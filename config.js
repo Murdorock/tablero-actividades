@@ -5,6 +5,11 @@ const SUPABASE_CONFIG = {
     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR4ZXV6c3lwbndlc3NjZ2Fua3RwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA1NDcxMzksImV4cCI6MjA2NjEyMzEzOX0.thcTKNcHaycUTJRUwROfDJKZTteCM1j3eCIMh7UVh4M'
 };
 
+// Forzar uso de sessionStorage para la sesión de Supabase
+if (typeof window !== 'undefined') {
+  window.localStorage = window.sessionStorage;
+}
+
 // Inicializar cliente de Supabase solo si no existe
 if (!window._supabase) {
     window._supabase = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
