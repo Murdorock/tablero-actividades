@@ -7,14 +7,31 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="main-container">
+    <!-- Formulario de autenticación -->
+    <div id="auth-container" style="display: flex; justify-content: center; align-items: center; height: 100vh;">
+        <form id="login-form" style="background: #fff; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); min-width: 320px;">
+            <h2>Iniciar sesión</h2>
+            <div style="margin-bottom: 1rem;">
+                <label for="email">Correo electrónico</label><br>
+                <input type="email" id="email" name="email" required style="width: 100%; padding: 0.5rem;">
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <label for="password">Contraseña</label><br>
+                <input type="password" id="password" name="password" required style="width: 100%; padding: 0.5rem;">
+            </div>
+            <button type="submit" style="width: 100%; padding: 0.5rem; background: #2c3e50; color: #fff; border: none; border-radius: 4px;">Entrar</button>
+            <div id="login-error" style="color: red; margin-top: 1rem; display: none;"></div>
+        </form>
+    </div>
+
+    <!-- Contenido principal oculto hasta autenticación -->
+    <div class="main-container" id="main-container" style="display: none;">
         <!-- Barra lateral de navegación -->
         <aside class="sidebar">
             <div class="sidebar-header">
                 <h1>📊 Sistema de Gestión</h1>
                 <p style="font-size: 12px; color: #95a5a6; margin-top: 5px;">Panel de Control</p>
             </div>
-            
             <nav class="sidebar-nav">
                 <a href="#" class="nav-item active" data-page="welcome.html">🏠 Inicio</a>
                 <a href="#" class="nav-item" data-page="aproximados.html">📍 Aproximados</a>
@@ -40,13 +57,11 @@
                 <a href="#" class="nav-item" data-page="secuencia_sin_lectura.html">❌ Secuencia Sin Lectura</a>
                 <a href="#" class="nav-item" data-page="registro_formacion.html">📝 Registro Formación</a>
             </nav>
-            
             <div style="padding: 20px; border-top: 1px solid #34495e; font-size: 12px; color: #95a5a6;">
                 <p>Sistema de Gestión v1.0</p>
                 <p style="margin-top: 5px;">Supabase Dashboard</p>
             </div>
         </aside>
-        
         <!-- Área de contenido -->
         <main class="content-area">
             <iframe id="contentFrame" class="content-frame" src="welcome.html"></iframe>
@@ -54,22 +69,57 @@
     </div>
     
     <script>
-        // Manejo de la navegación
+        // Manejo de la navegación y autenticación
         document.addEventListener('DOMContentLoaded', function() {
+            // --- Autenticación con Supabase ---
+            const authContainer = document.getElementById('auth-container');
+            const mainContainer = document.getElementById('main-container');
+            const loginForm = document.getElementById('login-form');
+            const loginError = document.getElementById('login-error');
+
+            // Verificar si el usuario ya está autenticado
+            supabase.auth.getSession().then(({ data: { session } }) => {
+                if (session) {
+                    mostrarContenido();
+                } else {
+                    mostrarLogin();
+                }
+            });
+
+            // Manejar envío de formulario de login
+            loginForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const email = document.getElementById('email').value;
+                const password = document.getElementById('password').value;
+                loginError.style.display = 'none';
+                const { error } = await supabase.auth.signInWithPassword({ email, password });
+                if (error) {
+                    loginError.textContent = error.message;
+                    loginError.style.display = 'block';
+                } else {
+                    mostrarContenido();
+                }
+            });
+
+            // Función para mostrar el contenido principal
+            function mostrarContenido() {
+                authContainer.style.display = 'none';
+                mainContainer.style.display = 'flex';
+            }
+            // Función para mostrar el login
+            function mostrarLogin() {
+                authContainer.style.display = 'flex';
+                mainContainer.style.display = 'none';
+            }
+
+            // Manejo de la navegación interna
             const navItems = document.querySelectorAll('.nav-item');
             const contentFrame = document.getElementById('contentFrame');
-            
             navItems.forEach(item => {
                 item.addEventListener('click', function(e) {
                     e.preventDefault();
-                    
-                    // Remover clase active de todos los items
                     navItems.forEach(nav => nav.classList.remove('active'));
-                    
-                    // Agregar clase active al item clickeado
                     this.classList.add('active');
-                    
-                    // Cambiar el contenido del iframe
                     const page = this.getAttribute('data-page');
                     contentFrame.src = page;
                 });
