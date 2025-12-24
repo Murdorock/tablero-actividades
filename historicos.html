@@ -1,0 +1,1344 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tablero de Carga Masiva - Históricos (CSV)</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .dashboard {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+        
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .main-content {
+            padding: 30px;
+        }
+        
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .status-card {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            border-left: 5px solid #2196F3;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .status-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        
+        .status-card.success {
+            border-left-color: #4CAF50;
+            background: linear-gradient(135deg, #e8f5e8 0%, #f1f8e9 100%);
+        }
+        
+        .status-card.error {
+            border-left-color: #f44336;
+            background: linear-gradient(135deg, #ffebee 0%, #fce4ec 100%);
+        }
+        
+        .status-card.warning {
+            border-left-color: #ff9800;
+            background: linear-gradient(135deg, #fff3e0 0%, #fce4ec 100%);
+        }
+        
+        .status-card h3 {
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+            color: #333;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+        }
+        
+        .indicator-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ccc;
+            animation: pulse 2s infinite;
+        }
+        
+        .indicator-dot.connected {
+            background: #4CAF50;
+        }
+        
+        .indicator-dot.error {
+            background: #f44336;
+        }
+        
+        .indicator-dot.warning {
+            background: #ff9800;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .upload-section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 2px dashed #ddd;
+            transition: all 0.3s ease;
+        }
+        
+        .upload-section.drag-over {
+            border-color: #2196F3;
+            background: #f0f8ff;
+            transform: scale(1.02);
+        }
+        
+        .upload-area {
+            text-align: center;
+            padding: 40px 20px;
+        }
+        
+        .upload-icon {
+            font-size: 4rem;
+            color: #2196F3;
+            margin-bottom: 20px;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 50px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            margin: 5px;
+            box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
+        }
+        
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+            box-shadow: 0 4px 15px rgba(244, 67, 54, 0.3);
+        }
+        
+        .btn-warning {
+            background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+            box-shadow: 0 4px 15px rgba(255, 152, 0, 0.3);
+        }
+        
+        .progress-section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            display: none;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 20px 0;
+            position: relative;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50 0%, #8BC34A 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+            border-radius: 10px;
+        }
+        
+        .progress-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-weight: bold;
+            color: #333;
+            font-size: 0.9rem;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        .stat-item {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #2196F3;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+        }
+        
+        .file-info {
+            background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+            border: 1px solid #2196F3;
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .file-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .log-section {
+            background: #1a1a1a;
+            color: #00ff00;
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 30px;
+            font-family: 'Courier New', monospace;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 2px 0;
+        }
+        
+        .log-entry.success {
+            color: #4CAF50;
+        }
+        
+        .log-entry.error {
+            color: #f44336;
+        }
+        
+        .log-entry.warning {
+            color: #ff9800;
+        }
+        
+        .log-entry.info {
+            color: #2196F3;
+        }
+        
+        .controls-section {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+        
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .control-group label {
+            font-weight: bold;
+            min-width: 150px;
+        }
+        
+        select, input {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+        
+        select:focus, input:focus {
+            outline: none;
+            border-color: #2196F3;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        .table-preview {
+            max-height: 400px;
+            overflow: auto;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .table-preview table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+        
+        .table-preview th,
+        .table-preview td {
+            padding: 8px 12px;
+            border-bottom: 1px solid #eee;
+            text-align: left;
+        }
+        
+        .table-preview th {
+            background: #f8f9fa;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+        }
+        
+        .table-preview tr:hover {
+            background: #f5f5f5;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="header">
+            <h1>🚰 Tablero de Carga Masiva (CSV)</h1>
+            <p>Sistema de importación de datos históricos a Supabase - Optimizado para CSV</p>
+        </div>
+        
+        <div class="main-content">
+            <!-- Status Cards -->
+            <div class="status-grid">
+                <div class="status-card" id="connectionCard">
+                    <h3>🔌 Estado de Conexión</h3>
+                    <div class="status-indicator">
+                        <div class="indicator-dot" id="connectionDot"></div>
+                        <span id="connectionStatus">Verificando...</span>
+                    </div>
+                    <button class="btn" onclick="checkConnection()">🔍 Verificar</button>
+                </div>
+                
+                <div class="status-card" id="tableCard">
+                    <h3>📋 Tabla Históricos</h3>
+                    <div class="status-indicator">
+                        <div class="indicator-dot" id="tableDot"></div>
+                        <span id="tableStatus">Sin verificar</span>
+                    </div>
+                    <button class="btn" onclick="checkTable()">📊 Verificar Tabla</button>
+                </div>
+                
+                <div class="status-card" id="fileCard">
+                    <h3>📁 Archivo de Datos</h3>
+                    <div class="status-indicator">
+                        <div class="indicator-dot" id="fileDot"></div>
+                        <span id="fileStatus">Sin archivo</span>
+                    </div>
+                    <div id="fileDetails" class="hidden">
+                        <small id="fileDetailsText"></small>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Upload Section -->
+            <div class="upload-section" id="uploadSection">
+                <div class="upload-area">
+                    <div class="upload-icon">📤</div>
+                    <h2>Cargar Archivo CSV</h2>
+                    <p>Arrastra tu archivo CSV aquí o haz clic para seleccionar</p>
+                    <p><small>Formato requerido: 23 columnas, hasta 500,000 filas - Ultra rápido ⚡</small></p>
+                    <input type="file" id="fileInput" accept=".csv" style="display: none;">
+                    <br><br>
+                    <button class="btn" onclick="document.getElementById('fileInput').click()">
+                        📁 Seleccionar Archivo CSV
+                    </button>
+                </div>
+            </div>
+            
+            <!-- File Info -->
+            <div class="file-info" id="fileInfo">
+                <h3>📊 Información del Archivo</h3>
+                <div class="file-details" id="fileDetailsGrid">
+                    <!-- Se llena dinámicamente -->
+                </div>
+            </div>
+            
+            <!-- Controls -->
+            <div class="controls-section" id="controlsSection" style="display: none;">
+                <h3>⚙️ Configuración de Carga</h3>
+                <div class="control-group">
+                    <label for="batchSize">Tamaño del lote:</label>
+                    <select id="batchSize">
+                        <option value="100">100 registros</option>
+                        <option value="500">500 registros</option>
+                        <option value="1000">1,000 registros</option>
+                        <option value="2000" selected>2,000 registros</option>
+                        <option value="5000">5,000 registros</option>
+                        <option value="10000">10,000 registros</option>
+                        <option value="20000">20,000 registros</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="delayBetweenBatches">Delay entre lotes (ms):</label>
+                    <input type="number" id="delayBetweenBatches" value="2000" min="100" max="10000">
+                </div>
+                <div class="control-group">
+                    <button class="btn btn-success" id="startUploadBtn" onclick="startUpload()">
+                        🚀 Iniciar Carga
+                    </button>
+                    <button class="btn btn-danger hidden" id="stopUploadBtn" onclick="stopUpload()">
+                        ⏹️ Detener
+                    </button>
+                    <button class="btn" onclick="showPreview()">
+                        👁️ Vista Previa
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Progress Section -->
+            <div class="progress-section" id="progressSection">
+                <h3>📈 Progreso de Carga</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                    <div class="progress-text" id="progressText">0%</div>
+                </div>
+                
+                <div id="progressSummary" style="text-align: center; margin: 15px 0; font-size: 1.1rem; font-weight: bold; color: #2196F3;">
+                    <div id="progressMainText">Preparando carga...</div>
+                    <div id="progressSubText" style="font-size: 0.9rem; color: #666; margin-top: 5px;">Inicializando proceso</div>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-number" id="processedCount">0</div>
+                        <div class="stat-label">Filas Procesadas</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number" id="successCount">0</div>
+                        <div class="stat-label">Exitosos</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number" id="errorCount">0</div>
+                        <div class="stat-label">Errores</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number" id="remainingCount">0</div>
+                        <div class="stat-label">Restantes</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number" id="currentBatch">0</div>
+                        <div class="stat-label">Lote Actual</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number" id="totalBatches">0</div>
+                        <div class="stat-label">Total Lotes</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number" id="timeElapsed">00:00</div>
+                        <div class="stat-label">Tiempo Transcurrido</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number" id="estimatedTime">--:--</div>
+                        <div class="stat-label">Tiempo Estimado</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Table Preview -->
+            <div class="table-preview hidden" id="tablePreview">
+                <h3>👁️ Vista Previa de Datos</h3>
+                <div id="previewTable"></div>
+            </div>
+            
+            <!-- Log Section -->
+            <div class="log-section">
+                <h3 style="color: white; margin-bottom: 15px;">📝 Log de Eventos</h3>
+                <div id="logContainer"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuración de Supabase
+        const SUPABASE_URL = 'https://txeuzsypnwesscganktp.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR4ZXV6c3lwbndlc3NjZ2Fua3RwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA1NDcxMzksImV4cCI6MjA2NjEyMzEzOX0.thcTKNcHaycUTJRUwROfDJKZTteCM1j3eCIMh7UVh4M';
+        
+        // Inicializar cliente de Supabase solo para históricos
+        const supabaseHistoricos = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        
+        // Variables globales
+        let csvData = [];
+        let isUploading = false;
+        let uploadCancelled = false;
+        let startTime = null;
+        let timeInterval = null;
+        let currentUploadStats = {
+            processed: 0,
+            successful: 0,
+            errors: 0,
+            currentBatch: 0,
+            totalBatches: 0
+        };
+        
+        // Nombres de las columnas esperadas (basado en la tabla real)
+        const expectedColumns = [
+            'direccion', 'nro_instalacion', 'ruta_lectura', 'supervisor', 'lector', 
+            'cod_ciclo', 'tipo_consumo', 'actual', 'anterior', 'mes3_ant', 'mes4_ant', 
+            'mes5_ant', 'mes6_ant', 'mes7_ant', 'causal_obs_act', 'causal_obs_ant', 
+            'causal_obs_mes3', 'causal_obs_mes4', 'causal_obs_mes5', 'causal_obs_mes6', 
+            'obs_adic', 'categoria_servicio', 'serie_medidor'
+        ];
+        
+        // Nota: id_historico se genera automáticamente, no se incluye en el insert
+        
+        // Inicialización
+        document.addEventListener('DOMContentLoaded', function() {
+            setupEventListeners();
+            checkConnection();
+            logEvent('🚀 Tablero inicializado', 'info');
+        });
+        
+        function setupEventListeners() {
+            // File input
+            const fileInput = document.getElementById('fileInput');
+            fileInput.addEventListener('change', handleFileSelect);
+            
+            // Drag and drop
+            const uploadSection = document.getElementById('uploadSection');
+            uploadSection.addEventListener('dragover', handleDragOver);
+            uploadSection.addEventListener('drop', handleDrop);
+            uploadSection.addEventListener('dragleave', handleDragLeave);
+        }
+        
+        // Funciones de conexión
+        async function checkConnection() {
+            try {
+                logEvent('🔍 Verificando conexión a Supabase...', 'info');
+                updateConnectionStatus('Verificando...', 'warning');
+                
+                const { data, error } = await supabaseHistoricos
+                    .from('historicos')
+                    .select('*')
+                    .limit(1);
+                
+                if (error) {
+                    throw error;
+                }
+                
+                updateConnectionStatus('Conectado', 'success');
+                logEvent('✅ Conexión establecida correctamente', 'success');
+                
+                // Verificar tabla automáticamente
+                setTimeout(checkTable, 1000);
+                
+            } catch (error) {
+                console.error('Error de conexión:', error);
+                updateConnectionStatus('Error: ' + error.message, 'error');
+                logEvent('❌ Error de conexión: ' + error.message, 'error');
+            }
+        }
+        
+        async function checkTable() {
+            try {
+                logEvent('📊 Verificando tabla historicos...', 'info');
+                updateTableStatus('Verificando...', 'warning');
+                
+                // Simplemente verificar que la tabla existe obteniendo solo 1 registro
+                // Sin hacer count que puede ser muy lento en tablas grandes
+                const { data, error } = await supabaseHistoricos
+                    .from('historicos')
+                    .select('id_historico, direccion, nro_instalacion, supervisor')
+                    .limit(1);
+                
+                if (error) {
+                    throw error;
+                }
+                
+                // Tabla existe y es accesible
+                updateTableStatus('Activa y lista', 'success');
+                logEvent('✅ Tabla verificada correctamente', 'success');
+                
+                // Mostrar estructura de la tabla en el log
+                if (data && data.length > 0) {
+                    const columnas = Object.keys(data[0]);
+                    logEvent(`📋 Columnas detectadas: ${columnas.join(', ')}`, 'info');
+                    logEvent(`✅ La tabla está lista para recibir datos`, 'success');
+                } else {
+                    logEvent(`📋 Tabla vacía - Lista para recibir datos`, 'info');
+                }
+                
+            } catch (error) {
+                console.error('Error al verificar tabla:', error);
+                
+                // Mejorar mensajes de error
+                let errorMsg = error.message;
+                if (error.message.includes('timeout') || error.message.includes('canceling statement')) {
+                    errorMsg = 'Timeout al verificar tabla (puede ser muy grande)';
+                    // A pesar del timeout, la tabla probablemente existe
+                    updateTableStatus('Tabla disponible', 'warning');
+                    logEvent('⚠️ Timeout al contar registros, pero la tabla parece estar disponible', 'warning');
+                    logEvent('💡 Puedes continuar con la carga de datos', 'info');
+                    return; // Salir sin mostrar error crítico
+                }
+                
+                updateTableStatus('Error: ' + errorMsg, 'error');
+                logEvent('❌ Error al verificar tabla: ' + errorMsg, 'error');
+                
+                // Sugerir solución si es problema de columnas
+                if (error.message.includes('column') || error.message.includes('does not exist')) {
+                    logEvent('💡 Sugerencia: Verifica que las columnas en expectedColumns coincidan con tu tabla', 'warning');
+                }
+            }
+        }
+        
+        // Funciones de UI
+        function updateConnectionStatus(message, type) {
+            const statusElement = document.getElementById('connectionStatus');
+            const dotElement = document.getElementById('connectionDot');
+            const cardElement = document.getElementById('connectionCard');
+            
+            statusElement.textContent = message;
+            dotElement.className = `indicator-dot ${type}`;
+            cardElement.className = `status-card ${type}`;
+        }
+        
+        function updateTableStatus(message, type) {
+            const statusElement = document.getElementById('tableStatus');
+            const dotElement = document.getElementById('tableDot');
+            const cardElement = document.getElementById('tableCard');
+            
+            statusElement.textContent = message;
+            dotElement.className = `indicator-dot ${type}`;
+            cardElement.className = `status-card ${type}`;
+        }
+        
+        function updateFileStatus(message, type, details = '') {
+            const statusElement = document.getElementById('fileStatus');
+            const dotElement = document.getElementById('fileDot');
+            const cardElement = document.getElementById('fileCard');
+            const detailsElement = document.getElementById('fileDetails');
+            const detailsTextElement = document.getElementById('fileDetailsText');
+            
+            statusElement.textContent = message;
+            dotElement.className = `indicator-dot ${type}`;
+            cardElement.className = `status-card ${type}`;
+            
+            if (details) {
+                detailsTextElement.textContent = details;
+                detailsElement.classList.remove('hidden');
+            } else {
+                detailsElement.classList.add('hidden');
+            }
+        }
+        
+        function logEvent(message, type = 'info') {
+            const logContainer = document.getElementById('logContainer');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${type}`;
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            
+            // Limitar número de logs
+            const logs = logContainer.children;
+            if (logs.length > 100) {
+                logContainer.removeChild(logs[0]);
+            }
+        }
+        
+        // Funciones de archivo
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.currentTarget.classList.add('drag-over');
+        }
+        
+        function handleDragLeave(e) {
+            e.currentTarget.classList.remove('drag-over');
+        }
+        
+        function handleDrop(e) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('drag-over');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                processFile(files[0]);
+            }
+        }
+        
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (file) {
+                processFile(file);
+            }
+        }
+        
+        async function processFile(file) {
+            const fileName = file.name.toLowerCase();
+            const isCsv = fileName.endsWith('.csv');
+            
+            if (!isCsv) {
+                logEvent('❌ Archivo no válido. Se requiere CSV (.csv)', 'error');
+                updateFileStatus('Archivo no válido', 'error');
+                return;
+            }
+            
+            logEvent(`📁 Procesando archivo CSV: ${file.name}`, 'info');
+            updateFileStatus('Procesando...', 'warning');
+            
+            // Mostrar indicador de procesamiento
+            showProcessingIndicator();
+            
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                // Procesar de forma asíncrona para no bloquear la UI
+                await sleep(100);
+                await parseCsvFileAsync(e.target.result, file.name);
+            };
+            reader.readAsText(file, 'UTF-8');
+        }
+        
+        function showProcessingIndicator() {
+            const uploadSection = document.getElementById('uploadSection');
+            uploadSection.innerHTML = `
+                <div class="upload-area">
+                    <div class="upload-icon">⏳</div>
+                    <h2>Procesando Archivo CSV</h2>
+                    <p>Por favor espera, procesando archivo CSV...</p>
+                    <div style="margin: 20px 0;">
+                        <div class="progress-bar" style="width: 300px; margin: 0 auto;">
+                            <div class="progress-fill" id="fileProgressFill" style="width: 0%; animation: pulse 1.5s infinite;"></div>
+                            <div class="progress-text" id="fileProgressText">Leyendo archivo CSV...</div>
+                        </div>
+                    </div>
+                    <p><small>CSV es ultra rápido - procesamiento optimizado ⚡</small></p>
+                </div>
+            `;
+        }
+        
+        async function parseCsvFileAsync(csvText, fileName) {
+            try {
+                logEvent('📊 Leyendo datos del archivo CSV...', 'info');
+                updateFileProgressText('Analizando estructura del CSV...');
+                
+                // Dividir en líneas y limpiar
+                const lines = csvText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+                
+                if (lines.length === 0) {
+                    throw new Error('El archivo CSV está vacío');
+                }
+                
+                updateFileProgressText('Detectando formato del CSV...');
+                await sleep(50);
+                
+                // Detectar separador (coma, punto y coma, etc.)
+                const delimiter = detectCsvDelimiter(lines[0]);
+                logEvent(`🔍 Separador detectado: "${delimiter}"`, 'info');
+                
+                // Detectar si tiene headers
+                const firstLine = lines[0].split(delimiter);
+                const hasHeaders = detectHeaders(firstLine);
+                const startIndex = hasHeaders ? 1 : 0;
+                const totalRows = lines.length - startIndex;
+                
+                logEvent(`📋 Procesando ${totalRows.toLocaleString()} filas CSV...`, 'info');
+                logEvent(`📊 Archivo tiene headers: ${hasHeaders ? 'Sí' : 'No'}`, 'info');
+                logEvent(`📏 Columnas detectadas: ${firstLine.length}`, 'info');
+                
+                if (firstLine.length !== expectedColumns.length) {
+                    logEvent(`⚠️ Advertencia: Se esperan ${expectedColumns.length} columnas, pero se detectaron ${firstLine.length}`, 'warning');
+                }
+                
+                updateFileProgressText(`Procesando ${totalRows.toLocaleString()} filas CSV...`);
+                await sleep(50);
+                
+                csvData = [];
+                let validRows = 0;
+                let skippedRows = 0;
+                
+                // Procesar en chunks para no bloquear la UI
+                const chunkSize = 5000; // CSV es más rápido, podemos usar chunks más grandes
+                const totalChunks = Math.ceil(totalRows / chunkSize);
+                
+                for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+                    const chunkStart = startIndex + (chunkIndex * chunkSize);
+                    const chunkEnd = Math.min(chunkStart + chunkSize, lines.length);
+                    
+                    // Actualizar progreso
+                    const progress = Math.round(((chunkIndex + 1) / totalChunks) * 100);
+                    updateFileProgress(progress);
+                    updateFileProgressText(`Procesando chunk ${chunkIndex + 1}/${totalChunks} (${progress}%)`);
+                    
+                    // Procesar chunk
+                    for (let i = chunkStart; i < chunkEnd; i++) {
+                        const line = lines[i];
+                        
+                        if (!line || line.trim() === '') {
+                            skippedRows++;
+                            continue;
+                        }
+                        
+                        // Dividir la línea por el delimitador
+                        const values = parseCsvLine(line, delimiter);
+                        
+                        // Saltar filas vacías
+                        if (values.every(val => val === '' || val === null || val === undefined)) {
+                            skippedRows++;
+                            continue;
+                        }
+                        
+                        // Convertir a objeto con las columnas esperadas
+                        const row = {};
+                        
+                        for (let j = 0; j < expectedColumns.length; j++) {
+                            let value = values[j] || '';
+                            
+                            // Limpiar valor
+                            value = value.trim();
+                            
+                            // Convertir valores especiales a null
+                            if (value === '' || value.toLowerCase() === 'null' || value === 'NULL' || value === 'undefined') {
+                                value = null;
+                            }
+                            
+                            // Convertir campos numéricos específicos
+                            const numericFields = ['actual', 'anterior', 'mes3_ant', 'mes4_ant', 'mes5_ant', 'mes6_ant', 'mes7_ant'];
+                            if (numericFields.includes(expectedColumns[j])) {
+                                if (value !== null && !isNaN(value) && value !== '') {
+                                    row[expectedColumns[j]] = parseFloat(value);
+                                } else {
+                                    row[expectedColumns[j]] = null;
+                                }
+                            } else {
+                                // Campos de texto
+                                row[expectedColumns[j]] = value;
+                            }
+                        }
+                        
+                        csvData.push(row);
+                        validRows++;
+                    }
+                    
+                    // Dar tiempo a la UI para que se actualice
+                    await sleep(5); // CSV es más rápido
+                }
+                
+                if (validRows > 0) {
+                    const fileSize = (csvText.length / 1024 / 1024).toFixed(2);
+                    updateFileStatus('Archivo CSV cargado', 'success', `${validRows.toLocaleString()} registros`);
+                    
+                    showFileInfo(fileName, validRows, skippedRows, fileSize);
+                    document.getElementById('controlsSection').style.display = 'block';
+                    
+                    logEvent(`✅ Archivo CSV procesado: ${validRows.toLocaleString()} registros válidos, ${skippedRows} filas omitidas`, 'success');
+                    logEvent(`📋 Estructura preparada para insertar en tabla 'historicos'`, 'info');
+                    logEvent(`⚡ Procesamiento CSV completado en tiempo record!`, 'success');
+                    
+                    // Restaurar la sección de upload
+                    restoreUploadSection();
+                } else {
+                    throw new Error('No se encontraron datos válidos en el CSV');
+                }
+                
+            } catch (error) {
+                console.error('Error al procesar CSV:', error);
+                logEvent('❌ Error al procesar archivo CSV: ' + error.message, 'error');
+                updateFileStatus('Error al procesar', 'error');
+                restoreUploadSection();
+            }
+        }
+        
+        function detectCsvDelimiter(firstLine) {
+            const delimiters = [',', ';', '\t', '|'];
+            let bestDelimiter = ',';
+            let maxColumns = 0;
+            
+            for (const delimiter of delimiters) {
+                const columns = firstLine.split(delimiter).length;
+                if (columns > maxColumns) {
+                    maxColumns = columns;
+                    bestDelimiter = delimiter;
+                }
+            }
+            
+            return bestDelimiter;
+        }
+        
+        function detectHeaders(firstLine) {
+            // Si la mayoría de valores en la primera línea son texto y no números, probablemente son headers
+            const textCount = firstLine.filter(value => {
+                const trimmed = value.trim();
+                return trimmed && isNaN(trimmed);
+            }).length;
+            
+            return textCount > firstLine.length * 0.5;
+        }
+        
+        function parseCsvLine(line, delimiter) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === delimiter && !inQuotes) {
+                    result.push(current);
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            
+            result.push(current);
+            return result.map(value => value.replace(/^"|"$/g, '')); // Remover comillas al inicio y final
+        }
+        
+        function updateFileProgress(percentage) {
+            const progressFill = document.getElementById('fileProgressFill');
+            if (progressFill) {
+                progressFill.style.width = percentage + '%';
+            }
+        }
+        
+        function updateFileProgressText(text) {
+            const progressText = document.getElementById('fileProgressText');
+            if (progressText) {
+                progressText.textContent = text;
+            }
+        }
+        
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+        
+        function restoreUploadSection() {
+            const uploadSection = document.getElementById('uploadSection');
+            uploadSection.innerHTML = `
+                <div class="upload-area">
+                    <div class="upload-icon">📤</div>
+                    <h2>Cargar Archivo CSV</h2>
+                    <p>Arrastra tu archivo CSV aquí o haz clic para seleccionar</p>
+                    <p><small>Formato requerido: 23 columnas, hasta 500,000 filas - Ultra rápido ⚡</small></p>
+                    <input type="file" id="fileInput" accept=".csv" style="display: none;">
+                    <br><br>
+                    <button class="btn" onclick="document.getElementById('fileInput').click()">
+                        📁 Seleccionar Archivo CSV
+                    </button>
+                </div>
+            `;
+            
+            // Reestablecer event listeners
+            const fileInput = document.getElementById('fileInput');
+            fileInput.addEventListener('change', handleFileSelect);
+        }
+        
+        function showFileInfo(fileName, validRows, skippedRows, fileSize) {
+            const fileInfo = document.getElementById('fileInfo');
+            const detailsGrid = document.getElementById('fileDetailsGrid');
+            
+            detailsGrid.innerHTML = `
+                <div class="stat-item">
+                    <div class="stat-number">${fileName}</div>
+                    <div class="stat-label">Nombre del archivo</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">${validRows.toLocaleString()}</div>
+                    <div class="stat-label">Registros válidos</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">${skippedRows.toLocaleString()}</div>
+                    <div class="stat-label">Filas omitidas</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">${fileSize} MB</div>
+                    <div class="stat-label">Tamaño del archivo</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">23</div>
+                    <div class="stat-label">Columnas</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">✅</div>
+                    <div class="stat-label">Estado</div>
+                </div>
+            `;
+            
+            fileInfo.style.display = 'block';
+        }
+        
+        function showPreview() {
+            const previewSection = document.getElementById('tablePreview');
+            const previewTable = document.getElementById('previewTable');
+            
+            if (csvData.length === 0) {
+                logEvent('❌ No hay datos para mostrar', 'error');
+                return;
+            }
+            
+            let html = '<table><thead><tr>';
+            // Mostrar solo las columnas que se van a insertar
+            expectedColumns.forEach(col => {
+                html += `<th>${col}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+            
+            // Mostrar primeras 10 filas
+            for (let i = 0; i < Math.min(10, csvData.length); i++) {
+                html += '<tr>';
+                expectedColumns.forEach(col => {
+                    const value = csvData[i][col];
+                    html += `<td>${value !== null && value !== undefined ? value : ''}</td>`;
+                });
+                html += '</tr>';
+            }
+            
+            if (csvData.length > 10) {
+                html += `<tr><td colspan="${expectedColumns.length}" style="text-align: center; font-style: italic; padding: 15px;">... y ${(csvData.length - 10).toLocaleString()} filas más</td></tr>`;
+            }
+            
+            html += '</tbody></table>';
+            previewTable.innerHTML = html;
+            previewSection.classList.remove('hidden');
+            
+            logEvent(`👁️ Mostrando vista previa de ${Math.min(10, csvData.length)} filas`, 'info');
+            logEvent(`📊 Columnas a insertar: ${expectedColumns.length} (${expectedColumns.join(', ')})`, 'info');
+        }
+        
+        // Funciones de carga optimizadas para grandes volúmenes
+        async function startUpload() {
+            if (csvData.length === 0) {
+                logEvent('❌ No hay datos para cargar', 'error');
+                return;
+            }
+            
+            isUploading = true;
+            uploadCancelled = false;
+            startTime = Date.now();
+            
+            const batchSize = parseInt(document.getElementById('batchSize').value);
+            const delay = parseInt(document.getElementById('delayBetweenBatches').value);
+            const totalBatches = Math.ceil(csvData.length / batchSize);
+            
+            // Actualizar UI
+            document.getElementById('startUploadBtn').classList.add('hidden');
+            document.getElementById('stopUploadBtn').classList.remove('hidden');
+            document.getElementById('progressSection').style.display = 'block';
+            
+            // Inicializar estadísticas
+            currentUploadStats = {
+                processed: 0,
+                successful: 0,
+                errors: 0,
+                currentBatch: 0,
+                totalBatches: totalBatches
+            };
+            
+            // Iniciar timer
+            startTimer();
+            updateStats();
+            updateProgressSummary('Iniciando carga masiva CSV...', 'Preparando lotes de datos optimizados');
+            
+            logEvent(`🚀 Iniciando carga masiva CSV: ${csvData.length.toLocaleString()} registros en ${totalBatches} lotes de ${batchSize.toLocaleString()} registros`, 'info');
+            logEvent(`⏱️ Delay entre lotes: ${delay}ms`, 'info');
+            logEvent(`⚡ Procesamiento CSV optimizado para máxima velocidad`, 'info');
+            
+            try {
+                // Procesar lotes de forma asíncrona para no bloquear la UI
+                await processUploadBatches(batchSize, delay, totalBatches);
+                
+            } catch (error) {
+                console.error('Error general en la carga:', error);
+                logEvent(`❌ Error general: ${error.message}`, 'error');
+            }
+            
+            // Finalizar
+            stopTimer();
+            resetUploadUI();
+        }
+        
+        async function processUploadBatches(batchSize, delay, totalBatches) {
+            for (let i = 0; i < totalBatches && !uploadCancelled; i++) {
+                const start = i * batchSize;
+                const end = Math.min(start + batchSize, csvData.length);
+                const batch = csvData.slice(start, end);
+                
+                currentUploadStats.currentBatch = i + 1;
+                updateStats();
+                updateProgressSummary(
+                    `Procesando lote ${i + 1} de ${totalBatches}`,
+                    `${batch.length.toLocaleString()} registros CSV en este lote`
+                );
+                
+                logEvent(`📤 Procesando lote ${i + 1}/${totalBatches} (${batch.length.toLocaleString()} registros)`, 'info');
+                
+                try {
+                    // Log del primer registro del lote para debugging (solo en el primer lote)
+                    if (i === 0) {
+                        logEvent(`🔍 Ejemplo de registro CSV a insertar:`, 'info');
+                        console.log('Estructura del primer registro CSV:', batch[0]);
+                    }
+                    
+                    // Implementar retry para timeouts
+                    let retryCount = 0;
+                    const maxRetries = 3;
+                    let lastError = null;
+                    
+                    while (retryCount <= maxRetries) {
+                        try {
+                            const { error } = await supabaseHistoricos
+                                .from('historicos')
+                                .insert(batch);
+                            
+                            if (error) {
+                                throw error;
+                            }
+                            
+                            // Si llegamos aquí, la inserción fue exitosa
+                            break;
+                            
+                        } catch (insertError) {
+                            lastError = insertError;
+                            
+                            // Si es timeout o error de conexión, reintentar
+                            if (insertError.message.includes('timeout') || 
+                                insertError.message.includes('canceling statement') ||
+                                insertError.message.includes('connection') ||
+                                insertError.code === 'PGRST301') {
+                                
+                                retryCount++;
+                                if (retryCount <= maxRetries) {
+                                    const retryDelay = Math.min(1000 * retryCount, 5000); // Delay incremental
+                                    logEvent(`⚠️ Timeout en lote ${i + 1}, reintentando en ${retryDelay}ms (intento ${retryCount}/${maxRetries})`, 'warning');
+                                    await new Promise(resolve => setTimeout(resolve, retryDelay));
+                                    continue;
+                                } else {
+                                    logEvent(`❌ Lote ${i + 1}: Máximo de reintentos alcanzado`, 'error');
+                                    throw insertError;
+                                }
+                            } else {
+                                // Error no relacionado con timeout, no reintentar
+                                throw insertError;
+                            }
+                        }
+                    }
+                    
+                    currentUploadStats.successful += batch.length;
+                    logEvent(`✅ Lote ${i + 1} completado exitosamente (${batch.length.toLocaleString()} registros)`, 'success');
+                    
+                } catch (error) {
+                    currentUploadStats.errors += batch.length;
+                    console.error(`Error en lote ${i + 1}:`, error);
+                    
+                    // Mejorar el manejo de errores específicos
+                    let errorMsg = error.message;
+                    if (error.message.includes('timeout') || error.message.includes('canceling statement')) {
+                        errorMsg = 'Error: Timeout en la base de datos - Lote muy grande o servidor ocupado';
+                    } else if (error.code === '23505') {
+                        errorMsg = 'Error: Registros duplicados detectados';
+                    } else if (error.code === '23502') {
+                        errorMsg = 'Error: Campos requeridos faltantes';
+                    } else if (error.code === '42703') {
+                        errorMsg = 'Error: Columna no existe en la tabla';
+                    } else if (error.message.includes('column')) {
+                        errorMsg = `Error de columna: ${error.message}`;
+                    }
+                    
+                    logEvent(`❌ Error en lote ${i + 1}: ${errorMsg}`, 'error');
+                    
+                    // Log adicional para el primer error
+                    if (i === 0) {
+                        logEvent(`🔍 Revisar estructura del CSV: debe tener ${expectedColumns.length} columnas en orden: ${expectedColumns.join(', ')}`, 'warning');
+                    }
+                    
+                    // Detener si hay error de autenticación o estructura (pero NO por timeout)
+                    if (error.message.includes('JWT') || 
+                        error.message.includes('auth') || 
+                        error.message.includes('column') ||
+                        error.message.includes('does not exist')) {
+                        logEvent('🛑 Deteniendo carga por error crítico', 'error');
+                        uploadCancelled = true;
+                    }
+                    
+                    // Para timeouts, solo continuar con el siguiente lote
+                    if (error.message.includes('timeout') || error.message.includes('canceling statement')) {
+                        logEvent(`⏭️ Continuando con el siguiente lote...`, 'info');
+                    }
+                }
+                
+                currentUploadStats.processed += batch.length;
+                updateProgress();
+                updateStats();
+                
+                // Dar tiempo al navegador para actualizar la UI y no bloquear
+                await new Promise(resolve => setTimeout(resolve, Math.max(delay, 50)));
+                
+                // Yield control para evitar bloqueo de la página
+                if (i % 5 === 0) { // Cada 5 lotes, hacer una pausa más larga
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+            }
+            
+            // Mostrar resultado final
+            if (!uploadCancelled) {
+                const successRate = ((currentUploadStats.successful / csvData.length) * 100).toFixed(1);
+                updateProgressSummary(
+                    `¡Carga CSV completada! ${successRate}% exitoso`,
+                    `${currentUploadStats.successful.toLocaleString()} registros cargados correctamente`
+                );
+                logEvent(`🎉 Carga CSV completada! ${currentUploadStats.successful.toLocaleString()} exitosos, ${currentUploadStats.errors.toLocaleString()} errores`, 
+                        currentUploadStats.successful > currentUploadStats.errors ? 'success' : 'error');
+            } else {
+                updateProgressSummary(
+                    `Carga detenida por el usuario`,
+                    `${currentUploadStats.successful.toLocaleString()} registros cargados antes de detener`
+                );
+                logEvent(`⏹️ Carga detenida por el usuario`, 'warning');
+            }
+        }
+        
+        function stopUpload() {
+            uploadCancelled = true;
+            logEvent('⏹️ Deteniendo la carga...', 'warning');
+            updateProgressSummary('Deteniendo carga...', 'Finalizando lote actual');
+        }
+        
+        function resetUploadUI() {
+            isUploading = false;
+            document.getElementById('startUploadBtn').classList.remove('hidden');
+            document.getElementById('stopUploadBtn').classList.add('hidden');
+        }
+        
+        function startTimer() {
+            timeInterval = setInterval(updateElapsedTime, 1000);
+        }
+        
+        function stopTimer() {
+            if (timeInterval) {
+                clearInterval(timeInterval);
+                timeInterval = null;
+            }
+        }
+        
+        function updateElapsedTime() {
+            if (!startTime) return;
+            
+            const elapsed = Date.now() - startTime;
+            const minutes = Math.floor(elapsed / 60000);
+            const seconds = Math.floor((elapsed % 60000) / 1000);
+            
+            document.getElementById('timeElapsed').textContent = 
+                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            
+            // Calcular tiempo estimado
+            if (currentUploadStats.processed > 0 && csvData.length > 0) {
+                const rate = currentUploadStats.processed / elapsed; // registros por ms
+                const remaining = csvData.length - currentUploadStats.processed;
+                const estimatedMs = remaining / rate;
+                
+                const estMinutes = Math.floor(estimatedMs / 60000);
+                const estSeconds = Math.floor((estimatedMs % 60000) / 1000);
+                
+                document.getElementById('estimatedTime').textContent = 
+                    `${estMinutes.toString().padStart(2, '0')}:${estSeconds.toString().padStart(2, '0')}`;
+            }
+        }
+        
+        function updateProgressSummary(mainText, subText) {
+            document.getElementById('progressMainText').textContent = mainText;
+            document.getElementById('progressSubText').textContent = subText;
+        }
+        
+        function updateProgress() {
+            const percentage = Math.round((currentUploadStats.processed / csvData.length) * 100);
+            document.getElementById('progressFill').style.width = percentage + '%';
+            document.getElementById('progressText').textContent = percentage + '%';
+        }
+        
+        function updateStats() {
+            document.getElementById('processedCount').textContent = currentUploadStats.processed.toLocaleString();
+            document.getElementById('successCount').textContent = currentUploadStats.successful.toLocaleString();
+            document.getElementById('errorCount').textContent = currentUploadStats.errors.toLocaleString();
+            document.getElementById('remainingCount').textContent = (csvData.length - currentUploadStats.processed).toLocaleString();
+            document.getElementById('currentBatch').textContent = currentUploadStats.currentBatch.toLocaleString();
+            document.getElementById('totalBatches').textContent = currentUploadStats.totalBatches.toLocaleString();
+        }
+    </script>
+</body>
+</html>

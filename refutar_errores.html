@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Refutar Errores - Sistema</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="config.js"></script>
+    <script>const TABLE_NAME = 'refutar_errores'; const TABLE_TITLE = '🔄 Refutar Errores';</script>
+    <script src="table-logic.js"></script>
+</head>
+<body>
+    <div class="table-container">
+        <div class="table-header">
+            <h2>🔄 Refutar Errores</h2>
+            <div class="table-actions">
+                <button class="btn btn-primary" onclick="openCreateModal()">➕ Nuevo</button>
+                <button class="btn btn-secondary" onclick="loadData()">🔄 Actualizar</button>
+                <button class="btn btn-success" onclick="exportToExcel()">📊 Exportar Excel</button>
+                <button class="btn btn-info" onclick="downloadTemplate()">📄 Descargar Plantilla</button>
+                <button class="btn btn-warning" onclick="openPasteModal()">📋 Pegar Datos CSV</button>
+                <button class="btn btn-danger" onclick="deleteAllData()">🗑️ Eliminar Todo</button>
+            </div>
+        </div>
+        <div class="data-table-wrapper">
+            <div id="loadingIndicator" class="loading"><div class="spinner"></div><p>Cargando...</p></div>
+            <div id="tableContainer"></div>
+        </div>
+    </div>
+    <div id="dataModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header"><h3 id="modalTitle">Nuevo Registro</h3></div>
+            <form id="dataForm">
+                <input type="hidden" id="recordId">
+                <div id="formFields"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script>
+        async function exportToExcel() {
+            try {
+                // Show loading indicator
+                const loadingIndicator = document.getElementById('loadingIndicator');
+                loadingIndicator.style.display = 'block';
+                
+                // Fetch all data from Supabase without limit
+                const { data, error } = await supabase
+                    .from(TABLE_NAME)
+                    .select('*')
+                    .order('id', { ascending: false });
+                
+                if (error) throw error;
+                
+                if (!data || data.length === 0) {
+                    alert('No hay datos para exportar');
+                    loadingIndicator.style.display = 'none';
+                    return;
+                }
+                
+                // Create workbook and worksheet
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.json_to_sheet(data);
+                
+                // Add worksheet to workbook
+                XLSX.utils.book_append_sheet(wb, ws, 'Refutar Errores');
+                
+                // Generate filename with current date
+                const now = new Date();
+                const dateStr = now.toISOString().slice(0, 10);
+                const timeStr = now.toTimeString().slice(0, 5).replace(':', '');
+                const filename = `refutar_errores_${dateStr}_${timeStr}.xlsx`;
+                
+                // Save file
+                XLSX.writeFile(wb, filename);
+                
+                loadingIndicator.style.display = 'none';
+                
+            } catch (error) {
+                console.error('Error al exportar:', error);
+                alert('Error al exportar los datos: ' + error.message);
+                document.getElementById('loadingIndicator').style.display = 'none';
+            }
+        }
+
+        async function deleteAllData() {
+            // First confirmation
+            const firstConfirm = confirm('⚠️ ATENCIÓN: Esta acción eliminará TODOS los registros de la tabla "Refutar Errores".\n\n¿Estás seguro de que deseas continuar?');
+            
+            if (!firstConfirm) return;
+            
+            // Second confirmation with typing requirement
+            const confirmText = prompt('Para confirmar esta acción DESTRUCTIVA, escribe exactamente: "ELIMINAR TODO"\n\n(Esta acción no se puede deshacer)');
+            
+            if (confirmText !== 'ELIMINAR TODO') {
+                if (confirmText !== null) {
+                    alert('Texto de confirmación incorrecto. Operación cancelada.');
+                }
+                return;
+            }
+            
+            try {
+                // Show loading indicator
+                const loadingIndicator = document.getElementById('loadingIndicator');
+                loadingIndicator.style.display = 'block';
+                
+                // Delete all records using a condition that matches all rows
+                const { error } = await supabase
+                    .from(TABLE_NAME)
+                    .delete()
+                    .not('id', 'is', null); // This will match all rows since id is never null
+                
+                if (error) throw error;
+                
+                // Hide loading indicator
+                loadingIndicator.style.display = 'none';
+                
+                // Show success message
+                alert('✅ Todos los registros han sido eliminados exitosamente.');
+                
+                // Reload the table to show empty state
+                loadData();
+                
+            } catch (error) {
+                console.error('Error al eliminar datos:', error);
+                let errorMessage = error.message || 'Error desconocido';
+                
+                // Provide more specific error information
+                if (error.message && error.message.includes('Failed to fetch')) {
+                    errorMessage += '\n\nPosibles causas:\n• Problemas de conexión a Supabase\n• Permisos insuficientes en la tabla\n• Políticas RLS (Row Level Security) bloqueando la operación';
+                }
+                
+                alert('❌ Error al eliminar los datos: ' + errorMessage);
+                document.getElementById('loadingIndicator').style.display = 'none';
+            }
+        }
+
+        function downloadTemplate() {
+            try {
+                // Define the columns for the template
+                const templateColumns = [
+                    'causa_observacion',
+                    'adicional',
+                    'direccion',
+                    'consumo',
+                    'alfa',
+                    'ciclo',
+                    'error',
+                    'lector',
+                    'instalacion',
+                    'supervisor_zona',
+                    'foto',
+                    'falta_firma',
+                    'observacion',
+                    'debia_dejar_constancia',
+                    'observacion_constancia'
+                ];
+                
+                // Create an empty row with the column headers
+                const templateData = [{}];
+                templateColumns.forEach(col => {
+                    templateData[0][col] = '';
+                });
+                
+                // Add a few example rows with placeholder data
+                const exampleRows = [
+                    {
+                        causa_observacion: 'Ejemplo: Medidor dañado',
+                        adicional: 'Información adicional de ejemplo',
+                        direccion: 'Calle 123 #45-67',
+                        consumo: '150',
+                        alfa: 'A1',
+                        ciclo: '2024-12',
+                        error: 'NO',
+                        lector: 'Juan Pérez',
+                        instalacion: '12345678',
+                        supervisor_zona: 'María García',
+                        foto: 'SI',
+                        falta_firma: 'NO',
+                        observacion: 'Observación de ejemplo',
+                        debia_dejar_constancia: 'SI',
+                        observacion_constancia: 'Constancia dejada correctamente',
+                        error: 'NO'
+                    },
+                    {
+                        causa_observacion: '',
+                        adicional: '',
+                        direccion: '',
+                        consumo: '',
+                        alfa: '',
+                        ciclo: '',
+                        error: '',
+                        lector: '',
+                        instalacion: '',
+                        supervisor_zona: '',
+                        foto: '',
+                        falta_firma: '',
+                        observacion: '',
+                        debia_dejar_constancia: '',
+                        observacion_constancia: '',
+                        error: ''
+                    }
+                ];
+                
+                // Combine template with examples
+                const finalData = [...exampleRows];
+                
+                // Create workbook and worksheet
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.json_to_sheet(finalData);
+                
+                // Set column widths for better readability
+                ws['!cols'] = templateColumns.map(() => ({ width: 20 }));
+                
+                // Add some styling to the header row
+                const headerRow = 1;
+                templateColumns.forEach((col, index) => {
+                    const cellRef = XLSX.utils.encode_cell({ r: 0, c: index });
+                    if (ws[cellRef]) {
+                        ws[cellRef].s = {
+                            fill: { fgColor: { rgb: "366092" } },
+                            font: { color: { rgb: "FFFFFF" }, bold: true }
+                        };
+                    }
+                });
+                
+                // Add worksheet to workbook
+                XLSX.utils.book_append_sheet(wb, ws, 'Plantilla Refutar Errores');
+                
+                // Generate filename with current date
+                const now = new Date();
+                const dateStr = now.toISOString().slice(0, 10);
+                const filename = `plantilla_refutar_errores_${dateStr}.xlsx`;
+                
+                // Save file
+                XLSX.writeFile(wb, filename);
+                
+                // Show success message
+                alert('✅ Plantilla descargada exitosamente.\n\nInstrucciones:\n• La primera fila contiene un ejemplo\n• Elimina la fila de ejemplo antes de importar\n• Completa los datos en las filas siguientes\n• Guarda el archivo antes de importar');
+                
+            } catch (error) {
+                console.error('Error al descargar plantilla:', error);
+                alert('❌ Error al descargar la plantilla: ' + error.message);
+            }
+        }
+
+        // Variables globales para el modal CSV
+        let datosCSVPreview = null;
+        let textoCSVActual = '';
+
+        // Función para abrir modal de pegar datos CSV
+        function openPasteModal() {
+            console.log('📝 Abriendo modal de pegar datos CSV...');
+            
+            // Crear modal dinámicamente
+            const modalHTML = `
+                <div id="pasteModal" class="modal" style="
+                    display: block;
+                    position: fixed;
+                    z-index: 1000;
+                    left: 0;
+                    top: 0;
+                    width: 100%;
+                    height: 100%;
+                    background-color: rgba(0,0,0,0.5);
+                ">
+                    <div class="modal-content" style="
+                        background-color: #fefefe;
+                        margin: 2% auto;
+                        padding: 1.5rem;
+                        border: none;
+                        width: 90%;
+                        max-width: 900px;
+                        border-radius: 0.5rem;
+                        max-height: 90vh;
+                        overflow-y: auto;
+                    ">
+                        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid #dee2e6; padding-bottom: 1rem;">
+                            <h3 style="margin: 0; color: #495057;">📋 Pegar Datos CSV - Refutar Errores</h3>
+                            <button onclick="closePasteModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #6c757d;">&times;</button>
+                        </div>
+                        
+                        <div class="modal-body">
+                            <!-- Instrucciones -->
+                            <div style="background: #e7f3ff; border: 1px solid #b3d7ff; border-radius: 0.25rem; padding: 1rem; margin-bottom: 1.5rem;">
+                                <h5 style="margin: 0 0 0.5rem 0; color: #0056b3;">💡 Instrucciones:</h5>
+                                <ul style="margin: 0; padding-left: 1.2rem; color: #0056b3;">
+                                    <li>Copia los datos CSV desde Excel, Google Sheets o cualquier aplicación</li>
+                                    <li>Pega directamente en el campo de abajo (Ctrl+V)</li>
+                                    <li>La primera fila debe contener los nombres de las columnas</li>
+                                    <li>Columnas requeridas: <strong>causa_observacion, direccion, instalacion</strong></li>
+                                    <li>Columnas disponibles: <em>adicional, consumo, alfa, ciclo, lector, supervisor_zona, foto, falta_firma, observacion, debia_dejar_constancia, observacion_constancia, error</em></li>
+                                </ul>
+                            </div>
+                            
+                            <!-- Área de texto principal -->
+                            <div style="margin-bottom: 1rem;">
+                                <label for="csvTextArea" style="display: block; margin-bottom: 0.5rem; font-weight: bold; color: #495057;">
+                                    📋 Pegar datos CSV aquí:
+                                </label>
+                                <textarea 
+                                    id="csvTextArea" 
+                                    placeholder="Pega aquí tus datos CSV...&#10;&#10;Ejemplo:&#10;causa_observacion,direccion,instalacion,adicional,error&#10;Medidor dañado,Calle 123 #45-67,12345678,Requiere cambio,NO&#10;Lectura errónea,Carrera 45 #12-34,87654321,Revisar medidor,SI"
+                                    style="
+                                        width: 100%; 
+                                        height: 300px; 
+                                        padding: 0.75rem; 
+                                        border: 2px dashed #ced4da; 
+                                        border-radius: 0.25rem;
+                                        font-family: 'Courier New', monospace;
+                                        font-size: 0.875rem;
+                                        resize: vertical;
+                                        background: #f8f9fa;
+                                    "
+                                ></textarea>
+                            </div>
+                            
+                            <!-- Botones de acción -->
+                            <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                                <button onclick="processCSVText()" id="procesarBtn" style="
+                                    background: #28a745; 
+                                    color: white; 
+                                    border: none; 
+                                    padding: 0.5rem 1rem; 
+                                    border-radius: 0.25rem; 
+                                    cursor: pointer;
+                                    font-weight: bold;
+                                ">🔄 Procesar Datos</button>
+                                
+                                <button onclick="clearCSVText()" style="
+                                    background: #6c757d; 
+                                    color: white; 
+                                    border: none; 
+                                    padding: 0.5rem 1rem; 
+                                    border-radius: 0.25rem; 
+                                    cursor: pointer;
+                                ">🗑️ Limpiar</button>
+                                
+                                <button onclick="showCSVExample()" style="
+                                    background: #17a2b8; 
+                                    color: white; 
+                                    border: none; 
+                                    padding: 0.5rem 1rem; 
+                                    border-radius: 0.25rem; 
+                                    cursor: pointer;
+                                ">📋 Ver Ejemplo</button>
+                            </div>
+                            
+                            <!-- Área de preview -->
+                            <div id="csvPreviewArea" style="display: none;">
+                                <hr style="margin: 1.5rem 0;">
+                                <h5 style="color: #495057; margin-bottom: 1rem;">👀 Vista Previa:</h5>
+                                <div id="csvPreviewContent"></div>
+                                
+                                <!-- Botones de carga -->
+                                <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #dee2e6;">
+                                    <button onclick="confirmCSVUpload()" id="cargarBtn" disabled style="
+                                        background: #007bff; 
+                                        color: white; 
+                                        border: none; 
+                                        padding: 0.75rem 1.5rem; 
+                                        border-radius: 0.25rem; 
+                                        cursor: pointer;
+                                        font-weight: bold;
+                                        margin-right: 0.5rem;
+                                    ">⬆️ Cargar a la Base de Datos</button>
+                                    
+                                    <button onclick="closePasteModal()" style="
+                                        background: #6c757d; 
+                                        color: white; 
+                                        border: none; 
+                                        padding: 0.75rem 1.5rem; 
+                                        border-radius: 0.25rem; 
+                                        cursor: pointer;
+                                    ">❌ Cancelar</button>
+                                </div>
+                            </div>
+                            
+                            <!-- Área de progreso -->
+                            <div id="csvProgressArea" style="display: none; margin-top: 1.5rem; padding: 1rem; background: #f8f9fa; border-radius: 0.25rem;">
+                                <h6 style="margin: 0 0 1rem 0; color: #495057;">⏳ Cargando datos...</h6>
+                                <div style="background: #e9ecef; border-radius: 0.25rem; overflow: hidden; margin-bottom: 0.5rem;">
+                                    <div id="csvProgressBar" style="background: #007bff; height: 1.5rem; width: 0%; transition: width 0.3s ease; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;"></div>
+                                </div>
+                                <div id="csvProgressText" style="font-size: 0.875rem; color: #6c757d; text-align: center;">Iniciando...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Agregar modal al DOM
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+            
+            // Enfocar el textarea
+            setTimeout(() => {
+                document.getElementById('csvTextArea').focus();
+            }, 100);
+        }
+
+        // Función para cerrar modal de pegar datos
+        function closePasteModal() {
+            const modal = document.getElementById('pasteModal');
+            if (modal) {
+                document.body.removeChild(modal);
+            }
+            textoCSVActual = '';
+            datosCSVPreview = null;
+        }
+
+        // Función para mostrar ejemplo en el textarea
+        function showCSVExample() {
+            const ejemplo = `causa_observacion,direccion,instalacion,adicional,consumo,alfa,ciclo,error,lector,supervisor_zona,foto,falta_firma,observacion,debia_dejar_constancia,observacion_constancia
+Medidor con falla en display,Calle 123 #45-67,12345678,Requiere cambio de medidor,150,A1,2024-12,NO,Juan Pérez,María García,SI,NO,Medidor presenta daños visibles,SI,Se dejó constancia al usuario
+Lectura errónea por obstáculo,Carrera 45 #12-34,87654321,Vegetación obstruye medidor,200,B2,2024-12,SI,Carlos López,Ana Rodríguez,SI,NO,Ramas tapan el display,NO,Usuario no se encontraba
+Error en registro anterior,Avenida 80 #23-45,11223344,Revisar historial de lecturas,175,C3,2024-12,NO,Pedro Martínez,Luis Hernández,NO,SI,Inconsistencia en lecturas previas,SI,Firmó el supervisor`;
+            
+            document.getElementById('csvTextArea').value = ejemplo;
+            
+            alert(`📋 Ejemplo cargado en el campo de texto!
+
+💡 Este ejemplo incluye:
+• 3 registros de muestra para refutar errores
+• Todas las columnas principales del sistema
+• Formato CSV estándar separado por comas
+• Datos realistas para el contexto
+
+✅ Puedes modificar este ejemplo o reemplazarlo con tus propios datos.`);
+        }
+
+        // Función para limpiar el textarea
+        function clearCSVText() {
+            document.getElementById('csvTextArea').value = '';
+            document.getElementById('csvPreviewArea').style.display = 'none';
+            document.getElementById('cargarBtn').disabled = true;
+            textoCSVActual = '';
+            datosCSVPreview = null;
+        }
+
+        // Función para procesar el texto CSV pegado
+        function processCSVText() {
+            const textarea = document.getElementById('csvTextArea');
+            const texto = textarea.value.trim();
+            
+            if (!texto) {
+                alert('⚠️ Por favor pega los datos CSV en el campo de texto.');
+                return;
+            }
+            
+            console.log('🔄 Procesando texto CSV pegado...');
+            
+            try {
+                // Parsear el texto CSV
+                const { datos, errores } = parseCSV(texto);
+                
+                // Guardar datos procesados
+                textoCSVActual = texto;
+                datosCSVPreview = { datos, errores };
+                
+                // Mostrar preview
+                showCSVPreview(datos, errores);
+                
+                // Habilitar botón de carga si hay datos válidos
+                document.getElementById('cargarBtn').disabled = datos.length === 0;
+                
+            } catch (error) {
+                console.error('❌ Error procesando texto CSV:', error);
+                alert('❌ Error al procesar los datos: ' + error.message + '\n\n💡 Verifica que:\n• La primera fila contenga los nombres de columnas\n• Los datos estén separados por comas\n• Las columnas requeridas estén presentes');
+            }
+        }
+
+        // Función para parsear CSV
+        function parseCSV(texto) {
+            console.log('🔍 Parseando contenido CSV...');
+            
+            const lineas = texto.split('\n').map(linea => linea.trim()).filter(linea => linea.length > 0);
+            
+            if (lineas.length < 2) {
+                throw new Error('El archivo debe contener al menos una fila de encabezados y una de datos');
+            }
+            
+            // Detectar el delimitador automáticamente
+            const primeraLinea = lineas[0];
+            let delimitador = ',';
+            
+            const numComas = (primeraLinea.match(/,/g) || []).length;
+            const numTabs = (primeraLinea.match(/\t/g) || []).length;
+            
+            if (numTabs > numComas) {
+                delimitador = '\t';
+                console.log('✅ Delimitador detectado: TABULACIÓN (datos de Excel)');
+            } else {
+                console.log('✅ Delimitador detectado: COMA (CSV estándar)');
+            }
+            
+            // Parsear encabezados
+            const encabezados = parseCSVRow(lineas[0], delimitador);
+            console.log('📝 Encabezados detectados:', encabezados);
+            
+            // Columnas conocidas para refutar_errores
+            const columnasConocidas = [
+                'causa_observacion', 'adicional', 'direccion', 'consumo', 'alfa', 
+                'ciclo', 'error', 'lector', 'instalacion', 'supervisor_zona', 'foto', 
+                'falta_firma', 'observacion', 'debia_dejar_constancia', 'observacion_constancia'
+            ];
+            
+            // Validar columnas esenciales (más flexible - solo requiere una de las principales)
+            const columnasEsenciales = ['direccion', 'instalacion'];
+            const columnasEsencialesNoEncontradas = columnasEsenciales.filter(col => !encabezados.includes(col));
+            if (columnasEsencialesNoEncontradas.length > 1) {
+                throw new Error(`Faltan columnas esenciales. Se requiere al menos: ${columnasEsenciales.join(' y ')}`);
+            }
+            
+            // Verificar columnas no reconocidas
+            const columnasNoReconocidas = encabezados.filter(col => !columnasConocidas.includes(col));
+            if (columnasNoReconocidas.length > 0) {
+                console.warn('⚠️ Columnas no reconocidas (serán ignoradas):', columnasNoReconocidas);
+            }
+            
+            const datos = [];
+            const errores = [];
+            
+            // Procesar filas de datos
+            for (let i = 1; i < lineas.length; i++) {
+                try {
+                    const valores = parseCSVRow(lineas[i], delimitador);
+                    
+                    // Ser más flexible con el número de columnas - rellenar con vacíos si faltan
+                    while (valores.length < encabezados.length) {
+                        valores.push('');
+                    }
+                    
+                    // Si hay más valores que encabezados, truncar
+                    if (valores.length > encabezados.length) {
+                        valores = valores.slice(0, encabezados.length);
+                        errores.push(`Fila ${i + 1}: Se encontraron columnas adicionales que fueron ignoradas`);
+                    }
+                    
+                    const registro = {};
+                    encabezados.forEach((encabezado, index) => {
+                        if (columnasConocidas.includes(encabezado)) {
+                            // Manejar valores null, undefined o vacíos más graciosamente
+                            let valor = valores[index];
+                            if (valor === undefined || valor === null) {
+                                valor = '';
+                            } else if (typeof valor === 'string') {
+                                valor = valor.trim();
+                                // Convertir "null", "NULL", "undefined" en texto a cadena vacía
+                                if (valor.toLowerCase() === 'null' || valor.toLowerCase() === 'undefined') {
+                                    valor = '';
+                                }
+                            }
+                            registro[encabezado] = valor;
+                        }
+                    });
+                    
+                    // Validaciones más flexibles - solo campos realmente críticos
+                    let tieneContenidoValido = false;
+                    
+                    // Verificar que al menos tenga dirección o instalación con contenido
+                    if (registro.direccion && registro.direccion.trim() !== '') {
+                        tieneContenidoValido = true;
+                    }
+                    if (registro.instalacion && registro.instalacion.trim() !== '') {
+                        tieneContenidoValido = true;
+                    }
+                    
+                    if (!tieneContenidoValido) {
+                        errores.push(`Fila ${i + 1}: Se requiere al menos 'direccion' o 'instalacion' con contenido`);
+                        continue;
+                    }
+                    
+                    datos.push(registro);
+                    
+                } catch (error) {
+                    errores.push(`Fila ${i + 1}: ${error.message}`);
+                }
+            }
+            
+            console.log(`✅ Procesados ${datos.length} registros válidos, ${errores.length} errores`);
+            return { datos, errores };
+        }
+
+        // Función para parsear una fila CSV (mejorada para manejar celdas vacías)
+        function parseCSVRow(fila, delimitador = ',') {
+            const resultado = [];
+            let valorActual = '';
+            let dentroDeComillas = false;
+            let i = 0;
+            
+            while (i < fila.length) {
+                const char = fila[i];
+                
+                if (char === '"' && !dentroDeComillas) {
+                    dentroDeComillas = true;
+                } else if (char === '"' && dentroDeComillas) {
+                    if (i + 1 < fila.length && fila[i + 1] === '"') {
+                        valorActual += '"';
+                        i++;
+                    } else {
+                        dentroDeComillas = false;
+                    }
+                } else if (char === delimitador && !dentroDeComillas) {
+                    // Limpiar valor antes de agregarlo
+                    let valorLimpio = valorActual.trim();
+                    // Manejar valores especiales
+                    if (valorLimpio === 'NULL' || valorLimpio === 'null' || valorLimpio === '#N/A' || valorLimpio === '') {
+                        valorLimpio = '';
+                    }
+                    resultado.push(valorLimpio);
+                    valorActual = '';
+                } else {
+                    valorActual += char;
+                }
+                
+                i++;
+            }
+            
+            // Agregar el último valor (también limpiarlo)
+            let valorLimpio = valorActual.trim();
+            if (valorLimpio === 'NULL' || valorLimpio === 'null' || valorLimpio === '#N/A') {
+                valorLimpio = '';
+            }
+            resultado.push(valorLimpio);
+            
+            return resultado;
+        }
+
+        // Función para mostrar preview de los datos procesados
+        function showCSVPreview(datos, errores) {
+            const previewArea = document.getElementById('csvPreviewArea');
+            const previewContent = document.getElementById('csvPreviewContent');
+            
+            let html = '';
+            
+            // Mostrar errores si existen
+            if (errores.length > 0) {
+                html += `
+                    <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 0.25rem; padding: 0.75rem; margin-bottom: 1rem;">
+                        <h6 style="color: #856404; margin: 0 0 0.5rem 0;">⚠️ Advertencias/Errores (${errores.length}):</h6>
+                        <div style="max-height: 120px; overflow-y: auto; font-size: 0.875rem;">
+                            ${errores.slice(0, 15).map(error => `<div style="color: #856404;">• ${error}</div>`).join('')}
+                            ${errores.length > 15 ? `<div style="color: #856404; font-style: italic;">...y ${errores.length - 15} más</div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Mostrar resumen y datos
+            if (datos.length > 0) {
+                const columnas = Object.keys(datos[0]);
+                const muestra = datos.slice(0, 5);
+                
+                html += `
+                    <div style="background: #d1edff; border: 1px solid #7cc7ff; border-radius: 0.25rem; padding: 0.75rem; margin-bottom: 1rem;">
+                        <h6 style="color: #004085; margin: 0 0 0.5rem 0;">✅ Datos procesados correctamente</h6>
+                        <div style="color: #004085; font-size: 0.875rem;">
+                            <strong>📊 Registros válidos:</strong> ${datos.length} | 
+                            <strong>📋 Columnas detectadas:</strong> ${columnas.length}
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 1rem;">
+                        <strong>Columnas detectadas:</strong><br>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.5rem;">
+                            ${columnas.map(col => {
+                                const esEsencial = ['causa_observacion', 'direccion', 'instalacion'].includes(col);
+                                const color = esEsencial ? '#28a745' : '#6c757d';
+                                const icon = esEsencial ? '✅' : '📋';
+                                return `<span style="background: ${color}; color: white; padding: 0.2rem 0.5rem; border-radius: 0.2rem; font-size: 0.8rem;">${icon} ${col.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>`;
+                            }).join('')}
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 1rem;">
+                        <strong>Vista previa (primeros ${muestra.length} registros):</strong>
+                    </div>
+                    
+                    <div style="overflow-x: auto; max-height: 300px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 0.25rem;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
+                            <thead style="position: sticky; top: 0; background: #f8f9fa;">
+                                <tr>
+                                    ${columnas.map(col => `<th style="padding: 0.5rem; border-bottom: 2px solid #dee2e6; text-align: left; font-weight: bold; white-space: nowrap;">${col.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</th>`).join('')}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${muestra.map((fila, index) => `
+                                    <tr style="background: ${index % 2 === 0 ? '#ffffff' : '#f8f9fa'};">
+                                        ${columnas.map(col => {
+                                            let valor = fila[col] || '';
+                                            if (valor.length > 40) valor = valor.substring(0, 37) + '...';
+                                            return `<td style="padding: 0.5rem; border-bottom: 1px solid #dee2e6; white-space: nowrap;">${valor || '<span style="color: #6c757d;">-</span>'}</td>`;
+                                        }).join('')}
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    ${datos.length > 5 ? `<div style="margin-top: 0.5rem; font-size: 0.875rem; color: #6c757d; text-align: center; font-style: italic;">...y ${datos.length - 5} registros más</div>` : ''}
+                `;
+            } else {
+                html += `
+                    <div style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 0.25rem; padding: 0.75rem;">
+                        <h6 style="color: #721c24; margin: 0;">❌ No se encontraron datos válidos</h6>
+                        <p style="color: #721c24; margin: 0.5rem 0 0 0; font-size: 0.875rem;">Verifica el formato de los datos y vuelve a intentar.</p>
+                    </div>
+                `;
+            }
+            
+            previewContent.innerHTML = html;
+            previewArea.style.display = 'block';
+        }
+
+        // Función para confirmar y cargar los datos
+        async function confirmCSVUpload() {
+            if (!datosCSVPreview || !datosCSVPreview.datos || datosCSVPreview.datos.length === 0) {
+                alert('❌ No hay datos válidos para cargar.');
+                return;
+            }
+            
+            const { datos, errores } = datosCSVPreview;
+            
+            let mensaje = `📊 Se van a cargar ${datos.length} registros a la base de datos.`;
+            if (errores.length > 0) {
+                mensaje += `\n⚠️ Se encontraron ${errores.length} errores/advertencias que fueron omitidos.`;
+            }
+            mensaje += '\n\n¿Confirmas la carga?';
+            
+            if (!confirm(mensaje)) {
+                return;
+            }
+            
+            try {
+                // Mostrar área de progreso
+                document.getElementById('csvProgressArea').style.display = 'block';
+                document.getElementById('cargarBtn').disabled = true;
+                document.getElementById('procesarBtn').disabled = true;
+                
+                // Cargar datos con progreso
+                await uploadCSVData(datos);
+                
+                // Cerrar modal y recargar tabla
+                closePasteModal();
+                loadData();
+                
+                alert(`✅ ¡Carga completada exitosamente!
+                
+📊 ${datos.length} registros cargados a la base de datos.
+🔄 La tabla se ha actualizado automáticamente.`);
+                
+            } catch (error) {
+                console.error('❌ Error en carga:', error);
+                alert('❌ Error durante la carga: ' + error.message);
+            } finally {
+                document.getElementById('cargarBtn').disabled = false;
+                document.getElementById('procesarBtn').disabled = false;
+                document.getElementById('csvProgressArea').style.display = 'none';
+            }
+        }
+
+        // Función para cargar datos con barra de progreso
+        async function uploadCSVData(datos) {
+            console.log(`📁 Iniciando carga de ${datos.length} registros desde texto CSV...`);
+            
+            const tamanoLote = 50;
+            const totalLotes = Math.ceil(datos.length / tamanoLote);
+            let procesados = 0;
+            let exitosos = 0;
+            let fallidos = 0;
+            
+            const progressBar = document.getElementById('csvProgressBar');
+            const progressText = document.getElementById('csvProgressText');
+            
+            for (let i = 0; i < datos.length; i += tamanoLote) {
+                const lote = datos.slice(i, i + tamanoLote);
+                const loteActual = Math.floor(i / tamanoLote) + 1;
+                
+                try {
+                    // Actualizar progreso
+                    const porcentaje = Math.round((procesados / datos.length) * 100);
+                    progressBar.style.width = porcentaje + '%';
+                    progressBar.textContent = porcentaje + '%';
+                    progressText.textContent = `Procesando lote ${loteActual} de ${totalLotes} - ${procesados}/${datos.length} registros`;
+                    
+                    console.log(`🔄 Procesando lote ${loteActual}/${totalLotes}`);
+                    
+                    // Insertar lote en Supabase
+                    const { data, error } = await supabase
+                        .from(TABLE_NAME)
+                        .insert(lote);
+                    
+                    if (error) {
+                        console.error('❌ Error insertando lote:', error);
+                        fallidos += lote.length;
+                    } else {
+                        exitosos += lote.length;
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ Error procesando lote:', error);
+                    fallidos += lote.length;
+                }
+                
+                procesados += lote.length;
+                
+                // Pausa pequeña para no sobrecargar
+                await new Promise(resolve => setTimeout(resolve, 200));
+            }
+            
+            // Progreso final
+            progressBar.style.width = '100%';
+            progressBar.textContent = '✅ 100%';
+            progressText.textContent = `Completado: ${exitosos} exitosos, ${fallidos} fallidos de ${procesados} total`;
+            
+            console.log(`✅ Carga desde texto completada: ${exitosos} exitosos, ${fallidos} fallidos`);
+            
+            return { procesados, exitosos, fallidos };
+        }
+    </script>
+</body>
+</html>

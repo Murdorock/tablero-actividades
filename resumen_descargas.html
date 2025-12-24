@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resumen Descargas - Sistema</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="config.js"></script>
+    <script src="table-logic-resumen_descargas.js"></script>
+</head>
+<body>
+    <div class="table-container">
+        <div class="table-header">
+            <h2>📋 Resumen Descargas</h2>
+            <div class="table-actions">
+                <button class="btn btn-success" onclick="abrirModalEstadisticas()">📊 Ver Estadísticas</button>
+                <button class="btn btn-primary" onclick="enviarEmail()">📧 Enviar Email</button>
+                <button class="btn btn-secondary" onclick="loadData()">🔄 Actualizar</button>
+            </div>
+        </div>
+        <div class="data-table-wrapper">
+            <div id="loadingIndicator" class="loading"><div class="spinner"></div><p>Cargando...</p></div>
+            <div id="tableContainer"></div>
+        </div>
+    </div>
+
+    <!-- Modal de Estadísticas -->
+    <div id="modalEstadisticas" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3>📊 Estadísticas de Avance - Ciclo <span id="modalCiclo"></span></h3>
+                <span class="close" onclick="cerrarModalEstadisticas()">&times;</span>
+            </div>
+            <div class="modal-body" id="modalEstadisticasBody">
+                <!-- Contenido generado dinámicamente -->
+            </div>
+        </div>
+    </div>
+</body>
+</html>

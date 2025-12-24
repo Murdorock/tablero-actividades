@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inconsistencias - Sistema</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="config.js"></script>
+    <script src="table-logic-inconsistencias.js"></script>
+</head>
+<body>
+    <div class="table-container">
+        <div class="table-header">
+            <h2>⚠️ Inconsistencias</h2>
+            <div class="table-actions">
+                <button class="btn btn-primary" onclick="openCreateModal()">➕ Nuevo</button>
+                <button class="btn btn-secondary" onclick="loadData()">🔄 Actualizar</button>
+                <button class="btn btn-success" onclick="descargarPlantillaExcel()">📋 Plantilla Excel</button>
+                <button class="btn btn-info" onclick="abrirCargaCSV()" style="background: #17a2b8; color: white;">📁 Cargar CSV</button>
+                <button class="btn btn-warning" onclick="exportarExcel()" style="background: #28a745; color: white;">📊 Exportar Excel</button>
+                <button class="btn btn-danger" onclick="eliminarTodosLosDatos()" style="background: #dc3545; color: white;">🗑️ Eliminar Todo</button>
+            </div>
+        </div>
+        <div class="data-table-wrapper">
+            <div id="loadingIndicator" class="loading"><div class="spinner"></div><p>Cargando...</p></div>
+            <div id="tableContainer"></div>
+        </div>
+    </div>
+    
+    <!-- Input oculto para cargar CSV -->
+    <input type="file" id="csvFileInput" accept=".csv" style="display: none;" onchange="procesarArchivoCSV(event)">
+    
+    <!-- Modal de carga CSV -->
+    <div id="csvModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 90%; width: 800px; max-height: 90vh; overflow: hidden;">
+            <div class="modal-header">
+                <h3>📁 Cargar Archivo CSV</h3>
+            </div>
+            <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                <!-- Área de selección de archivo -->
+                <div id="fileSelectionArea" style="margin-bottom: 1.5rem;">
+                    <div style="border: 2px dashed #dee2e6; border-radius: 0.5rem; padding: 2rem; text-align: center; background: #f8f9fa;">
+                        <div style="font-size: 3rem; color: #6c757d; margin-bottom: 1rem;">📄</div>
+                        <h4 style="color: #495057; margin-bottom: 0.5rem;">Seleccionar archivo CSV</h4>
+                        <p style="color: #6c757d; margin-bottom: 1rem;">Haga clic para seleccionar o arrastre su archivo aquí</p>
+                        <button type="button" onclick="abrirSelectorArchivo()" class="btn btn-primary">📂 Seleccionar Archivo</button>
+                        <input type="file" id="modalCsvInput" accept=".csv" style="display: none;" onchange="cargarArchivoEnModal(event)">
+                    </div>
+                </div>
+                
+                <!-- Información del archivo -->
+                <div id="fileInfo" style="display: none; margin-bottom: 1.5rem;">
+                    <div style="background: #e3f2fd; border-radius: 0.5rem; padding: 1rem; border-left: 4px solid #2196f3;">
+                        <h5 style="margin: 0 0 0.5rem 0; color: #1976d2;">📊 Información del Archivo</h5>
+                        <div id="fileDetails"></div>
+                    </div>
+                </div>
+                
+                <!-- Barra de progreso -->
+                <div id="progressArea" style="display: none; margin-bottom: 1.5rem;">
+                    <h5 style="color: #495057; margin-bottom: 0.5rem;">📈 Progreso de Carga</h5>
+                    <div style="background: #e9ecef; border-radius: 0.25rem; overflow: hidden; margin-bottom: 0.5rem;">
+                        <div id="progressBar" style="background: linear-gradient(90deg, #28a745, #20c997); height: 1rem; width: 0%; transition: width 0.3s ease; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.75rem; font-weight: bold;"></div>
+                    </div>
+                    <div id="progressText" style="font-size: 0.875rem; color: #6c757d;">Preparando...</div>
+                </div>
+                
+                <!-- Previsualización -->
+                <div id="previewArea" style="display: none;">
+                    <h5 style="color: #495057; margin-bottom: 0.5rem;">👁️ Previsualización de Datos</h5>
+                    <div style="background: #f8f9fa; border-radius: 0.5rem; padding: 1rem; max-height: 300px; overflow: auto; border: 1px solid #dee2e6;">
+                        <div id="previewContent"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="cancelBtn" onclick="cerrarModalCSV()" class="btn btn-secondary">Cancelar</button>
+                <button type="button" id="uploadBtn" onclick="iniciarCargaCSV()" class="btn btn-success" disabled>📤 Cargar Datos</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="dataModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header"><h3 id="modalTitle">Nuevo Registro</h3></div>
+            <form id="dataForm">
+                <input type="hidden" id="recordId">
+                <div id="formFields"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

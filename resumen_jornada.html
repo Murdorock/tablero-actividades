@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resumen Jornada - Sistema</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="config.js"></script>
+    <script>const TABLE_NAME = 'base'; const TABLE_TITLE = '📊 Resumen Jornada';</script>
+    <script src="table-logic-resumen_jornada.js"></script>
+</head>
+<body>
+    <div class="table-container">
+        <div class="table-header">
+            <h2>📊 Resumen Jornada</h2>
+            <div class="table-actions">
+                <button class="btn btn-primary" onclick="abrirModalCompacto()">📱 Ver Resumen Compacto</button>
+                <button class="btn btn-success" onclick="exportarTablas()">📥 Exportar</button>
+                <button class="btn btn-secondary" onclick="loadData()">🔄 Actualizar</button>
+            </div>
+        </div>
+        <div class="data-table-wrapper">
+            <div id="loadingIndicator" class="loading"><div class="spinner"></div><p>Cargando...</p></div>
+            <div id="tableContainer"></div>
+        </div>
+    </div>
+
+    <!-- Modal Resumen Compacto -->
+    <div id="modalCompacto" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 95vw; max-height: 95vh; overflow: auto; background: white;">
+            <div class="modal-header" style="background: #607d8b; color: white; padding: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0;">📊 Resumen Jornada - Totales</h3>
+                <span class="close" onclick="cerrarModalCompacto()" style="cursor: pointer; font-size: 1.5rem;">&times;</span>
+            </div>
+            <div class="modal-body" id="modalCompactoBody" style="padding: 1rem; background: white;">
+                <!-- Contenido generado dinámicamente -->
+            </div>
+        </div>
+    </div>
+</body>
+</html>

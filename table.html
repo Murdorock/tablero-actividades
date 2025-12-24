@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tabla Genérica - Sistema de Gestión</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+</head>
+<body>
+    <div class="table-container">
+        <div class="table-header">
+            <h2 id="tableTitle">Cargando...</h2>
+            <div class="table-actions">
+                <button class="btn btn-primary" onclick="openCreateModal()">➕ Nuevo Registro</button>
+                <button class="btn btn-secondary" onclick="loadData()">🔄 Actualizar</button>
+            </div>
+        </div>
+        
+        <div class="data-table-wrapper">
+            <div id="loadingIndicator" class="loading">
+                <div class="spinner"></div>
+                <p>Cargando datos...</p>
+            </div>
+            
+            <div id="tableContainer"></div>
+        </div>
+    </div>
+    
+    <!-- Modal para crear/editar -->
+    <div id="dataModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Nuevo Registro</h3>
+            </div>
+            <form id="dataForm">
+                <input type="hidden" id="recordId">
+                <div id="formFields"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        // Obtener el nombre de la tabla de los parámetros de URL o del nombre del archivo
+        const urlParams = new URLSearchParams(window.location.search);
+        const TABLE_NAME = urlParams.get('table') || getTableNameFromFile();
+        
+        let tableColumns = [];
+        let currentData = [];
+        
+        function getTableNameFromFile() {
+            const fileName = window.location.pathname.split('/').pop().replace('.html', '');
+            return fileName === 'table' ? 'base' : fileName;
+        }
+        
+        // Configuración de títulos amigables
+        const tableTitles = {
+            'aproximados': '📍 Aproximados',
+            'base': '🗄️ Base',
+            'cmlec': '📊 CMLEC',
+            'control_descargas': '⬇️ Control Descargas',
+            'controles_reparto': '🚚 Controles Reparto',
+            'coordenadas': '🗺️ Coordenadas',
+            'hist_lectura': '📖 Historial Lectura',
+            'historicos': '📜 Históricos',
+            'inconsistencias': '⚠️ Inconsistencias',
+            'llegadas_tarde': '⏰ Llegadas Tarde',
+            'perfiles': '👤 Perfiles',
+            'personal': '👥 Personal',
+            'programacion_lectura': '📅 Programación Lectura',
+            'rangos': '📏 Rangos',
+            'rangos_reparto': '📦 Rangos Reparto',
+            'refutar_errores': '🔄 Refutar Errores',
+            'resumen_descargas': '📋 Resumen Descargas',
+            'secuencia_lectura': '🔢 Secuencia Lectura',
+            'secuencia_sin_lectura': '❌ Secuencia Sin Lectura'
+        };
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('tableTitle').textContent = tableTitles[TABLE_NAME] || TABLE_NAME.toUpperCase();
+            loadData();
+        });
+        
+        async function loadData() {
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const tableContainer = document.getElementById('tableContainer');
+            
+            loadingIndicator.style.display = 'block';
+            tableContainer.innerHTML = '';
+            
+            try {
+                const { data, error } = await supabase
+                    .from(TABLE_NAME)
+                    .select('*')
+                    .limit(100);
+                
+                if (error) throw error;
+                
+                currentData = data || [];
+                
+                if (currentData.length > 0) {
+                    // Obtener columnas del primer registro
+                    tableColumns = Object.keys(currentData[0]);
+                    renderTable(currentData);
+                } else {
+                    // Intentar obtener la estructura de la tabla
+                    const { data: emptyData, error: structureError } = await supabase
+                        .from(TABLE_NAME)
+                        .select('*')
+                        .limit(1);
+                    
+                    tableContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: #7f8c8d;">No hay registros en esta tabla</div>';
+                }
+                
+                loadingIndicator.style.display = 'none';
+            } catch (error) {
+                handleError(error, 'al cargar datos');
+                loadingIndicator.style.display = 'none';
+                tableContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: #e74c3c;">Error al cargar los datos. Verifica que la tabla exista en Supabase.</div>';
+            }
+        }
+        
+        function renderTable(data) {
+            const tableContainer = document.getElementById('tableContainer');
+            
+            let html = '<table class="data-table"><thead><tr>';
+            
+            // Encabezados
+            tableColumns.forEach(col => {
+                html += `<th>${formatColumnName(col)}</th>`;
+            });
+            html += '<th>Acciones</th></tr></thead><tbody>';
+            
+            // Filas de datos
+            data.forEach(row => {
+                html += '<tr>';
+                tableColumns.forEach(col => {
+                    const value = row[col];
+                    html += `<td>${formatValue(value, col)}</td>`;
+                });
+                
+                const rowId = row.id || row[tableColumns[0]];
+                html += `<td class="actions">
+                    <button class="btn btn-primary btn-sm" onclick="editRecord('${rowId}')">✏️</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteRecord('${rowId}')">🗑️</button>
+                </td></tr>`;
+            });
+            
+            html += '</tbody></table>';
+            tableContainer.innerHTML = html;
+        }
+        
+        function formatColumnName(col) {
+            return col.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+        
+        function formatValue(value, columnName) {
+            if (value === null || value === undefined) return '-';
+            if (typeof value === 'boolean') return value ? '✓' : '✗';
+            if (columnName.includes('fecha') || columnName.includes('date') || columnName.includes('created_at') || columnName.includes('updated_at')) {
+                return formatDate(value);
+            }
+            if (typeof value === 'object') return JSON.stringify(value).substring(0, 50) + '...';
+            const str = String(value);
+            return str.length > 100 ? str.substring(0, 100) + '...' : str;
+        }
+        
+        function openCreateModal() {
+            document.getElementById('modalTitle').textContent = 'Nuevo Registro';
+            document.getElementById('dataForm').reset();
+            document.getElementById('recordId').value = '';
+            generateFormFields();
+            document.getElementById('dataModal').classList.add('show');
+        }
+        
+        function generateFormFields() {
+            const formFields = document.getElementById('formFields');
+            formFields.innerHTML = '';
+            
+            tableColumns.forEach(col => {
+                if (col === 'id' || col === 'created_at' || col === 'updated_at') return;
+                
+                const formGroup = document.createElement('div');
+                formGroup.className = 'form-group';
+                
+                const label = document.createElement('label');
+                label.textContent = formatColumnName(col);
+                label.setAttribute('for', col);
+                
+                let input;
+                if (col.includes('fecha') || col.includes('date')) {
+                    input = document.createElement('input');
+                    input.type = 'datetime-local';
+                } else if (col.toLowerCase().includes('email')) {
+                    input = document.createElement('input');
+                    input.type = 'email';
+                } else if (col.toLowerCase().includes('phone') || col.toLowerCase().includes('tel')) {
+                    input = document.createElement('input');
+                    input.type = 'tel';
+                } else {
+                    input = document.createElement('input');
+                    input.type = 'text';
+                }
+                
+                input.id = col;
+                input.name = col;
+                
+                formGroup.appendChild(label);
+                formGroup.appendChild(input);
+                formFields.appendChild(formGroup);
+            });
+        }
+        
+        async function editRecord(id) {
+            try {
+                const record = currentData.find(r => r.id == id || r[tableColumns[0]] == id);
+                
+                if (!record) throw new Error('Registro no encontrado');
+                
+                document.getElementById('modalTitle').textContent = 'Editar Registro';
+                document.getElementById('recordId').value = id;
+                generateFormFields();
+                
+                // Llenar el formulario con los datos existentes
+                tableColumns.forEach(col => {
+                    const input = document.getElementById(col);
+                    if (input && record[col] !== null && record[col] !== undefined) {
+                        if (input.type === 'datetime-local') {
+                            const date = new Date(record[col]);
+                            input.value = date.toISOString().slice(0, 16);
+                        } else {
+                            input.value = record[col];
+                        }
+                    }
+                });
+                
+                document.getElementById('dataModal').classList.add('show');
+            } catch (error) {
+                handleError(error, 'al cargar registro');
+            }
+        }
+        
+        async function deleteRecord(id) {
+            if (!confirm('¿Estás seguro de que deseas eliminar este registro?')) {
+                return;
+            }
+            
+            try {
+                const { error } = await supabase
+                    .from(TABLE_NAME)
+                    .delete()
+                    .eq('id', id);
+                
+                if (error) throw error;
+                
+                showMessage('Registro eliminado exitosamente', 'success');
+                loadData();
+            } catch (error) {
+                handleError(error, 'al eliminar registro');
+            }
+        }
+        
+        function closeModal() {
+            document.getElementById('dataModal').classList.remove('show');
+        }
+        
+        document.getElementById('dataForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const id = document.getElementById('recordId').value;
+            const formData = {};
+            
+            tableColumns.forEach(col => {
+                if (col === 'id' || col === 'created_at' || col === 'updated_at') return;
+                const input = document.getElementById(col);
+                if (input) {
+                    formData[col] = input.value || null;
+                }
+            });
+            
+            try {
+                if (id) {
+                    const { error } = await supabase
+                        .from(TABLE_NAME)
+                        .update(formData)
+                        .eq('id', id);
+                    
+                    if (error) throw error;
+                    showMessage('Registro actualizado exitosamente', 'success');
+                } else {
+                    const { error } = await supabase
+                        .from(TABLE_NAME)
+                        .insert([formData]);
+                    
+                    if (error) throw error;
+                    showMessage('Registro creado exitosamente', 'success');
+                }
+                
+                closeModal();
+                loadData();
+            } catch (error) {
+                handleError(error, 'al guardar registro');
+            }
+        });
+        
+        document.getElementById('dataModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+    </script>
+</body>
+</html>

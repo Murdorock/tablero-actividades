@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tablero Supabase - Sistema de Gestión</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="main-container">
+        <!-- Barra lateral de navegación -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>📊 Sistema de Gestión</h1>
+                <p style="font-size: 12px; color: #95a5a6; margin-top: 5px;">Panel de Control</p>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-page="welcome.html">🏠 Inicio</a>
+                <a href="#" class="nav-item" data-page="aproximados.html">📍 Aproximados</a>
+                <a href="#" class="nav-item" data-page="base.html">🗄️ Base</a>
+                <a href="#" class="nav-item" data-page="cmlec.html">📊 CMLEC</a>
+                <a href="#" class="nav-item" data-page="control_descargas.html">⬇️ Control Descargas</a>
+                <a href="#" class="nav-item" data-page="controles_reparto.html">🚚 Controles Reparto</a>
+                <a href="#" class="nav-item" data-page="coordenadas.html">🗺️ Coordenadas</a>
+                <a href="#" class="nav-item" data-page="evidencias.html">📸 Evidencias</a>
+                <a href="#" class="nav-item" data-page="hist_lectura.html">📖 Historial Lectura</a>
+                <a href="#" class="nav-item" data-page="historicos.html">📜 Históricos</a>
+                <a href="#" class="nav-item" data-page="inconsistencias.html">⚠️ Inconsistencias</a>
+                <a href="#" class="nav-item" data-page="llegadas_tarde.html">⏰ Llegadas Tarde</a>
+                <a href="#" class="nav-item" data-page="perfiles.html">👤 Perfiles</a>
+                <a href="#" class="nav-item" data-page="personal.html">👥 Personal</a>
+                <a href="#" class="nav-item" data-page="programacion_lectura.html">📅 Programación Lectura</a>
+                <a href="#" class="nav-item" data-page="rangos.html">📏 Rangos</a>
+                <a href="#" class="nav-item" data-page="rangos_reparto.html">📦 Rangos Reparto</a>
+                <a href="#" class="nav-item" data-page="refutar_errores.html">🔄 Refutar Errores</a>
+                <a href="#" class="nav-item" data-page="resumen_descargas.html">📋 Resumen Descargas</a>
+                <a href="#" class="nav-item" data-page="resumen_jornada.html">📊 Resumen Jornada</a>
+                <a href="#" class="nav-item" data-page="secuencia_lectura.html">🔢 Secuencia Lectura</a>
+                <a href="#" class="nav-item" data-page="secuencia_sin_lectura.html">❌ Secuencia Sin Lectura</a>
+                <a href="#" class="nav-item" data-page="registro_formacion.html">📝 Registro Formación</a>
+            </nav>
+            
+            <div style="padding: 20px; border-top: 1px solid #34495e; font-size: 12px; color: #95a5a6;">
+                <p>Sistema de Gestión v1.0</p>
+                <p style="margin-top: 5px;">Supabase Dashboard</p>
+            </div>
+        </aside>
+        
+        <!-- Área de contenido -->
+        <main class="content-area">
+            <iframe id="contentFrame" class="content-frame" src="welcome.html"></iframe>
+        </main>
+    </div>
+    
+    <script>
+        // Manejo de la navegación
+        document.addEventListener('DOMContentLoaded', function() {
+            const navItems = document.querySelectorAll('.nav-item');
+            const contentFrame = document.getElementById('contentFrame');
+            
+            navItems.forEach(item => {
+                item.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    
+                    // Remover clase active de todos los items
+                    navItems.forEach(nav => nav.classList.remove('active'));
+                    
+                    // Agregar clase active al item clickeado
+                    this.classList.add('active');
+                    
+                    // Cambiar el contenido del iframe
+                    const page = this.getAttribute('data-page');
+                    contentFrame.src = page;
+                });
+            });
+        });
+    </script>
+</body>
+</html>

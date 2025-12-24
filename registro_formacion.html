@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro Formación - Sistema</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <script src="config.js"></script>
+    <!-- SheetJS para exportar a XLSX -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script>
+        const TABLE_NAME = 'registro_formacion'; 
+        const TABLE_TITLE = '🎓 Registro Formación';
+        const PRIMARY_KEY = 'id'; // Clave única para esta tabla
+    </script>
+    <script src="logoUTIC.js"></script>
+    <script src="table-logic-registro_formacion.js"></script>
+</head>
+<body>
+    <div class="table-container">
+        <div class="table-header">
+            <h2>🎓 Registro Formación</h2>
+            <div class="table-actions">
+                <button class="btn btn-success" onclick="generarPDF()">📄 Generar PDF</button>
+                <button class="btn btn-secondary" onclick="loadData()">🔄 Refrescar</button>
+                <button class="btn btn-info" onclick="descargarPlantillaExcel()">📥 Plantilla</button>
+                <button class="btn btn-warning" onclick="mostrarModalCargarPorTexto()">📋 Cargar por texto</button>
+                <button class="btn btn-success" onclick="exportarFiltradoExcel()">📊 Exportar filtrado a Excel</button>
+            </div>
+        </div>
+        
+        <!-- Filtros -->
+        <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div style="display: flex; gap: 15px; align-items: end; flex-wrap: wrap;">
+                <div class="form-group" style="margin: 0; flex: 1; min-width: 200px;">
+                    <label for="filterSearch">Buscar</label>
+                    <input type="text" id="filterSearch" placeholder="Buscar en todos los campos..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                </div>
+                <div class="form-group" style="margin: 0; flex: 1; min-width: 200px;">
+                    <label for="filterColumn">Columna</label>
+                    <select id="filterColumn" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="">Todas las columnas</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-primary" onclick="applyFilter()">🔍 Filtrar</button>
+                    <button class="btn btn-secondary" onclick="clearFilter()">✖️ Limpiar</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="data-table-wrapper">
+            <table id="dataTable" class="data-table">
+                <thead id="tableHead"></thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+        
+        <div id="pagination" class="pagination"></div>
+    </div>
+</body>
+</html>

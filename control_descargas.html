@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Descargas - Sistema</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="table-logic-control_descargas.js"></script>
+</head>
+<body>
+    <div class="table-container">
+        <div class="table-header">
+            <h2>⬇️ Control Descargas</h2>
+            <div class="table-actions">
+                <button class="btn btn-primary" onclick="openCreateModal()">➕ Nuevo</button>
+                <button class="btn btn-warning" onclick="openPendientesModal()">🔎 Ver Pendientes</button>
+                <button class="btn btn-secondary" onclick="loadData()">🔄 Actualizar</button>
+                <!-- Modal Pendientes -->
+                <div id="modalPendientes" class="modal" style="display:none;">
+                    <div class="modal-content" style="max-width:95vw; max-height:95vh; overflow:auto; background:white;">
+                        <div class="modal-header" style="background:#fbc02d; color:#333; padding:1rem; display:flex; justify-content:space-between; align-items:center;">
+                            <h3 style="margin:0;">🔎 Correrías con Pendientes</h3>
+                            <span class="close" onclick="closePendientesModal()" style="cursor:pointer; font-size:1.5rem;">&times;</span>
+                        </div>
+                        <div class="modal-body" id="modalPendientesBody" style="padding:1rem; background:white;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div style="padding: 0.75rem 1rem; background: #e3f2fd; border-left: 4px solid #2196f3; margin: 1rem 0; border-radius: 0.25rem;">
+            <strong>🕐 Última Actualización:</strong> <span id="hora-primer-registro">Cargando...</span>
+        </div>
+        <div class="filter-container">
+            <div class="filter-group">
+                <label for="filtro-id-correria">ID Correría:</label>
+                <input type="text" id="filtro-id-correria" list="id-correria-list" placeholder="Buscar..." oninput="applyFilters()">
+                <datalist id="id-correria-list"></datalist>
+            </div>
+            <div class="filter-group">
+                <label for="filtro-codigo">Código:</label>
+                <input type="text" id="filtro-codigo" list="codigo-list" placeholder="Buscar..." oninput="applyFilters()">
+                <datalist id="codigo-list"></datalist>
+            </div>
+            <div class="filter-group">
+                <label for="filtro-supervisor">Supervisor:</label>
+                <input type="text" id="filtro-supervisor" list="supervisor-list" placeholder="Buscar..." oninput="applyFilters()">
+                <datalist id="supervisor-list"></datalist>
+            </div>
+            <div class="filter-group">
+                <button class="btn btn-secondary btn-sm" onclick="clearFilters()">🗑️ Limpiar Filtros</button>
+            </div>
+        </div>
+        <div class="data-table-wrapper">
+            <div id="loadingIndicator" class="loading"><div class="spinner"></div><p>Cargando...</p></div>
+            <div id="tableContainer"></div>
+        </div>
+    </div>
+    <div id="dataModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header"><h3 id="modalTitle">Nuevo Registro</h3></div>
+            <form id="dataForm">
+                <input type="hidden" id="recordId">
+                <div id="formFields"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

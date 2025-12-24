@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controles Reparto - Sistema</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script>const TABLE_NAME = 'controles_reparto'; const TABLE_TITLE = '🚚 Controles Reparto';</script>
+    <script src="table-logic.js"></script>
+</head>
+<body>
+    <div class="table-container">
+        <div class="table-header">
+            <h2>🚚 Controles Reparto</h2>
+            <div class="table-actions">
+                <button class="btn btn-primary" onclick="openCreateModal()">➕ Nuevo</button>
+                <button class="btn btn-secondary" onclick="loadData()">🔄 Actualizar</button>
+            </div>
+        </div>
+        <div class="filter-container">
+            <div class="filter-group">
+                <label for="filtro-ciclo">Ciclo:</label>
+                <select id="filtro-ciclo" onchange="applyFilters()">
+                    <option value="">Seleccione ciclo</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="filtro-correria">Correría:</label>
+                <input type="text" id="filtro-correria" placeholder="Ingrese 4 números" maxlength="4" oninput="handleCorreriaInput(this)">
+            </div>
+            <div class="filter-group">
+                <button class="btn btn-secondary btn-sm" onclick="clearFilters()">🗑️ Limpiar Filtros</button>
+            </div>
+        </div>
+        <div class="data-table-wrapper">
+            <div id="loadingIndicator" class="loading"><div class="spinner"></div><p>Cargando...</p></div>
+            <div id="tableContainer"></div>
+        </div>
+    </div>
+    <div id="dataModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header"><h3 id="modalTitle">Nuevo Registro</h3></div>
+            <form id="dataForm">
+                <input type="hidden" id="recordId">
+                <div id="formFields"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

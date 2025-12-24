@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Programación Lectura - Sistema</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <script src="config.js"></script>
+    <script>
+        const TABLE_NAME = 'programacion_lectura'; 
+        const TABLE_TITLE = '📅 Programación Lectura';
+        const PRIMARY_KEY = 'id_correria';
+    </script>
+    <script src="table-logic-programacion_lectura.js"></script>
+</head>
+<body>
+    <div class="table-container">
+        <div class="table-header">
+            <h2>📅 Programación Lectura</h2>
+            <div class="table-actions">
+                <button class="btn btn-primary" onclick="openCreateModal()">➕ Nuevo</button>
+                <button class="btn btn-secondary" onclick="loadData()">🔄 Refrescar</button>
+                <button class="btn btn-success" onclick="openImportModal()">📤 Cargar CSV</button>
+                <button class="btn btn-primary" onclick="openUpdateModal()">🔄 Actualizar CSV</button>
+                <button class="btn btn-danger" onclick="limpiarTabla()">🗑️ Limpiar Tabla</button>
+            </div>
+        </div>
+        
+        <!-- Filtros -->
+        <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div style="display: flex; gap: 15px; align-items: end; flex-wrap: wrap;">
+                <div class="form-group" style="margin: 0; flex: 1; min-width: 200px;">
+                    <label for="filterSearch">Buscar</label>
+                    <input type="text" id="filterSearch" placeholder="Buscar en todos los campos..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                </div>
+                <div class="form-group" style="margin: 0; flex: 1; min-width: 200px;">
+                    <label for="filterColumn">Columna</label>
+                    <select id="filterColumn" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="">Todas las columnas</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-primary" onclick="applyFilter()">🔍 Filtrar</button>
+                    <button class="btn btn-secondary" onclick="clearFilter()">✖️ Limpiar</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="data-table-wrapper">
+            <div id="loadingIndicator" class="loading"><div class="spinner"></div><p>Cargando...</p></div>
+            <div id="tableContainer"></div>
+        </div>
+    </div>
+    <div id="dataModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header"><h3 id="modalTitle">Nuevo Registro</h3></div>
+            <form id="dataForm">
+                <input type="hidden" id="recordId">
+                <div id="formFields"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal para importar CSV -->
+    <div id="importModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📤 Cargar datos desde CSV</h3>
+            </div>
+            <div style="padding: 20px;">
+                <p style="margin-bottom: 15px; color: #555;">
+                    Selecciona un archivo CSV con los datos a importar (inserción de nuevos registros).
+                </p>
+                <div class="form-group">
+                    <label for="csvFile">Archivo CSV</label>
+                    <input type="file" id="csvFile" accept=".csv" style="padding: 5px;">
+                </div>
+                <div id="importPreview" style="margin-top: 15px; display: none;">
+                    <h4 style="color: #2c3e50; margin-bottom: 10px;">Vista previa:</h4>
+                    <div id="previewContent" style="max-height: 300px; overflow: auto; background: #f8f9fa; padding: 10px; border-radius: 4px;"></div>
+                    <p style="margin-top: 10px; font-size: 14px; color: #7f8c8d;">
+                        <strong id="previewCount">0</strong> registros encontrados
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeImportModal()">Cancelar</button>
+                <button type="button" class="btn btn-success" id="btnImport" onclick="importData()" disabled>Importar Datos</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal para actualizar desde CSV -->
+    <div id="updateModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🔄 Actualizar datos desde CSV</h3>
+            </div>
+            <div style="padding: 20px;">
+                <p style="margin-bottom: 15px; color: #555;">
+                    Selecciona un archivo CSV con los datos a actualizar (usa <strong>correria</strong> como referencia).
+                </p>
+                <div class="form-group">
+                    <label for="csvFileUpdate">Archivo CSV</label>
+                    <input type="file" id="csvFileUpdate" accept=".csv" style="padding: 5px;">
+                </div>
+                <div id="updatePreview" style="margin-top: 15px; display: none;">
+                    <h4 style="color: #2c3e50; margin-bottom: 10px;">Vista previa:</h4>
+                    <div id="updatePreviewContent" style="max-height: 300px; overflow: auto; background: #f8f9fa; padding: 10px; border-radius: 4px;"></div>
+                    <p style="margin-top: 10px; font-size: 14px; color: #7f8c8d;">
+                        <strong id="updatePreviewCount">0</strong> registros encontrados
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeUpdateModal()">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnUpdate" onclick="updateData()" disabled>Actualizar Datos</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
