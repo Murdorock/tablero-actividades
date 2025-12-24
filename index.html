@@ -92,13 +92,27 @@
                 const email = document.getElementById('email').value;
                 const password = document.getElementById('password').value;
                 loginError.style.display = 'none';
-                const { error } = await supabase.auth.signInWithPassword({ email, password });
+                // Autenticación con Supabase
+                const { data, error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) {
                     loginError.textContent = error.message;
                     loginError.style.display = 'block';
-                } else {
-                    mostrarContenido();
+                    return;
                 }
+                // Verificar rol en la tabla perfiles
+                const { data: perfiles, error: errorPerfil } = await supabase
+                    .from('perfiles')
+                    .select('rol')
+                    .eq('email', email)
+                    .single();
+                if (errorPerfil || !perfiles || perfiles.rol !== 'ADMINISTRADOR') {
+                    loginError.textContent = 'Acceso denegado: solo administradores pueden ingresar.';
+                    loginError.style.display = 'block';
+                    // Cerrar sesión si no es administrador
+                    await supabase.auth.signOut();
+                    return;
+                }
+                mostrarContenido();
             });
 
             // Función para mostrar el contenido principal
