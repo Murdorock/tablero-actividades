@@ -28,9 +28,12 @@
     <div class="main-container" id="main-container" style="display: none;">
         <!-- Barra lateral de navegación -->
         <aside class="sidebar">
+            <button id="toggle-sidebar" style="position: absolute; left: 280px; top: 20px; z-index: 10; background: #2c3e50; color: #fff; border: none; border-radius: 0 4px 4px 0; padding: 6px 10px; cursor: pointer; font-size: 18px;">⏴</button>
             <div class="sidebar-header">
+                </style>
                 <h1>📊 Sistema de Gestión</h1>
                 <p style="font-size: 12px; color: #95a5a6; margin-top: 5px;">Panel de Control</p>
+                <input type="text" id="menu-filter" placeholder="Filtrar menú..." style="width: 100%; margin-top: 10px; padding: 6px; border-radius: 4px; border: 1px solid #34495e; font-size: 14px;">
             </div>
             <nav class="sidebar-nav">
                 <a href="#" class="nav-item active" data-page="welcome.html">🏠 Inicio</a>
@@ -71,6 +74,56 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <script src="config.js"></script>
     <script>
+                        // Funcionalidad para ocultar/mostrar el panel lateral
+                        document.addEventListener('DOMContentLoaded', function() {
+                            const sidebar = document.querySelector('.sidebar');
+                            const toggleBtn = document.getElementById('toggle-sidebar');
+                            const mainContainer = document.getElementById('main-container');
+                            if (toggleBtn && sidebar) {
+                                toggleBtn.addEventListener('click', function() {
+                                    if (sidebar.style.display === 'none') {
+                                        sidebar.style.display = '';
+                                        toggleBtn.innerHTML = '⏴';
+                                        if (mainContainer) mainContainer.style.marginLeft = '';
+                                    } else {
+                                        sidebar.style.display = 'none';
+                                        toggleBtn.innerHTML = '⏵';
+                                        if (mainContainer) mainContainer.style.marginLeft = '0';
+                                    }
+                                });
+                            }
+                            // Ocultar automáticamente en pantallas pequeñas
+                            function autoHideSidebar() {
+                                if (window.innerWidth < 700) {
+                                    sidebar.style.display = 'none';
+                                    toggleBtn.innerHTML = '⏵';
+                                    if (mainContainer) mainContainer.style.marginLeft = '0';
+                                } else {
+                                    sidebar.style.display = '';
+                                    toggleBtn.innerHTML = '⏴';
+                                    if (mainContainer) mainContainer.style.marginLeft = '';
+                                }
+                            }
+                            window.addEventListener('resize', autoHideSidebar);
+                            autoHideSidebar();
+                        });
+                // Filtro de menú lateral
+                document.addEventListener('DOMContentLoaded', function() {
+                    const filterInput = document.getElementById('menu-filter');
+                    if (filterInput) {
+                        filterInput.addEventListener('input', function() {
+                            const filter = filterInput.value.toLowerCase();
+                            document.querySelectorAll('.sidebar-nav .nav-item').forEach(item => {
+                                const text = item.textContent.toLowerCase();
+                                if (text.includes(filter)) {
+                                    item.style.display = '';
+                                } else {
+                                    item.style.display = 'none';
+                                }
+                            });
+                        });
+                    }
+                });
         // Manejo de la navegación y autenticación
         document.addEventListener('DOMContentLoaded', function() {
             // --- Autenticación con Supabase ---
