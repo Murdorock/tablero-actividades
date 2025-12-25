@@ -28,7 +28,7 @@
     <div class="main-container" id="main-container" style="display: none;">
         <!-- Barra lateral de navegación -->
         <aside class="sidebar">
-            <button id="toggle-sidebar" style="position: absolute; left: 280px; top: 20px; z-index: 10; background: #2c3e50; color: #fff; border: none; border-radius: 0 4px 4px 0; padding: 6px 10px; cursor: pointer; font-size: 18px;">⏴</button>
+            <button id="toggle-sidebar" style="position: fixed; left: 280px; top: 20px; z-index: 1001; background: #2c3e50; color: #fff; border: none; border-radius: 0 4px 4px 0; padding: 6px 10px; cursor: pointer; font-size: 18px; transition: left 0.2s;">⏴</button>
             <div class="sidebar-header">
                 </style>
                 <h1>📊 Sistema de Gestión</h1>
@@ -84,10 +84,12 @@
                                     if (sidebar.style.display === 'none') {
                                         sidebar.style.display = '';
                                         toggleBtn.innerHTML = '⏴';
+                                        toggleBtn.style.left = '280px';
                                         if (mainContainer) mainContainer.style.marginLeft = '';
                                     } else {
                                         sidebar.style.display = 'none';
                                         toggleBtn.innerHTML = '⏵';
+                                        toggleBtn.style.left = '0px';
                                         if (mainContainer) mainContainer.style.marginLeft = '0';
                                     }
                                 });
@@ -97,10 +99,12 @@
                                 if (window.innerWidth < 700) {
                                     sidebar.style.display = 'none';
                                     toggleBtn.innerHTML = '⏵';
+                                    toggleBtn.style.left = '0px';
                                     if (mainContainer) mainContainer.style.marginLeft = '0';
                                 } else {
                                     sidebar.style.display = '';
                                     toggleBtn.innerHTML = '⏴';
+                                    toggleBtn.style.left = '280px';
                                     if (mainContainer) mainContainer.style.marginLeft = '';
                                 }
                             }
