@@ -7,6 +7,9 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <!-- Botón global para mostrar/ocultar sidebar -->
+    <button id="toggle-sidebar" style="position: fixed; left: 280px; top: 20px; z-index: 1001; background: #2c3e50; color: #fff; border: none; border-radius: 0 4px 4px 0; padding: 6px 10px; cursor: pointer; font-size: 18px; transition: left 0.2s;">⏴</button>
+
     <!-- Formulario de autenticación -->
     <div id="auth-container" style="display: flex; justify-content: center; align-items: center; height: 100vh;">
         <form id="login-form" style="background: #fff; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); min-width: 320px;">
@@ -28,7 +31,6 @@
     <div class="main-container" id="main-container" style="display: none;">
         <!-- Barra lateral de navegación -->
         <aside class="sidebar">
-            <button id="toggle-sidebar" style="position: fixed; left: 280px; top: 20px; z-index: 1001; background: #2c3e50; color: #fff; border: none; border-radius: 0 4px 4px 0; padding: 6px 10px; cursor: pointer; font-size: 18px; transition: left 0.2s;">⏴</button>
             <div class="sidebar-header">
                 </style>
                 <h1>📊 Sistema de Gestión</h1>
