@@ -17,6 +17,7 @@
                 <button class="btn btn-primary" onclick="openCreateModal()">➕ Nuevo</button>
                 <button class="btn btn-warning" onclick="openPendientesModal()">🔎 Ver Pendientes</button>
                 <button class="btn btn-secondary" onclick="loadData()">🔄 Actualizar</button>
+                <button class="btn btn-success" id="btnCargarControlDescargas">📥 Cargar</button>
                 <!-- Modal Pendientes -->
                 <div id="modalPendientes" class="modal" style="display:none;">
                     <div class="modal-content" style="max-width:95vw; max-height:95vh; overflow:auto; background:white;">
@@ -71,4 +72,67 @@
         </div>
     </div>
 </body>
+<script>
+    // Función especial para cargar datos en control_descargas
+    document.getElementById('btnCargarControlDescargas').addEventListener('click', cargarDatosControlDescargas);
+    async function cargarDatosControlDescargas() {
+        const contenido = document.getElementById('tableContainer');
+        const supabaseClient = window.supabase;
+        contenido.innerHTML = '<p>Cargando datos de control descargas...</p>';
+        try {
+            // 1. Obtener datos de programacion_lectura
+            const { data: programacionData, error: progError } = await supabaseClient
+                .from('programacion_lectura')
+                .select('correria, codigo, realiza_zona, totales');
+            if (progError) {
+                alert('Error al obtener datos de programación_lectura: ' + progError.message);
+                return;
+            }
+            // 2. Obtener datos de cmlec
+            const { data: cmlecData, error: cmlecError } = await supabaseClient
+                .from('cmlec')
+                .select('correria_mp, ordenes_descargar');
+            if (cmlecError) {
+                alert('Error al obtener datos de cmlec: ' + cmlecError.message);
+                return;
+            }
+            // 3. Procesar y combinar los datos
+            const registrosControlDescargas = [];
+            programacionData.forEach(progReg => {
+                // Buscar ordenes_descargar en cmlec para esta correria
+                const cmlecReg = cmlecData.find(c => c.correria_mp === progReg.correria);
+                const pendientes = cmlecReg ? Number(cmlecReg.ordenes_descargar) || 0 : 0;
+                const totales = Number(progReg.totales) || 0;
+                registrosControlDescargas.push({
+                    id_correria: progReg.correria,
+                    codigo: progReg.codigo,
+                    supervisor: progReg.realiza_zona,
+                    totales: totales,
+                    pendientes: pendientes
+                });
+            });
+            if (registrosControlDescargas.length === 0) {
+                alert('No se encontraron datos para procesar.');
+                await cargarTabla();
+                return;
+            }
+            // 4. Limpiar tabla control_descargas
+            await supabaseClient.from('control_descargas').delete().neq('id_correria', '');
+            // 5. Insertar nuevos datos
+            const { error: insertError } = await supabaseClient
+                .from('control_descargas')
+                .insert(registrosControlDescargas);
+            if (insertError) {
+                alert('Error al insertar datos: ' + insertError.message);
+            } else {
+                alert(`Se cargaron ${registrosControlDescargas.length} registros correctamente.`);
+            }
+            // 6. Recargar la tabla para mostrar los nuevos datos
+            if (typeof cargarTabla === 'function') await cargarTabla();
+        } catch (error) {
+            alert('Error al procesar los datos: ' + error.message);
+            if (typeof cargarTabla === 'function') await cargarTabla();
+        }
+    }
+</script>
 </html>

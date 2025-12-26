@@ -16,6 +16,10 @@
             <div class="table-actions">
                 <button class="btn btn-primary" onclick="openCreateModal()">➕ Nuevo</button>
                 <button class="btn btn-secondary" onclick="loadData()">🔄 Actualizar</button>
+                <label class="btn btn-success" style="margin-left:8px; cursor:pointer;">
+                    📥 Cargar Excel
+                    <input type="file" id="excelInput" accept=".xlsx,.xls" style="display:none;">
+                </label>
             </div>
         </div>
         <div class="filter-container">
@@ -54,4 +58,69 @@
         </div>
     </div>
 </body>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+    // Cargar Excel para cmlec
+    const excelInput = document.getElementById('excelInput');
+    const tablaActual = 'cmlec';
+    const contenido = document.getElementById('tableContainer');
+    let datos = [];
+    let columnas = [];
+    // Usar supabase como supabaseClient (compatibilidad)
+    const supabaseClient = window.supabase;
+
+    excelInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        contenido.innerHTML = '<p>Procesando Excel...</p>';
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            let rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            if (rows.length < 2) return alert('El archivo debe tener al menos dos filas.');
+            // Eliminar la primera fila (encabezados originales)
+            rows.shift();
+            // Definir los nombres de columnas deseados
+            const columnasDeseadas = ['id_llave','correria_sirius','correria_mp','periodo_consumo','ciclo_consumo','zona','terminal','ordenes_descargar','ordenes_legalizar','ordenes_no_lectura','padre_id'];
+            // Convertir todas las filas restantes (que son datos) a objetos
+            const objetos = rows.map(r => {
+                let obj = {};
+                columnasDeseadas.forEach((col, i) => obj[col] = r[i] ?? null);
+                return obj;
+            });
+            if (!objetos.length) return alert('No hay datos para cargar.');
+            // Limpiar la tabla cmlec antes de insertar
+            await supabaseClient.from('cmlec').delete().neq('id_llave', null);
+            // Insertar en Supabase
+            let error = null;
+            // Insertar en lotes de 500 si es necesario
+            for (let i = 0; i < objetos.length; i += 500) {
+                const { error: err } = await supabaseClient.from('cmlec').insert(objetos.slice(i, i+500));
+                if (err) error = err;
+            }
+            if (error) {
+                alert('Error al cargar: ' + error.message);
+            } else {
+                alert('Datos cargados correctamente.');
+            }
+            await cargarTabla();
+        } catch (err) {
+            alert('Error procesando el archivo: ' + err.message);
+        }
+        excelInput.value = '';
+    });
+
+    async function cargarTabla() {
+        contenido.innerHTML = '<p>Cargando...</p>';
+        const { data, error } = await supabaseClient.from(tablaActual).select('*');
+        if (error || !data) {
+            contenido.innerHTML = '<p>Error al obtener datos.</p>';
+            return;
+        }
+        datos = data;
+        columnas = datos.length ? Object.keys(datos[0]) : [];
+        if (typeof renderTabla === 'function') renderTabla();
+    }
+</script>
 </html>
