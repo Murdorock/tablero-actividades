@@ -24,6 +24,9 @@
             </div>
         </div>
         <div class="data-table-wrapper">
+            <div style="margin-bottom:1rem;">
+                <input type="text" id="searchInput" placeholder="🔍 Filtrar..." style="width: 300px; padding: 0.5rem; border-radius: 0.25rem; border: 1px solid #ccc;" oninput="window.filterTable && window.filterTable()">
+            </div>
             <div id="loadingIndicator" class="loading"><div class="spinner"></div><p>Cargando...</p></div>
             <div id="tableContainer"></div>
         </div>
@@ -96,4 +99,5 @@
         </div>
     </div>
 </body>
+    <!-- La lógica del filtro ahora está en table-logic-inconsistencias.js -->
 </html>

@@ -11,6 +11,16 @@ let currentEditId = null;
 let estadisticasData = {};
 let columnasRealesTabla = []; // Para almacenar las columnas reales de la tabla
 
+// Filtro de búsqueda para la tabla
+window.filterTable = function() {
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    if (!Array.isArray(tableData)) return;
+    const filtered = tableData.filter(row => {
+        return Object.values(row).some(val => (val || '').toString().toLowerCase().includes(search));
+    });
+    renderTable(filtered);
+}
+
 // Función para cargar datos
 async function loadData() {
     console.log('🔄 Cargando datos de', TABLE_NAME);
@@ -111,8 +121,9 @@ function calcularEstadisticas() {
 // Función para renderizar tabla
 function renderTable() {
     const tableContainer = document.getElementById('tableContainer');
-    
-    if (tableData.length === 0) {
+    // Permitir pasar datos filtrados
+    let data = Array.isArray(arguments[0]) ? arguments[0] : tableData;
+    if (data.length === 0) {
         tableContainer.innerHTML = `
             <div class="empty-state" style="text-align: center; padding: 3rem;">
                 <h3>📭 No hay registros</h3>
@@ -122,10 +133,9 @@ function renderTable() {
         `;
         return;
     }
-    
     let tableHTML = `
         <div class="table-info" style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
-            <span class="record-count">📊 ${tableData.length} registros encontrados</span>
+            <span class="record-count">📊 ${data.length} registros encontrados</span>
             <button onclick="openEstadisticasModal()" class="btn btn-info" style="background: #17a2b8; color: white; border: none; padding: 0.5rem 1rem; border-radius: 0.25rem; cursor: pointer;">📈 Ver Estadísticas</button>
         </div>
         <div style="overflow-x: auto;">
@@ -133,17 +143,14 @@ function renderTable() {
                 <thead>
                     <tr style="background-color: #f8f9fa;">
     `;
-    
     columns.forEach(col => {
         tableHTML += `<th style="padding: 0.75rem; border: 1px solid #dee2e6; text-align: left; color: #212529; font-weight: bold;">${formatColumnName(col)}</th>`;
     });
     tableHTML += '<th style="padding: 0.75rem; border: 1px solid #dee2e6; color: #212529; font-weight: bold;">Acciones</th></tr></thead><tbody>';
-    
-    tableData.forEach(row => {
+    data.forEach(row => {
         tableHTML += '<tr>';
         columns.forEach(col => {
             let value = row[col];
-            
             // Formateo específico para inconsistencias
             if (col === 'nombre_revisor' && value) {
                 const stats = estadisticasData[value];
@@ -157,10 +164,8 @@ function renderTable() {
             } else if (value === null || value === undefined || value === '') {
                 value = '<span style="color: #6c757d;">-</span>';
             }
-            
             tableHTML += `<td style="padding: 0.75rem; border: 1px solid #dee2e6;">${value}</td>`;
         });
-        
         tableHTML += `
             <td style="padding: 0.75rem; border: 1px solid #dee2e6;">
                 <button onclick="openEditModal(${row[PRIMARY_KEY]})" class="btn-action" style="margin-right: 0.25rem; padding: 0.25rem 0.5rem; background: #007bff; color: white; border: none; border-radius: 0.25rem; cursor: pointer;">✏️</button>
@@ -169,7 +174,6 @@ function renderTable() {
         `;
         tableHTML += '</tr>';
     });
-    
     tableHTML += '</tbody></table></div>';
     tableContainer.innerHTML = tableHTML;
 }
