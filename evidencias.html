@@ -19,6 +19,9 @@
             </div>
         </div>
         <div class="data-table-wrapper">
+            <div style="margin-bottom:1rem;">
+                <input type="text" id="searchInput" placeholder="🔍 Filtrar..." style="width: 300px; padding: 0.5rem; border-radius: 0.25rem; border: 1px solid #ccc;" oninput="filterTable()">
+            </div>
             <div id="loadingIndicator" class="loading"><div class="spinner"></div><p>Cargando...</p></div>
             <table id="dataTable" class="data-table">
                 <thead id="tableHeader"></thead>
@@ -26,5 +29,40 @@
             </table>
         </div>
     </div>
+    <script>
+        // Filtro de búsqueda para la tabla
+        let allRows = [];
+        function filterTable() {
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            allRows.forEach(row => {
+                if (Object.values(row).some(val => (val || '').toString().toLowerCase().includes(search))) {
+                    const tr = document.createElement('tr');
+                    Object.values(row).forEach(val => {
+                        const td = document.createElement('td');
+                        td.textContent = val;
+                        tr.appendChild(td);
+                    });
+                    tbody.appendChild(tr);
+                }
+            });
+        }
+        // Sobreescribir loadData para guardar los datos en allRows
+        const originalLoadData = window.loadData;
+        window.loadData = async function() {
+            if (typeof originalLoadData === 'function') await originalLoadData();
+            // Obtener datos de la tabla
+            const tbody = document.getElementById('tableBody');
+            allRows = [];
+            Array.from(tbody.rows).forEach(tr => {
+                const rowObj = {};
+                Array.from(tr.cells).forEach((td, i) => {
+                    rowObj[i] = td.textContent;
+                });
+                allRows.push(rowObj);
+            });
+        }
+    </script>
 </body>
 </html>
