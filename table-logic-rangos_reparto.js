@@ -25,7 +25,7 @@ async function loadData() {
         currentData = data || [];
         
         if (currentData.length > 0) {
-            tableColumns = Object.keys(currentData[0]).filter(col => col.toLowerCase() !== 'id');
+            tableColumns = Object.keys(currentData[0]).filter(col => col.toLowerCase() !== 'id' && col.toLowerCase() !== 'id_ranrep');
             renderTable(currentData);
         } else {
             tableContainer.innerHTML = '<div class="no-data">No hay rangos de reparto para mostrar</div>';
