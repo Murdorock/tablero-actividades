@@ -22,11 +22,25 @@
                 <button class="btn btn-info" onclick="downloadTemplate()">📄 Descargar Plantilla</button>
                 <button class="btn btn-warning" onclick="openPasteModal()">📋 Pegar Datos CSV</button>
                 <button class="btn btn-danger" onclick="deleteAllData()">🗑️ Eliminar Todo</button>
+                <button class="btn btn-dark" onclick="openStatsModal()">📈 Estadísticas</button>
             </div>
         </div>
         <div class="data-table-wrapper">
+            <div style="margin-bottom:1rem;">
+                <input type="text" id="searchInput" placeholder="🔍 Buscar..." style="width: 300px; padding: 0.5rem; border-radius: 0.25rem; border: 1px solid #ccc;" oninput="filterTable()">
+            </div>
             <div id="loadingIndicator" class="loading"><div class="spinner"></div><p>Cargando...</p></div>
             <div id="tableContainer"></div>
+        </div>
+    </div>
+    <!-- Modal de estadísticas -->
+    <div id="statsModal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <div class="modal-header"><h3>📈 Estadísticas de Refutación</h3></div>
+            <div class="modal-body" id="statsContent"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeStatsModal()">Cerrar</button>
+            </div>
         </div>
     </div>
     <div id="dataModal" class="modal">
@@ -43,6 +57,109 @@
         </div>
     </div>
     <script>
+                // Variables para datos y filtro
+                let allData = [];
+                let filteredData = [];
+
+                // Filtro de búsqueda
+                function filterTable() {
+                    const search = document.getElementById('searchInput').value.toLowerCase();
+                    filteredData = allData.filter(row => {
+                        return Object.values(row).some(val => (val || '').toString().toLowerCase().includes(search));
+                    });
+                    renderTable(filteredData);
+                }
+
+                // Modal de estadísticas
+                function openStatsModal() {
+                    const total = allData.length;
+                    const refutados = allData.filter(row => row.evidencia1 && row.evidencia1.trim() !== '').length;
+                    document.getElementById('statsContent').innerHTML = `
+                        <p><strong>Total errores cargados:</strong> ${total}</p>
+                        <p><strong>Total errores refutados:</strong> ${refutados}</p>
+                        <p><strong>Porcentaje refutado:</strong> ${total > 0 ? ((refutados/total)*100).toFixed(2) : '0'}%</p>
+                    `;
+                    document.getElementById('statsModal').style.display = 'block';
+                }
+                function closeStatsModal() {
+                    document.getElementById('statsModal').style.display = 'none';
+                }
+
+                // Renderizar tabla con orden por evidencia1
+                function renderTable(data) {
+                    // Ordenar primero los que tienen evidencia1
+                    data = [...data].sort((a, b) => {
+                        const aHas = a.evidencia1 && a.evidencia1.trim() !== '' ? 1 : 0;
+                        const bHas = b.evidencia1 && b.evidencia1.trim() !== '' ? 1 : 0;
+                        return bHas - aHas;
+                    });
+                    // Aquí deberías tener tu lógica para renderizar la tabla en #tableContainer
+                    // Si usas table-logic.js, llama la función adecuada, si no, genera la tabla aquí
+                    // Ejemplo simple:
+                    const container = document.getElementById('tableContainer');
+                    if (!data.length) {
+                        container.innerHTML = '<p>No hay datos para mostrar.</p>';
+                        return;
+                    }
+                    // Definir columnas a mostrar y ordenarlas
+                    let cols = Object.keys(data[0]).filter(c => c !== 'id');
+                    // Mover 'lector' al inicio si existe
+                    if (cols.includes('lector')) {
+                        cols = ['lector', ...cols.filter(c => c !== 'lector')];
+                    }
+                    let html = '<table class="data-table"><thead><tr>' + cols.map(c => `<th>${c.toUpperCase()}</th>`).join('') + '</tr></thead><tbody>';
+                    data.forEach(row => {
+                        html += '<tr>' + cols.map(c => {
+                            if (c === 'evidencia1' || c === 'evidencia2') {
+                                const val = row[c] || '';
+                                if (val) {
+                                    return `<td><a href="${val}" target="_blank" rel="noopener noreferrer">Ver</a></td>`;
+                                } else {
+                                    return '<td>-</td>';
+                                }
+                            }
+                            return `<td>${row[c] || ''}</td>`;
+                        }).join('') + '</tr>';
+                    });
+                    html += '</tbody></table>';
+                    container.innerHTML = html;
+                }
+
+        // Modal para mostrar evidencia
+        function showEvidenciaModal(col, val) {
+            const valor = decodeURIComponent(val);
+            let titulo = col === 'evidencia1' ? 'Evidencia 1' : 'Evidencia 2';
+            let modalHtml = `<div id="evidenciaModal" class="modal" style="display:block;z-index:2000;">
+                <div class="modal-content">
+                    <div class="modal-header"><h3>${titulo}</h3></div>
+                    <div class="modal-body"><pre style="white-space:pre-wrap;word-break:break-word;">${valor}</pre></div>
+                    <div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeEvidenciaModal()">Cerrar</button></div>
+                </div>
+            </div>`;
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        }
+        function closeEvidenciaModal() {
+            const modal = document.getElementById('evidenciaModal');
+            if (modal) document.body.removeChild(modal);
+        }
+                
+
+                // Sobreescribir loadData para usar allData y renderTable
+                async function loadData() {
+                    const loadingIndicator = document.getElementById('loadingIndicator');
+                    loadingIndicator.style.display = 'block';
+                    const { data, error } = await supabase
+                        .from(TABLE_NAME)
+                        .select('*');
+                    loadingIndicator.style.display = 'none';
+                    if (error) {
+                        alert('Error al cargar los datos: ' + error.message);
+                        return;
+                    }
+                    allData = data || [];
+                    filteredData = allData;
+                    renderTable(filteredData);
+                }
         async function exportToExcel() {
             try {
                 // Show loading indicator
