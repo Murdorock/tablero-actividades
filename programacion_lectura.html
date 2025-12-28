@@ -25,7 +25,26 @@
                 <button class="btn btn-success" onclick="openImportModal()">📤 Cargar CSV</button>
                 <button class="btn btn-primary" onclick="openUpdateModal()">🔄 Actualizar CSV</button>
                 <button class="btn btn-danger" onclick="limpiarTabla()">🗑️ Limpiar Tabla</button>
+                <button class="btn btn-info" onclick="descargarPlantillaCSV()">📄 Plantilla</button>
             </div>
+            <script>
+            function descargarPlantillaCSV() {
+                const columnas = [
+                    'correria', 'nombre_correria', 'zona', 'supervisor', 'transporte', 'grupo_vehicular',
+                    'calificativo', 'terreno', 'historico2', 'historico1', 'codigo', 'dias', 'ok', 'novedad',
+                    'repite', 'totales', 'nombre_lector', 'telefono', 'realiza_zona', 'diferencia', 'funcionario', 'va_grupo'
+                ];
+                // Usar punto y coma como separador para compatibilidad con Excel
+                const csv = columnas.join(';') + '\n';
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'plantilla_programacion_lectura.csv';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+            </script>
         </div>
         
         <!-- Filtros -->
