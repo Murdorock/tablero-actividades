@@ -165,25 +165,79 @@ async function calcularResumen() {
             resumenData.cicloRelecturas = ciclosUnicos.length > 0 ? ciclosUnicos.join(' - ') : '1';
         }
         
-        // MES FACTURACION: Calcular según el ciclo y la fecha actual del sistema
-        // Lógica: Ciclos 01-10 → mes siguiente, Ciclos 11-20 → mes actual
-        const cicloNum = parseInt(resumenData.ciclo);
-        const fechaActual = new Date();
-        let mesFacturacion = fechaActual.getMonth(); // 0=enero, 11=diciembre
-        
-        // Si el ciclo está entre 01 y 10, el mes de facturación es el siguiente
-        if (cicloNum >= 1 && cicloNum <= 10) {
-            mesFacturacion = mesFacturacion + 1;
-            // Si llegamos a diciembre + 1, volvemos a enero
-            if (mesFacturacion > 11) {
-                mesFacturacion = 0;
+        // MES FACTURACION: Calcular según la secuencia de referencia de ciclo y periodo_consumo
+        // 1. Obtener todos los ciclos y periodos de consumo de cmlec
+        // 2. Detectar los "bloques" de periodos secuenciales para ciclo 1 y reiniciar el mes cuando cambie
+        // 3. Asignar el mes correspondiente al ciclo y periodo actual
+
+        // Paso 1: Obtener todos los ciclos y periodos de consumo ordenados
+        const { data: ciclosPeriodos, error: ciclosPeriodosError } = await supabase
+            .from('cmlec')
+            .select('ciclo, periodo_consumo')
+            .order('periodo_consumo', { ascending: true })
+            .order('ciclo', { ascending: true });
+
+        if (!ciclosPeriodosError && ciclosPeriodos && ciclosPeriodos.length > 0) {
+            // Paso 2: Construir la secuencia de meses
+            const nombresMeses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+                'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+            // Agrupar por bloques de periodo_consumo para ciclo 1
+            let bloques = [];
+            let bloqueActual = [];
+            let ultimoPeriodoC1 = null;
+            for (let i = 0; i < ciclosPeriodos.length; i++) {
+                const row = ciclosPeriodos[i];
+                if (row.ciclo == 1) {
+                    if (ultimoPeriodoC1 !== null && row.periodo_consumo > ultimoPeriodoC1) {
+                        // Nuevo bloque
+                        bloques.push(bloqueActual);
+                        bloqueActual = [];
+                    }
+                    ultimoPeriodoC1 = row.periodo_consumo;
+                }
+                bloqueActual.push(row);
             }
+            if (bloqueActual.length > 0) {
+                bloques.push(bloqueActual);
+            }
+
+            // Paso 3: Asignar meses a cada bloque
+            let mapping = {};
+            let mesIndex = 0;
+            for (let b = 0; b < bloques.length; b++) {
+                const bloque = bloques[b];
+                for (let j = 0; j < bloque.length; j++) {
+                    const row = bloque[j];
+                    mapping[`${row.ciclo}-${row.periodo_consumo}`] = nombresMeses[mesIndex % 12];
+                }
+                mesIndex++;
+            }
+
+            // Paso 4: Buscar el mes para el ciclo y periodo actual
+            // Buscar el ciclo y periodo_consumo del primer registro de cmlec (o el ciclo/periodo relevante)
+            const { data: primerRegistro, error: primerRegistroError } = await supabase
+                .from('cmlec')
+                .select('ciclo, periodo_consumo')
+                .limit(1);
+            let cicloActual = resumenData.ciclo;
+            let periodoActual = null;
+            if (!primerRegistroError && primerRegistro && primerRegistro.length > 0) {
+                cicloActual = primerRegistro[0].ciclo;
+                periodoActual = primerRegistro[0].periodo_consumo;
+            }
+            // Si no se encuentra periodo_actual, buscar el mayor periodo_consumo para el ciclo actual
+            if (!periodoActual) {
+                const periodoCiclo = ciclosPeriodos.find(r => r.ciclo == cicloActual);
+                periodoActual = periodoCiclo ? periodoCiclo.periodo_consumo : null;
+            }
+            // Asignar el mes
+            const mes = mapping[`${cicloActual}-${periodoActual}`] || nombresMeses[0];
+            resumenData.mesFacturacion = mes;
+        } else {
+            // Si hay error o no hay datos, dejar enero por defecto
+            resumenData.mesFacturacion = 'enero';
         }
-        
-        // Convertir número de mes a nombre
-        const nombresMeses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 
-                              'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-        resumenData.mesFacturacion = nombresMeses[mesFacturacion];
         
     } catch (error) {
         console.error('Error calculando resumen:', error);
