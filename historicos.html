@@ -424,7 +424,48 @@
                     <button class="btn" onclick="document.getElementById('fileInput').click()">
                         📁 Seleccionar Archivo CSV
                     </button>
+                    <button class="btn btn-info" style="margin-left:10px;" onclick="descargarPlantillaCSVHistoricos()">
+                        📄 Plantilla
+                    </button>
                 </div>
+                        <script>
+                        function descargarPlantillaCSVHistoricos() {
+                            const columnas = [
+                                'direccion',
+                                'nro_instalacion',
+                                'ruta_lectura',
+                                'supervisor',
+                                'lector',
+                                'cod_ciclo',
+                                'tipo_consumo',
+                                'actual',
+                                'anterior',
+                                'mes3_ant',
+                                'mes4_ant',
+                                'mes5_ant',
+                                'mes6_ant',
+                                'mes7_ant',
+                                'causal_obs_act',
+                                'causal_obs_ant',
+                                'causal_obs_mes3',
+                                'causal_obs_mes4',
+                                'causal_obs_mes5',
+                                'causal_obs_mes6',
+                                'obs_adic',
+                                'categoria_servicio',
+                                'serie_medidor'
+                            ];
+                            // Usar punto y coma como separador para compatibilidad con Excel
+                            const csv = columnas.join(';') + '\n';
+                            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                            const link = document.createElement('a');
+                            link.href = URL.createObjectURL(blob);
+                            link.download = 'plantilla_historicos.csv';
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                        }
+                        </script>
             </div>
             
             <!-- File Info -->
