@@ -151,92 +151,64 @@ async function calcularResumen() {
             resumenData.porcentajePendiente = '100.00%';
         }
         
-        // CICLO RELECTURAS/INCONSISTENCIAS: Valores únicos de la columna ciclo de la tabla inconsistencias
-        const { data: inconsistenciasData, error: inconsistenciasError } = await supabase
-            .from('inconsistencias')
-            .select('ciclo');
-        
-        if (!inconsistenciasError && inconsistenciasData) {
-            const ciclosUnicos = [...new Set(inconsistenciasData
-                .map(row => row.ciclo)
-                .filter(ciclo => ciclo !== null && ciclo !== undefined && ciclo !== ''))]
-                .sort((a, b) => a - b);
-            
-            resumenData.cicloRelecturas = ciclosUnicos.length > 0 ? ciclosUnicos.join(' - ') : '1';
+        // CICLO RELECTURAS/INCONSISTENCIAS: Solo mostrar datos si la fecha del sistema coincide con fecha_revision de la tabla inconsistencias
+        try {
+            const hoy = new Date();
+            const year = hoy.getFullYear();
+            const month = String(hoy.getMonth() + 1).padStart(2, '0');
+            const day = String(hoy.getDate()).padStart(2, '0');
+            const fechaHoy = `${year}-${month}-${day}`;
+
+            const { data: inconsistenciasData, error: inconsistenciasError } = await supabase
+                .from('inconsistencias')
+                .select('ciclo, fecha_revision');
+
+            if (!inconsistenciasError && inconsistenciasData && inconsistenciasData.length > 0) {
+                // Verificar si alguna fecha_revision coincide con la fecha de hoy
+                const hayCoincidencia = inconsistenciasData.some(row => {
+                    if (!row.fecha_revision) return false;
+                    const fechaItem = new Date(row.fecha_revision);
+                    const fechaItemStr = `${fechaItem.getFullYear()}-${String(fechaItem.getMonth() + 1).padStart(2, '0')}-${String(fechaItem.getDate()).padStart(2, '0')}`;
+                    return fechaItemStr === fechaHoy;
+                });
+                if (hayCoincidencia) {
+                    // Solo mostrar los ciclos únicos si hay coincidencia
+                    const ciclosUnicos = [...new Set(inconsistenciasData
+                        .map(row => row.ciclo)
+                        .filter(ciclo => ciclo !== null && ciclo !== undefined && ciclo !== ''))]
+                        .sort((a, b) => a - b);
+                    resumenData.cicloRelecturas = ciclosUnicos.length > 0 ? ciclosUnicos.join(' - ') : '1';
+                } else {
+                    resumenData.cicloRelecturas = 'n/a';
+                }
+            } else {
+                resumenData.cicloRelecturas = 'n/a';
+            }
+        } catch (err) {
+            resumenData.cicloRelecturas = 'n/a';
         }
         
-        // MES FACTURACION: Calcular según la secuencia de referencia de ciclo y periodo_consumo
-        // 1. Obtener todos los ciclos y periodos de consumo de cmlec
-        // 2. Detectar los "bloques" de periodos secuenciales para ciclo 1 y reiniciar el mes cuando cambie
-        // 3. Asignar el mes correspondiente al ciclo y periodo actual
+        // MES FACTURACION: Consultar la tabla calendario_ciclos_unpivoted y buscar la fecha actual
+        try {
+            const hoy = new Date();
+            const year = hoy.getFullYear();
+            const month = String(hoy.getMonth() + 1).padStart(2, '0');
+            const day = String(hoy.getDate()).padStart(2, '0');
+            const fechaHoy = `${year}-${month}-${day}`;
 
-        // Paso 1: Obtener todos los ciclos y periodos de consumo ordenados
-        const { data: ciclosPeriodos, error: ciclosPeriodosError } = await supabase
-            .from('cmlec')
-            .select('ciclo, periodo_consumo')
-            .order('periodo_consumo', { ascending: true })
-            .order('ciclo', { ascending: true });
-
-        if (!ciclosPeriodosError && ciclosPeriodos && ciclosPeriodos.length > 0) {
-            // Paso 2: Construir la secuencia de meses
-            const nombresMeses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-                'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-
-            // Agrupar por bloques de periodo_consumo para ciclo 1
-            let bloques = [];
-            let bloqueActual = [];
-            let ultimoPeriodoC1 = null;
-            for (let i = 0; i < ciclosPeriodos.length; i++) {
-                const row = ciclosPeriodos[i];
-                if (row.ciclo == 1) {
-                    if (ultimoPeriodoC1 !== null && row.periodo_consumo > ultimoPeriodoC1) {
-                        // Nuevo bloque
-                        bloques.push(bloqueActual);
-                        bloqueActual = [];
-                    }
-                    ultimoPeriodoC1 = row.periodo_consumo;
-                }
-                bloqueActual.push(row);
-            }
-            if (bloqueActual.length > 0) {
-                bloques.push(bloqueActual);
-            }
-
-            // Paso 3: Asignar meses a cada bloque
-            let mapping = {};
-            let mesIndex = 0;
-            for (let b = 0; b < bloques.length; b++) {
-                const bloque = bloques[b];
-                for (let j = 0; j < bloque.length; j++) {
-                    const row = bloque[j];
-                    mapping[`${row.ciclo}-${row.periodo_consumo}`] = nombresMeses[mesIndex % 12];
-                }
-                mesIndex++;
-            }
-
-            // Paso 4: Buscar el mes para el ciclo y periodo actual
-            // Buscar el ciclo y periodo_consumo del primer registro de cmlec (o el ciclo/periodo relevante)
-            const { data: primerRegistro, error: primerRegistroError } = await supabase
-                .from('cmlec')
-                .select('ciclo, periodo_consumo')
+            const { data: calendarioData, error: calendarioError } = await supabase
+                .from('calendario_ciclos_unpivoted')
+                .select('fecha, mes')
+                .eq('fecha', fechaHoy)
                 .limit(1);
-            let cicloActual = resumenData.ciclo;
-            let periodoActual = null;
-            if (!primerRegistroError && primerRegistro && primerRegistro.length > 0) {
-                cicloActual = primerRegistro[0].ciclo;
-                periodoActual = primerRegistro[0].periodo_consumo;
+
+            if (!calendarioError && calendarioData && calendarioData.length > 0) {
+                resumenData.mesFacturacion = calendarioData[0].mes;
+            } else {
+                resumenData.mesFacturacion = 'sin mes';
             }
-            // Si no se encuentra periodo_actual, buscar el mayor periodo_consumo para el ciclo actual
-            if (!periodoActual) {
-                const periodoCiclo = ciclosPeriodos.find(r => r.ciclo == cicloActual);
-                periodoActual = periodoCiclo ? periodoCiclo.periodo_consumo : null;
-            }
-            // Asignar el mes
-            const mes = mapping[`${cicloActual}-${periodoActual}`] || nombresMeses[0];
-            resumenData.mesFacturacion = mes;
-        } else {
-            // Si hay error o no hay datos, dejar enero por defecto
-            resumenData.mesFacturacion = 'enero';
+        } catch (err) {
+            resumenData.mesFacturacion = 'sin mes';
         }
         
     } catch (error) {
