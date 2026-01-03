@@ -370,6 +370,64 @@
         .table-preview tr:hover {
             background: #f5f5f5;
         }
+        
+        .ciclos-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .ciclos-table thead {
+            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+            color: white;
+        }
+        
+        .ciclos-table th {
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 0.5px;
+        }
+        
+        .ciclos-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #e0e0e0;
+            color: #333;
+        }
+        
+        .ciclos-table tbody tr {
+            transition: background-color 0.2s ease;
+        }
+        
+        .ciclos-table tbody tr:hover {
+            background-color: #f5f5f5;
+        }
+        
+        .ciclos-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .ciclos-count {
+            background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
+            color: white;
+            font-weight: bold;
+            text-align: center;
+            border-radius: 4px;
+            padding: 6px 12px;
+            display: inline-block;
+            min-width: 50px;
+        }
+        
+        #ciclosTableContainer {
+            max-height: 300px;
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body>
@@ -392,12 +450,10 @@
                 </div>
                 
                 <div class="status-card" id="tableCard">
-                    <h3>📋 Tabla Históricos</h3>
-                    <div class="status-indicator">
-                        <div class="indicator-dot" id="tableDot"></div>
-                        <span id="tableStatus">Sin verificar</span>
+                    <h3>📋 Ciclos Disponibles</h3>
+                    <div id="ciclosTableContainer" style="margin-top: 15px;">
+                        <div style="text-align: center; color: #7f8c8d; padding: 15px;">Cargando ciclos...</div>
                     </div>
-                    <button class="btn" onclick="checkTable()">📊 Verificar Tabla</button>
                 </div>
                 
                 <div class="status-card" id="fileCard">
@@ -653,53 +709,77 @@
         
         async function checkTable() {
             try {
-                logEvent('📊 Verificando tabla historicos...', 'info');
-                updateTableStatus('Verificando...', 'warning');
+                logEvent('📊 Cargando ciclos disponibles...', 'info');
                 
-                // Simplemente verificar que la tabla existe obteniendo solo 1 registro
-                // Sin hacer count que puede ser muy lento en tablas grandes
+                // Obtener todos los registros de la tabla historicos
                 const { data, error } = await supabaseHistoricos
                     .from('historicos')
-                    .select('id_historico, direccion, nro_instalacion, supervisor')
-                    .limit(1);
+                    .select('cod_ciclo');
                 
                 if (error) {
                     throw error;
                 }
                 
-                // Tabla existe y es accesible
-                updateTableStatus('Activa y lista', 'success');
-                logEvent('✅ Tabla verificada correctamente', 'success');
-                
-                // Mostrar estructura de la tabla en el log
+                // Procesar datos para obtener ciclos únicos y sus conteos
+                const ciclosMap = {};
                 if (data && data.length > 0) {
-                    const columnas = Object.keys(data[0]);
-                    logEvent(`📋 Columnas detectadas: ${columnas.join(', ')}`, 'info');
-                    logEvent(`✅ La tabla está lista para recibir datos`, 'success');
+                    data.forEach(record => {
+                        if (record.cod_ciclo) {
+                            ciclosMap[record.cod_ciclo] = (ciclosMap[record.cod_ciclo] || 0) + 1;
+                        }
+                    });
+                    
+                    // Ordenar ciclos numéricamente
+                    const ciclosOrdenados = Object.keys(ciclosMap)
+                        .sort((a, b) => parseInt(a) - parseInt(b));
+                    
+                    // Construir tabla HTML
+                    let tableHTML = `
+                        <table class="ciclos-table">
+                            <thead>
+                                <tr>
+                                    <th>Ciclo</th>
+                                    <th style="text-align: right;">Registros</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
+                    
+                    ciclosOrdenados.forEach(ciclo => {
+                        const count = ciclosMap[ciclo];
+                        tableHTML += `
+                            <tr>
+                                <td><strong>${ciclo}</strong></td>
+                                <td style="text-align: right;"><span class="ciclos-count">${count}</span></td>
+                            </tr>`;
+                    });
+                    
+                    tableHTML += `
+                            </tbody>
+                        </table>`;
+                    
+                    const container = document.getElementById('ciclosTableContainer');
+                    container.innerHTML = tableHTML;
+                    
+                    const totalRegistros = data.length;
+                    logEvent(`✅ Se encontraron ${ciclosOrdenados.length} ciclos diferentes con ${totalRegistros} registros totales`, 'success');
                 } else {
-                    logEvent(`📋 Tabla vacía - Lista para recibir datos`, 'info');
+                    const container = document.getElementById('ciclosTableContainer');
+                    container.innerHTML = '<div style="text-align: center; color: #f39c12; padding: 15px;">⚠️ No hay registros disponibles en la tabla históricos</div>';
+                    logEvent('⚠️ La tabla históricos está vacía', 'warning');
                 }
                 
             } catch (error) {
-                console.error('Error al verificar tabla:', error);
-                
-                // Mejorar mensajes de error
+                console.error('Error al cargar ciclos:', error);
                 let errorMsg = error.message;
+                const container = document.getElementById('ciclosTableContainer');
+                
                 if (error.message.includes('timeout') || error.message.includes('canceling statement')) {
-                    errorMsg = 'Timeout al verificar tabla (puede ser muy grande)';
-                    // A pesar del timeout, la tabla probablemente existe
-                    updateTableStatus('Tabla disponible', 'warning');
-                    logEvent('⚠️ Timeout al contar registros, pero la tabla parece estar disponible', 'warning');
-                    logEvent('💡 Puedes continuar con la carga de datos', 'info');
-                    return; // Salir sin mostrar error crítico
-                }
-                
-                updateTableStatus('Error: ' + errorMsg, 'error');
-                logEvent('❌ Error al verificar tabla: ' + errorMsg, 'error');
-                
-                // Sugerir solución si es problema de columnas
-                if (error.message.includes('column') || error.message.includes('does not exist')) {
-                    logEvent('💡 Sugerencia: Verifica que las columnas en expectedColumns coincidan con tu tabla', 'warning');
+                    errorMsg = 'Timeout al cargar ciclos';
+                    container.innerHTML = '<div style="text-align: center; color: #ff9800; padding: 15px;">⚠️ ' + errorMsg + ' (la tabla puede ser muy grande)</div>';
+                    logEvent('⚠️ Timeout al cargar ciclos, pero la tabla está disponible', 'warning');
+                } else {
+                    container.innerHTML = '<div style="text-align: center; color: #f44336; padding: 15px;">❌ Error al cargar ciclos: ' + errorMsg + '</div>';
+                    logEvent('❌ Error al cargar ciclos: ' + errorMsg, 'error');
                 }
             }
         }

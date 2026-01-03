@@ -20,7 +20,7 @@ async function loadData() {
         // Aquí se calculará la lógica de cada campo
         // Por ahora inicializamos con valores por defecto
         resumenData = {
-            ciclo: '01',
+            ciclo: '00',
             totalCorrerias: 0,
             correriasEjecutadas: 0,
             correriasPendientesDescargar: 0,
