@@ -141,11 +141,14 @@ async function calcularResumen() {
         // PORCENTAJE EJECUTADO: (Cantidad Ordenes Descargadas / Ordenes Totales) * 100
         if (resumenData.ordenesTotales > 0) {
             const porcentaje = (resumenData.cantidadOrdenesDescargadas / resumenData.ordenesTotales) * 100;
-            resumenData.porcentajeEjecutado = porcentaje.toFixed(2) + '%';
+            // Truncar a 2 decimales sin redondear
+            const porcentajeTruncado = Math.floor(porcentaje * 100) / 100;
+            resumenData.porcentajeEjecutado = porcentajeTruncado.toFixed(2) + '%';
             
             // PORCENTAJE PENDIENTE: 100% - Porcentaje Ejecutado
-            const porcentajePendiente = 100 - porcentaje;
-            resumenData.porcentajePendiente = porcentajePendiente.toFixed(2) + '%';
+            const porcentajePendiente = 100 - porcentajeTruncado;
+            const porcentajePendienteTruncado = Math.floor(porcentajePendiente * 100) / 100;
+            resumenData.porcentajePendiente = porcentajePendienteTruncado.toFixed(2) + '%';
         } else {
             resumenData.porcentajeEjecutado = '0.00%';
             resumenData.porcentajePendiente = '100.00%';
