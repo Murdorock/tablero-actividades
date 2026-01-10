@@ -4,7 +4,11 @@ const TABLE_NAME = 'inconsistencias';
 const TABLE_TITLE = '⚠️ Inconsistencias';
 
 // Variables globales
-let tableData = [];
+let fullData = []; // TODOS los registros para estadísticas y operaciones
+let tableData = []; // Subconjunto visible en la tabla
+const VIEW_LIMIT = 20; // Límite de filas visibles en la tabla
+let currentPage = 1; // Página actual
+let currentDataSource = []; // Fuente actual (fullData o filtrado)
 let columns = [];
 let isEditing = false;
 let currentEditId = null;
@@ -14,11 +18,14 @@ let columnasRealesTabla = []; // Para almacenar las columnas reales de la tabla
 // Filtro de búsqueda para la tabla
 window.filterTable = function() {
     const search = document.getElementById('searchInput').value.toLowerCase();
-    if (!Array.isArray(tableData)) return;
-    const filtered = tableData.filter(row => {
+    if (!Array.isArray(fullData)) return;
+    const filteredAll = fullData.filter(row => {
         return Object.values(row).some(val => (val || '').toString().toLowerCase().includes(search));
     });
-    renderTable(filtered);
+    currentDataSource = filteredAll;
+    currentPage = 1;
+    updateTableSlice();
+    renderTable(tableData);
 }
 
 // Función para cargar datos
@@ -36,24 +43,50 @@ async function loadData() {
         loadingIndicator.style.display = 'block';
         tableContainer.innerHTML = '';
         
-        console.log('📡 Consultando Supabase...');
-        const { data, error } = await supabase
+        console.log('📡 Consultando Supabase (todos los registros)...');
+        // 1) Obtener conteo total de registros
+        const { count, error: countError } = await supabase
             .from(TABLE_NAME)
-            .select('*')
-            .order(PRIMARY_KEY, { ascending: false })
-            .limit(1000);
-        
-        if (error) {
-            console.error('❌ Error de Supabase:', error);
-            throw error;
+            .select(PRIMARY_KEY, { count: 'exact', head: true });
+
+        if (countError) {
+            console.error('❌ Error obteniendo conteo:', countError);
+            throw countError;
         }
-        
-        console.log('✅ Datos cargados:', data?.length || 0, 'registros');
-        tableData = data || [];
+
+        const total = count || 0;
+        console.log('📦 Total de registros en BD:', total);
+
+        // 2) Paginar y traer todos los registros en lotes (evita límite de 1000)
+        const batchSize = 1000;
+        let allData = [];
+
+        for (let from = 0; from < total; from += batchSize) {
+            const to = Math.min(from + batchSize - 1, total - 1);
+            console.log(`🔄 Descargando lote ${from}-${to}...`);
+            const { data: batch, error: batchError } = await supabase
+                .from(TABLE_NAME)
+                .select('*')
+                .order(PRIMARY_KEY, { ascending: false })
+                .range(from, to);
+
+            if (batchError) {
+                console.error('❌ Error obteniendo lote:', batchError);
+                throw batchError;
+            }
+
+            allData = allData.concat(batch || []);
+        }
+
+        console.log('✅ Datos cargados:', allData.length, 'registros');
+        fullData = allData;
+        currentDataSource = fullData;
+        currentPage = 1;
+        updateTableSlice();
         
         if (tableData.length > 0) {
             // Detectar columnas reales de la tabla
-            columnasRealesTabla = Object.keys(tableData[0]);
+            columnasRealesTabla = Object.keys(fullData[0]);
             console.log('📋 Columnas reales detectadas en la tabla:', columnasRealesTabla);
             
             columns = columnasRealesTabla.filter(col => col !== PRIMARY_KEY);
@@ -86,7 +119,7 @@ function calcularEstadisticas() {
     estadisticasData = {};
     
     // Obtener todos los revisores únicos
-    const revisores = [...new Set(tableData
+    const revisores = [...new Set(fullData
         .map(row => row.nombre_revisor)
         .filter(nombre => nombre && nombre.trim() !== '')
     )];
@@ -95,10 +128,10 @@ function calcularEstadisticas() {
     
     revisores.forEach(revisor => {
         // Contar total de registros asignados al revisor
-        const totalAsignados = tableData.filter(row => row.nombre_revisor === revisor).length;
+        const totalAsignados = fullData.filter(row => row.nombre_revisor === revisor).length;
         
         // Contar registros con PDF (revisiones completadas)
-        const conPdf = tableData.filter(row => 
+        const conPdf = fullData.filter(row => 
             row.nombre_revisor === revisor && 
             row.pdf && 
             row.pdf.trim() !== ''
@@ -119,6 +152,25 @@ function calcularEstadisticas() {
 }
 
 // Función para renderizar tabla
+function getTotalPages() {
+    return Math.max(1, Math.ceil((currentDataSource?.length || 0) / VIEW_LIMIT));
+}
+
+function updateTableSlice() {
+    const start = (currentPage - 1) * VIEW_LIMIT;
+    tableData = (currentDataSource || []).slice(start, start + VIEW_LIMIT);
+}
+
+window.goToPage = function(page) {
+    const total = getTotalPages();
+    currentPage = Math.min(Math.max(1, page), total);
+    updateTableSlice();
+    renderTable(tableData);
+}
+
+window.prevPage = function() { window.goToPage(currentPage - 1); }
+window.nextPage = function() { window.goToPage(currentPage + 1); }
+
 function renderTable() {
     const tableContainer = document.getElementById('tableContainer');
     // Permitir pasar datos filtrados
@@ -133,9 +185,19 @@ function renderTable() {
         `;
         return;
     }
+    const totalPages = getTotalPages();
+    const startIndex = (currentPage - 1) * VIEW_LIMIT + (data.length > 0 ? 1 : 0);
+    const endIndex = (currentPage - 1) * VIEW_LIMIT + data.length;
+    const prevDisabled = currentPage === 1 ? 'disabled' : '';
+    const nextDisabled = currentPage === totalPages ? 'disabled' : '';
     let tableHTML = `
-        <div class="table-info" style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
-            <span class="record-count">📊 ${data.length} registros encontrados</span>
+        <div class="table-info" style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <span class="record-count">📊 Mostrando ${startIndex}-${endIndex} de ${currentDataSource.length} registros ${currentDataSource !== fullData ? `(filtrado de ${fullData.length})` : ''}</span>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <button onclick="prevPage()" class="btn btn-secondary" ${prevDisabled}>◀️ Anterior</button>
+                <span>Página ${currentPage} de ${totalPages}</span>
+                <button onclick="nextPage()" class="btn btn-secondary" ${nextDisabled}>Siguiente ▶️</button>
+            </div>
             <button onclick="openEstadisticasModal()" class="btn btn-info" style="background: #17a2b8; color: white; border: none; padding: 0.5rem 1rem; border-radius: 0.25rem; cursor: pointer;">📈 Ver Estadísticas</button>
         </div>
         <div style="overflow-x: auto;">
@@ -187,8 +249,8 @@ function openEstadisticasModal() {
     `;
     
     // Calcular totales generales
-    const totalRegistros = tableData.length;
-    const totalConPdf = tableData.filter(row => row.pdf && row.pdf.trim() !== '').length;
+    const totalRegistros = fullData.length;
+    const totalConPdf = fullData.filter(row => row.pdf && row.pdf.trim() !== '').length;
     const totalSinPdf = totalRegistros - totalConPdf;
     const promedioAvance = totalRegistros > 0 ? Math.round((totalConPdf / totalRegistros) * 100) : 0;
     
@@ -205,9 +267,9 @@ function openEstadisticasModal() {
         </div>
     `;
     
-    // Estadísticas por revisor
+    // Estadísticas por revisor (ordenadas por nombre de menor a mayor)
     Object.entries(estadisticasData)
-        .sort((a, b) => b[1].porcentajeAvance - a[1].porcentajeAvance)
+        .sort((a, b) => a[0].localeCompare(b[0], 'es', { sensitivity: 'base' }))
         .forEach(([revisor, stats]) => {
             const colorBarra = stats.porcentajeAvance >= 80 ? '#28a745' : 
                              stats.porcentajeAvance >= 50 ? '#ffc107' : '#dc3545';
