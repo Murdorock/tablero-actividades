@@ -154,36 +154,19 @@ async function calcularResumen() {
             resumenData.porcentajePendiente = '100.00%';
         }
         
-        // CICLO RELECTURAS/INCONSISTENCIAS: Solo mostrar datos si la fecha del sistema coincide con fecha_revision de la tabla inconsistencias
+        // CICLO RELECTURAS/INCONSISTENCIAS: Obtener valores únicos de la columna ciclo de la tabla inconsistencias
         try {
-            const hoy = new Date();
-            const year = hoy.getFullYear();
-            const month = String(hoy.getMonth() + 1).padStart(2, '0');
-            const day = String(hoy.getDate()).padStart(2, '0');
-            const fechaHoy = `${year}-${month}-${day}`;
-
             const { data: inconsistenciasData, error: inconsistenciasError } = await supabase
                 .from('inconsistencias')
-                .select('ciclo, fecha_revision');
+                .select('ciclo');
 
             if (!inconsistenciasError && inconsistenciasData && inconsistenciasData.length > 0) {
-                // Verificar si alguna fecha_revision coincide con la fecha de hoy
-                const hayCoincidencia = inconsistenciasData.some(row => {
-                    if (!row.fecha_revision) return false;
-                    const fechaItem = new Date(row.fecha_revision);
-                    const fechaItemStr = `${fechaItem.getFullYear()}-${String(fechaItem.getMonth() + 1).padStart(2, '0')}-${String(fechaItem.getDate()).padStart(2, '0')}`;
-                    return fechaItemStr === fechaHoy;
-                });
-                if (hayCoincidencia) {
-                    // Solo mostrar los ciclos únicos si hay coincidencia
-                    const ciclosUnicos = [...new Set(inconsistenciasData
-                        .map(row => row.ciclo)
-                        .filter(ciclo => ciclo !== null && ciclo !== undefined && ciclo !== ''))]
-                        .sort((a, b) => a - b);
-                    resumenData.cicloRelecturas = ciclosUnicos.length > 0 ? ciclosUnicos.join(' - ') : '1';
-                } else {
-                    resumenData.cicloRelecturas = 'n/a';
-                }
+                // Obtener ciclos únicos de la tabla inconsistencias
+                const ciclosUnicos = [...new Set(inconsistenciasData
+                    .map(row => row.ciclo)
+                    .filter(ciclo => ciclo !== null && ciclo !== undefined && ciclo !== ''))]
+                    .sort((a, b) => a - b);
+                resumenData.cicloRelecturas = ciclosUnicos.length > 0 ? ciclosUnicos.join(' - ') : '1';
             } else {
                 resumenData.cicloRelecturas = 'n/a';
             }
