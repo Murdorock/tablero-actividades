@@ -380,14 +380,16 @@
             const cardElement = document.getElementById('fileCard');
             const detailsElement = document.getElementById('fileDetails');
             const detailsTextElement = document.getElementById('fileDetailsText');
-            statusElement.textContent = message;
-            dotElement.className = `indicator-dot ${type}`;
-            cardElement.className = `status-card ${type}`;
-            if (details) {
-                detailsTextElement.textContent = details;
-                detailsElement.classList.remove('hidden');
-            } else {
-                detailsElement.classList.add('hidden');
+            if (statusElement) statusElement.textContent = message;
+            if (dotElement) dotElement.className = `indicator-dot ${type}`;
+            if (cardElement) cardElement.className = `status-card ${type}`;
+            if (detailsElement && detailsTextElement) {
+                if (details) {
+                    detailsTextElement.textContent = details;
+                    detailsElement.classList.remove('hidden');
+                } else {
+                    detailsElement.classList.add('hidden');
+                }
             }
         }
         function logEvent(message, type = 'info') {
