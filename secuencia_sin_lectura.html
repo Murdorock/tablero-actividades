@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tablero de Carga Masiva - Secuencias Sin Lectura (CSV)</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         /* --- INICIO CSS NUEVO --- */
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -103,6 +104,13 @@
                     <div id="fileDetails" class="hidden">
                         <small id="fileDetailsText"></small>
                     </div>
+                </div>
+                <div class="status-card">
+                    <h3>📊 Rangos Lectura</h3>
+                    <div class="status-indicator">
+                        <span>Visualizar datos cargados</span>
+                    </div>
+                    <button class="btn" onclick="abrirModalTabla()">👁️ Ver Tabla</button>
                 </div>
             </div>
             <!-- Columns Info -->
@@ -856,7 +864,272 @@
             document.getElementById('currentBatch').textContent = currentUploadStats.currentBatch.toLocaleString();
             document.getElementById('totalBatches').textContent = currentUploadStats.totalBatches.toLocaleString();
         }
+
+        // Función para abrir el modal de tabla
+        async function abrirModalTabla() {
+            const modal = document.getElementById('modalTabla');
+            const contenido = document.getElementById('contenidoModalTabla');
+            
+            // Mostrar indicador de carga
+            contenido.innerHTML = '<div style="text-align: center; padding: 40px;"><div style="display: inline-block;"><div style="border: 4px solid #f3f3f3; border-top: 4px solid #9C27B0; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;"></div></div><p style="margin-top: 20px;">Cargando todos los datos de la tabla...</p></div>';
+            
+            modal.style.display = 'block';
+            
+            try {
+                // Cargar TODOS los datos de la tabla secuencia_sin_lectura desde Supabase
+                let allData = [];
+                let from = 0;
+                const batchSize = 1000;
+                let hasMore = true;
+                
+                // Cargar en lotes para evitar timeout
+                while (hasMore) {
+                    const { data, error } = await supabaseSecuencia
+                        .from('secuencia_sin_lectura')
+                        .select('*')
+                        .range(from, from + batchSize - 1);
+                    
+                    if (error) {
+                        throw new Error('Error al cargar datos: ' + error.message);
+                    }
+                    
+                    if (data && data.length > 0) {
+                        allData = allData.concat(data);
+                        from += batchSize;
+                        
+                        // Actualizar mensaje de carga
+                        contenido.innerHTML = '<div style="text-align: center; padding: 40px;"><div style="display: inline-block;"><div style="border: 4px solid #f3f3f3; border-top: 4px solid #9C27B0; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;"></div></div><p style="margin-top: 20px;">Cargando datos... ' + allData.length.toLocaleString() + ' registros</p></div>';
+                        
+                        // Si recibimos menos registros que el tamaño del lote, ya terminamos
+                        if (data.length < batchSize) {
+                            hasMore = false;
+                        }
+                    } else {
+                        hasMore = false;
+                    }
+                }
+                
+                if (allData.length === 0) {
+                    contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">No hay datos disponibles en la tabla</div>';
+                    return;
+                }
+                
+                console.log('Total datos cargados:', allData.length);
+                console.log('Columnas disponibles:', Object.keys(allData[0]));
+                
+                // Procesar los datos
+                contenido.innerHTML = '<div style="text-align: center; padding: 40px;"><p>Procesando ' + allData.length.toLocaleString() + ' registros...</p></div>';
+                
+                const datosProcessados = procesarDatosTabla(allData);
+                
+                // Generar tabla HTML
+                generarTablaHTML(datosProcessados, contenido);
+                
+            } catch (error) {
+                console.error('Error cargando tabla:', error);
+                contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #f44336;"><strong>Error al cargar los datos:</strong> ' + error.message + '</div>';
+            }
+        }
+
+        // Almacena el último conjunto procesado para exportar
+        let lastDatosSecuencia = [];
+
+        // Función para procesar los datos de la tabla
+        function procesarDatosTabla(data) {
+            console.log('Total registros recibidos:', data.length);
+            
+            // Agrupar por: ciclo + correría + dirección_procesada
+            const agrupaciones = {};
+            
+            data.forEach((row) => {
+                const correria = row.ruta_lectura || '';
+                const direccionCompleta = row.direccion || '';
+                const nroInstalacion = (row.nro_instalacion || '').toString();
+                
+                // Extraer ciclo de los dígitos 5 y 6 de la correría (índices 4 y 5)
+                let ciclo = '';
+                if (correria && correria.length >= 6) {
+                    const cicloStr = correria.substring(4, 6);
+                    ciclo = parseInt(cicloStr, 10).toString(); // quita ceros a la izquierda
+                }
+                
+                // Extraer solo la parte antes del "-" de la dirección
+                let direccionProcesada = direccionCompleta.trim();
+                const teniaGuion = direccionProcesada.includes('-');
+                if (teniaGuion) {
+                    direccionProcesada = direccionProcesada.split('-')[0].trim();
+                }
+                
+                if (correria && direccionProcesada) {
+                    const key = `${ciclo}|${correria}|${direccionProcesada}`;
+                    
+                    if (!agrupaciones[key]) {
+                        agrupaciones[key] = {
+                            ciclo: ciclo,
+                            correria: correria,
+                            direccion: direccionProcesada,
+                            lecturas: 0,
+                            instalacionesSet: new Set(),
+                            sinGuion: !teniaGuion
+                        };
+                    }
+                    
+                    const grupo = agrupaciones[key];
+                    grupo.lecturas += 1;
+                    
+                    // Calcular instalaciones: si no hubo guion, cuenta como 1 instalación fija
+                    if (grupo.sinGuion) {
+                        grupo.instalacionesSet.add('__sin_guion__');
+                    } else {
+                        // Tomar últimos 7 dígitos del nro_instalacion
+                        const last7 = nroInstalacion.slice(-7);
+                        if (last7) {
+                            grupo.instalacionesSet.add(last7);
+                        } else {
+                            // Si no hay nro_instalacion, cuenta como 1
+                            grupo.instalacionesSet.add('__sin_nro__');
+                        }
+                    }
+                }
+            });
+            
+            // Convertir el objeto a array
+            const registrosFormateados = Object.values(agrupaciones).map(item => ({
+                ciclo: item.ciclo,
+                correria: item.correria,
+                direccion: item.direccion,
+                lecturas: item.lecturas,
+                instalaciones: item.sinGuion ? 1 : Math.max(item.instalacionesSet.size, 1)
+            }));
+            
+            console.log('Total grupos únicos creados:', registrosFormateados.length);
+            console.log('Ejemplo primer grupo:', registrosFormateados[0]);
+            
+            // Ordenar por correría primero, luego por dirección
+            registrosFormateados.sort((a, b) => {
+                const corrA = (a.correria || '').toString();
+                const corrB = (b.correria || '').toString();
+                const cmpCorr = corrA.localeCompare(corrB, 'es', { numeric: true });
+                if (cmpCorr !== 0) return cmpCorr;
+                const dirA = (a.direccion || '').toString();
+                const dirB = (b.direccion || '').toString();
+                return dirA.localeCompare(dirB, 'es', { numeric: true });
+            });
+            
+            const ciclosUnicos = [...new Set(registrosFormateados
+                .map(r => r.ciclo)
+                .filter(c => c !== null && c !== undefined && c !== ''))
+            ];
+            const correriasUnicas = [...new Set(registrosFormateados.map(r => r.correria))];
+            
+            // Guardar datos para exportación
+            lastDatosSecuencia = registrosFormateados;
+
+            return {
+                datos: registrosFormateados,
+                ciclosUnicos: ciclosUnicos,
+                totalCorrerias: correriasUnicas.length
+            };
+        }
+
+        // Exportar a Excel
+        function exportarExcelSecuencia() {
+            if (!lastDatosSecuencia || lastDatosSecuencia.length === 0) {
+                alert('No hay datos para exportar');
+                return;
+            }
+
+            const rows = lastDatosSecuencia.map(row => ({
+                ciclo: row.ciclo,
+                correria: (row.correria || '').toString().slice(-4),
+                direccion: row.direccion,
+                lecturas: row.lecturas,
+                instalaciones: row.instalaciones
+            }));
+
+            const worksheet = XLSX.utils.json_to_sheet(rows);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'secuencia');
+            XLSX.writeFile(workbook, 'secuencia_sin_lectura.xlsx');
+        }
+
+        // Función para generar la tabla HTML
+        function generarTablaHTML(datos, contenedor) {
+            let html = '<style>';
+            html += '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }';
+            html += '.tabla-secuencia { width: 100%; border-collapse: collapse; margin: 20px 0; }';
+            html += '.tabla-secuencia th { background: #9C27B0; color: white; padding: 15px; text-align: left; font-weight: bold; border: 1px solid #333; }';
+            html += '.tabla-secuencia td { padding: 12px 15px; border: 1px solid #ddd; }';
+            html += '.tabla-secuencia tr:nth-child(even) { background: #f9f9f9; }';
+            html += '.tabla-secuencia tr:hover { background: #e8d5f2; }';
+            html += '</style>';
+            
+            // Información de valores únicos
+            html += '<div style="background: #f0f0f0; padding: 15px; border-radius: 8px; margin-bottom: 20px;">';
+            html += '<p><strong>📊 Ciclo:</strong> ' + (datos.ciclosUnicos.length > 0 ? datos.ciclosUnicos.join(', ') : 'Sin datos') + '</p>';
+            html += '<p><strong>📍 Correrías:</strong> ' + datos.totalCorrerias + '</p>';
+            html += '<p><strong>📋 Rangos:</strong> ' + datos.datos.length + '</p>';
+            html += '</div>';
+
+            // Botón de exportación
+            html += '<div style="text-align: right; margin-bottom: 10px;">';
+            html += '<button class="btn" style="padding: 10px 16px;" onclick="exportarExcelSecuencia()">⬇️ Exportar Excel</button>';
+            html += '</div>';
+            
+            // Tabla
+            html += '<table class="tabla-secuencia">';
+            html += '<thead><tr>';
+            html += '<th>Ciclo</th>';
+            html += '<th>Correria</th>';
+            html += '<th>Dirección</th>';
+            html += '<th>Lecturas</th>';
+            html += '<th>Instalaciones</th>';
+            html += '</tr></thead>';
+            html += '<tbody>';
+            
+            datos.datos.forEach(row => {
+                const corrDisplay = (row.correria || '').toString().slice(-4);
+                html += '<tr>';
+                html += '<td>' + (row.ciclo || '-') + '</td>';
+                html += '<td>' + (corrDisplay || '-') + '</td>';
+                html += '<td>' + (row.direccion || '-') + '</td>';
+                html += '<td>' + (row.lecturas || '-') + '</td>';
+                html += '<td>' + (row.instalaciones || '-') + '</td>';
+                html += '</tr>';
+            });
+            
+            html += '</tbody>';
+            html += '</table>';
+            
+            contenedor.innerHTML = html;
+        }
+
+        // Función para cerrar el modal
+        function cerrarModalTabla() {
+            document.getElementById('modalTabla').style.display = 'none';
+        }
+
+        // Cerrar modal al hacer clic fuera de él
+        window.onclick = function(event) {
+            const modal = document.getElementById('modalTabla');
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        }
         // --- FIN JS NUEVO ---
     </script>
+
+    <!-- Modal de Tabla Secuencia Sin Lectura -->
+    <div id="modalTabla" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; overflow: auto;">
+        <div style="background: white; margin: 20px auto; padding: 30px; border-radius: 15px; width: 95%; max-width: 1400px; max-height: 90vh; overflow: auto; box-shadow: 0 20px 40px rgba(0,0,0,0.3);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>📊 Tabla Secuencia Sin Lectura</h2>
+                <button onclick="cerrarModalTabla()" style="background: #f44336; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 1rem;">✕ Cerrar</button>
+            </div>
+            <div id="contenidoModalTabla" style="overflow-x: auto;">
+                <!-- Tabla se generará aquí -->
+            </div>
+        </div>
+    </div>
 </body>
 </html>
