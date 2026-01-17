@@ -1145,53 +1145,29 @@
             return coordYFormateada + ' ' + coordXFormateada;
         }
 
-        // Función para abrir el modal de coordenadas
+        // Función para abrir el modal de coordenadas (usa RPC con DISTINCT ON en BD)
         async function abrirModalCoordenadas() {
             const modal = document.getElementById('modalCoordenadas');
             const contenido = document.getElementById('contenidoModalCoordenadas');
             
-            contenido.innerHTML = '<div style="text-align: center; padding: 40px;"><div style="display: inline-block;"><div style="border: 4px solid #f3f3f3; border-top: 4px solid #9C27B0; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;"></div></div><p style="margin-top: 20px;">Cargando coordenadas...</p></div>';
+            contenido.innerHTML = '<div style="text-align: center; padding: 40px;"><div style="display: inline-block;"><div style="border: 4px solid #f3f3f3; border-top: 4px solid #9C27B0; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;"></div></div><p style="margin-top: 20px;">Cargando coordenadas únicas...</p></div>';
             
             modal.style.display = 'block';
             
             try {
-                let allData = [];
-                let from = 0;
-                const batchSize = 1000;
-                let hasMore = true;
-                
-                while (hasMore) {
-                    const { data, error } = await supabaseSecuencia
-                        .from('secuencia_sin_lectura')
-                        .select('nro_instalacion, direccion, coordenada_y, coordenada_x, ruta_lectura')
-                        .range(from, from + batchSize - 1);
-                    
-                    if (error) {
-                        throw new Error('Error al cargar datos: ' + error.message);
-                    }
-                    
-                    if (data && data.length > 0) {
-                        allData = allData.concat(data);
-                        from += batchSize;
-                        
-                        contenido.innerHTML = '<div style="text-align: center; padding: 40px;"><div style="display: inline-block;"><div style="border: 4px solid #f3f3f3; border-top: 4px solid #9C27B0; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;"></div></div><p style="margin-top: 20px;">Cargando datos... ' + allData.length.toLocaleString() + ' registros</p></div>';
-                        
-                        if (data.length < batchSize) {
-                            hasMore = false;
-                        }
-                    } else {
-                        hasMore = false;
-                    }
-                }
-                
+                const { data, error } = await supabaseSecuencia.rpc('coordenadas_unicas');
+                if (error) throw new Error('Error al cargar datos: ' + error.message);
+
+                const allData = data || [];
+
                 if (allData.length === 0) {
                     contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">No hay datos disponibles</div>';
                     return;
                 }
                 
-                console.log('Total datos cargados para coordenadas:', allData.length);
+                console.log('Total datos cargados (únicos por instalación vía RPC):', allData.length);
                 
-                contenido.innerHTML = '<div style="text-align: center; padding: 40px;"><p>Procesando ' + allData.length.toLocaleString() + ' registros...</p></div>';
+                contenido.innerHTML = '<div style="text-align: center; padding: 40px;"><p>Procesando ' + allData.length.toLocaleString() + ' registros únicos...</p></div>';
                 
                 const datosCoordenadas = procesarCoordenadas(allData);
                 generarTablaCoordenadas(datosCoordenadas, contenido);
@@ -1202,60 +1178,62 @@
             }
         }
 
-        // Procesar datos de coordenadas
+        // Procesar datos de coordenadas (RPC ya entrega únicos por instalación)
         function procesarCoordenadas(data) {
-            const agrupaciones = {};
-            
+            const registrosFormateados = [];
+            let conteoNulos = 0;
+
             data.forEach(row => {
-                const nroInstalacion = (row.nro_instalacion || '').toString().trim();
-                const direccion = row.direccion || '';
-                const coordY = row.coordenada_y || '';
-                const coordX = row.coordenada_x || '';
+                const nroInstalacion = row.nro_instalacion !== undefined && row.nro_instalacion !== null ? String(row.nro_instalacion) : '';
+                if (!nroInstalacion) {
+                    conteoNulos++;
+                    return;
+                }
+
+                const direccion = (row.direccion || '').toString();
+                const coordY = row.coordenada_y;
+                const coordX = row.coordenada_x;
                 const correria = row.ruta_lectura || '';
-                
+
                 let ciclo = '';
                 if (correria && correria.length >= 6) {
                     const cicloStr = correria.substring(4, 6);
                     ciclo = parseInt(cicloStr, 10).toString();
                 }
-                
-                if (nroInstalacion) {
-                    const key = `${ciclo}|${nroInstalacion}`;
-                    
-                    if (!agrupaciones[key]) {
-                        const coordFormateada = formatearCoordenada(coordY, coordX);
-                        agrupaciones[key] = {
-                            ciclo: ciclo,
-                            instalacion: nroInstalacion,
-                            direccion: direccion,
-                            coordenada: coordFormateada
-                        };
-                    }
-                }
+
+                registrosFormateados.push({
+                    ciclo: ciclo,
+                    instalacion: nroInstalacion,
+                    direccion: direccion,
+                    coordenada: (coordY || coordX) ? formatearCoordenada(coordY || '', coordX || '') : ''
+                });
             });
-            
-            const registrosFormateados = Object.values(agrupaciones);
-            
+
+            console.log('Total registros sin instalación descartados:', conteoNulos);
+            console.log('Total registros únicos recibidos (RPC):', registrosFormateados.length);
+            console.log('Sample primeros 5 registros:', registrosFormateados.slice(0, 5));
+
             // Ordenar por ciclo y luego por instalación
             registrosFormateados.sort((a, b) => {
                 const cicloA = parseInt(a.ciclo || 0);
                 const cicloB = parseInt(b.ciclo || 0);
                 if (cicloA !== cicloB) return cicloA - cicloB;
-                
+
                 const instA = (a.instalacion || '').toString();
                 const instB = (b.instalacion || '').toString();
                 return instA.localeCompare(instB, 'es', { numeric: true });
             });
-            
+
             const ciclosUnicos = [...new Set(registrosFormateados.map(r => r.ciclo))];
-            
+
             // Guardar datos para exportación
             lastDatosCoordenadas = registrosFormateados;
-            
+
             return {
                 datos: registrosFormateados,
                 ciclosUnicos: ciclosUnicos,
-                total: registrosFormateados.length
+                total: registrosFormateados.length,
+                totalProcesados: data.length
             };
         }
 
@@ -1273,6 +1251,7 @@
             html += '<div style="background: #f0f0f0; padding: 15px; border-radius: 8px; margin-bottom: 20px;">';
             html += '<p><strong>📊 Ciclos únicos:</strong> ' + (datos.ciclosUnicos.length > 0 ? datos.ciclosUnicos.join(', ') : 'Sin datos') + '</p>';
             html += '<p><strong>📍 Total instalaciones únicas:</strong> ' + datos.total + '</p>';
+            html += '<p style="color: #666; font-size: 0.9rem; margin-top: 10px;"><em>Datos procesados de ' + datos.totalProcesados + ' registros cargados</em></p>';
             html += '</div>';
             
             // Botón de exportación
@@ -1280,26 +1259,7 @@
             html += '<button class="btn" style="padding: 10px 16px;" onclick="exportarExcelCoordenadas()">⬇️ Exportar Excel</button>';
             html += '</div>';
             
-            html += '<table class="tabla-secuencia">';
-            html += '<thead><tr>';
-            html += '<th>Ciclo</th>';
-            html += '<th>Instalación</th>';
-            html += '<th>Dirección</th>';
-            html += '<th>Coordenada</th>';
-            html += '</tr></thead>';
-            html += '<tbody>';
-            
-            datos.datos.forEach(row => {
-                html += '<tr>';
-                html += '<td>' + (row.ciclo || '-') + '</td>';
-                html += '<td>' + (row.instalacion || '-') + '</td>';
-                html += '<td>' + (row.direccion || '-') + '</td>';
-                html += '<td>' + (row.coordenada || '-') + '</td>';
-                html += '</tr>';
-            });
-            
-            html += '</tbody>';
-            html += '</table>';
+            html += '<p style="text-align: center; color: #999; padding: 20px;">✅ Datos procesados correctamente. Los resultados están listos para exportar.</p>';
             
             contenedor.innerHTML = html;
         }
