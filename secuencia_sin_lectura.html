@@ -93,6 +93,7 @@
                         <div class="indicator-dot" id="tableDot"></div>
                         <span id="tableStatus">Sin verificar</span>
                     </div>
+                    <div id="ciclosInfoSinLectura" style="margin:8px 0 0 0; font-size:0.95em; color:#673AB7;"></div>
                     <button class="btn" onclick="checkTable()">📊 Verificar Tabla</button>
                 </div>
                 <div class="status-card">
@@ -277,6 +278,30 @@
             window.checkConnection();
             logEvent('🚀 Tablero de Secuencias Sin Lectura inicializado', 'info');
             logEvent('📊 Configurado para 75 columnas y hasta 300,000 registros', 'info');
+            fetchCiclosUnicosSinLectura();
+                // Obtener valores únicos de cod_ciclo y mostrarlos en la caja 'Tabla Secuencias Sin Lectura'
+                async function fetchCiclosUnicosSinLectura() {
+                    try {
+                        const { data, error } = await supabaseSecuencia
+                            .from('secuencia_sin_lectura')
+                            .select('cod_ciclo')
+                            .neq('cod_ciclo', null)
+                            .limit(10000);
+                        if (error) {
+                            document.getElementById('ciclosInfoSinLectura').textContent = 'Error al obtener ciclos.';
+                            return;
+                        }
+                        if (data && data.length > 0) {
+                            const ciclosSet = new Set(data.map(row => row.cod_ciclo).filter(x => x !== null && x !== undefined));
+                            const ciclos = Array.from(ciclosSet).sort();
+                            document.getElementById('ciclosInfoSinLectura').innerHTML = `<b>Ciclos cargados:</b> ${ciclos.length > 0 ? ciclos.join(', ') : 'Ninguno'}`;
+                        } else {
+                            document.getElementById('ciclosInfoSinLectura').textContent = 'No hay ciclos cargados.';
+                        }
+                    } catch (err) {
+                        document.getElementById('ciclosInfoSinLectura').textContent = 'Error al consultar ciclos.';
+                    }
+                }
         });
 
         function setupEventListeners() {
