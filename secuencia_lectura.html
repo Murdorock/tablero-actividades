@@ -427,6 +427,7 @@
                     <div id="fileDetails" class="hidden">
                         <small id="fileDetailsText"></small>
                     </div>
+                        <div id="ciclosInfo" style="margin-top:10px; font-size:0.95em; color:#673AB7;"></div>
                 </div>
             </div>
             
@@ -612,7 +613,33 @@
             checkConnection();
             logEvent('🚀 Tablero de Secuencias de Lectura inicializado', 'info');
             logEvent('📊 Configurado para 75 columnas y hasta 300,000 registros', 'info');
+                fetchCiclosUnicos();
         });
+                // Obtener valores únicos de cod_ciclo y mostrarlos en la caja 'Archivo de Datos'
+                async function fetchCiclosUnicos() {
+                    try {
+                        const { data, error } = await supabaseSecuencia
+                            .from('secuencia_lectura')
+                            .select('cod_ciclo')
+                            .neq('cod_ciclo', null)
+                            .limit(10000); // Limite alto para evitar paginación
+
+                        if (error) {
+                            document.getElementById('ciclosInfo').textContent = 'Error al obtener ciclos.';
+                            return;
+                        }
+                        if (data && data.length > 0) {
+                            // Extraer y filtrar únicos
+                            const ciclosSet = new Set(data.map(row => row.cod_ciclo).filter(x => x !== null && x !== undefined));
+                            const ciclos = Array.from(ciclosSet).sort();
+                            document.getElementById('ciclosInfo').innerHTML = `<b>Ciclos cargados:</b> ${ciclos.length > 0 ? ciclos.join(', ') : 'Ninguno'}`;
+                        } else {
+                            document.getElementById('ciclosInfo').textContent = 'No hay ciclos cargados.';
+                        }
+                    } catch (err) {
+                        document.getElementById('ciclosInfo').textContent = 'Error al consultar ciclos.';
+                    }
+                }
         
         function setupEventListeners() {
             // File input
