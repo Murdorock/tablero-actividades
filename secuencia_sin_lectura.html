@@ -108,7 +108,7 @@
                     <div class="status-indicator">
                         <span>Visualizar datos cargados</span>
                     </div>
-                    <button class="btn" onclick="abrirModalTabla()">👁️ Ver Tabla</button>
+                    <button class="btn" id="btnVerTabla" onclick="abrirModalRangosLectura()">📊 Generar Rangos</button>
                 </div>
             </div>
             <!-- Columns Info -->
@@ -1134,6 +1134,72 @@
             document.getElementById('modalTabla').style.display = 'none';
         }
 
+        // Modal de Rangos de Lectura
+        async function abrirModalRangosLectura() {
+            const modal = document.getElementById('modalRangosLectura');
+            const contenido = document.getElementById('contenidoModalRangosLectura');
+            contenido.innerHTML = '<div style="text-align: center; padding: 40px;"><div style="display: inline-block;"><div style="border: 4px solid #f3f3f3; border-top: 4px solid #9C27B0; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;"></div></div><p style="margin-top: 20px;">Cargando rangos de lectura únicos...</p></div>';
+            modal.style.display = 'block';
+            try {
+                const { data, error } = await supabaseSecuencia.rpc('rangos_lectura_unicos');
+                if (error) throw new Error('Error al cargar datos: ' + error.message);
+                const allData = data || [];
+                if (allData.length === 0) {
+                    contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">No hay datos disponibles</div>';
+                    return;
+                }
+                // Agrupar por correria y dirección, y quitar ceros a la izquierda en ciclo
+                const agrupado = {};
+                allData.forEach(row => {
+                    // Quitar ceros a la izquierda en ciclo
+                    let ciclo = row.ciclo ? String(Number(row.ciclo)) : '';
+                    const key = `${row.correria}||${row.direccion}`;
+                    if (!agrupado[key]) {
+                        agrupado[key] = {
+                            ciclo: ciclo,
+                            correria: row.correria,
+                            direccion: row.direccion,
+                            lecturas: 0,
+                            instalaciones: 0
+                        };
+                    }
+                    agrupado[key].lecturas += Number(row.lecturas) || 0;
+                    agrupado[key].instalaciones += Number(row.instalaciones) || 0;
+                });
+                // Convertir a array y ordenar por correria y dirección
+                const resultado = Object.values(agrupado).sort((a, b) => {
+                    const cmpCorr = (a.correria || '').localeCompare(b.correria || '', 'es', { numeric: true });
+                    if (cmpCorr !== 0) return cmpCorr;
+                    return (a.direccion || '').localeCompare(b.direccion || '', 'es', { numeric: true });
+                });
+                // Generar y descargar Excel
+                if (resultado.length === 0) {
+                    contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">No hay datos agrupados</div>';
+                    return;
+                }
+                const rows = resultado.map(row => ({
+                    ciclo: row.ciclo,
+                    correria: row.correria ? String(row.correria).slice(-4) : '',
+                    direccion: row.direccion,
+                    lecturas: row.lecturas,
+                    instalaciones: row.instalaciones
+                }));
+                const worksheet = XLSX.utils.json_to_sheet(rows);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, 'rangos_lectura');
+                XLSX.writeFile(workbook, 'rangos_lectura.xlsx');
+                contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #4CAF50; font-size:1.2em;">✅ Archivo Excel generado y descargado.<br>Puedes cerrar esta ventana.</div>';
+            } catch (error) {
+                console.error('Error cargando rangos:', error);
+                contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #f44336;"><strong>Error:</strong> ' + error.message + '</div>';
+            }
+        }
+
+        // Función para cerrar el modal de rangos
+        function cerrarModalRangosLectura() {
+            document.getElementById('modalRangosLectura').style.display = 'none';
+        }
+
         // Cerrar modal al hacer clic fuera de él
         window.onclick = function(event) {
             const modal = document.getElementById('modalTabla');
@@ -1143,6 +1209,10 @@
             const modalCoor = document.getElementById('modalCoordenadas');
             if (event.target === modalCoor) {
                 modalCoor.style.display = 'none';
+            }
+            const modalRangos = document.getElementById('modalRangosLectura');
+            if (event.target === modalRangos) {
+                modalRangos.style.display = 'none';
             }
         }
 
@@ -1339,6 +1409,19 @@
                 <button onclick="cerrarModalCoordenadas()" style="background: #f44336; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 1rem;">✕ Cerrar</button>
             </div>
             <div id="contenidoModalCoordenadas" style="overflow-x: auto;">
+                <!-- Tabla se generará aquí -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Rangos de Lectura -->
+    <div id="modalRangosLectura" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; overflow: auto;">
+        <div style="background: white; margin: 20px auto; padding: 30px; border-radius: 15px; width: 95%; max-width: 1400px; max-height: 90vh; overflow: auto; box-shadow: 0 20px 40px rgba(0,0,0,0.3);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>📊 Rangos de Lectura</h2>
+                <button onclick="cerrarModalRangosLectura()" style="background: #f44336; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 1rem;">✕ Cerrar</button>
+            </div>
+            <div id="contenidoModalRangosLectura" style="overflow-x: auto;">
                 <!-- Tabla se generará aquí -->
             </div>
         </div>
