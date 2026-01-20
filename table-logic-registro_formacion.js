@@ -39,43 +39,51 @@ async function generarPDFRegistroFormacion(datosExtra) {
         return;
     }
 
-    // Usar los datos filtrados en la web (currentData) para el PDF, ordenados por 'codigo' de menor a mayor
-    const registros = (window.currentData || currentData || [])
-        .filter(r => r && r.nombre_completo)
-        .slice() // Copia para no mutar el array original
-        .sort((a, b) => {
-            function extraerNumeroCodigo(codigo) {
-                if (!codigo) return 0;
-                const match = (codigo + '').match(/_(\d+)$/);
-                return match ? parseInt(match[1], 10) : 0;
-            }
-            const numA = extraerNumeroCodigo(a.codigo);
-            const numB = extraerNumeroCodigo(b.codigo);
-            return numA - numB;
-        });
-    const registrosPorPagina = 15;
-    const totalPaginas = Math.ceil(registros.length / registrosPorPagina) || 1;
-    let numeroGlobal = 1;
+    // Agrupar registros por código
+    const registros = (window.currentData || currentData || []).filter(r => r && r.nombre_completo);
+    const codigosUnicos = Array.from(new Set(registros.map(r => r.codigo))).filter(Boolean);
     const doc = new window.jspdf.jsPDF();
-    for (let pagina = 0; pagina < totalPaginas; pagina++) {
-        if (pagina > 0) doc.addPage();
-        let registro = registros[0] || {};
-        let nombreInstructor = registro.instructor || '';
-        let y = 12;
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const usableWidth = pageWidth - 28;
-        const colWidths = [usableWidth * 0.20, usableWidth * 0.40, usableWidth * 0.15, usableWidth * 0.25];
-        let x = 14;
-        doc.setDrawColor(0,0,0);
-        doc.setLineWidth(0.2);
-        doc.rect(x, y, colWidths[0], 16);
-        try {
-            if (typeof logoUTIC !== 'undefined' && logoUTIC) {
-                const padding = 2;
-                const logoWidth = colWidths[0] - 2 * padding;
-                const logoHeight = 16 - 2 * padding;
-                doc.addImage(logoUTIC, 'PNG', x + padding, y + padding, logoWidth, logoHeight);
-            } else {
+    let primeraHoja = true;
+    for (const codigo of codigosUnicos) {
+        const registrosCodigo = registros.filter(r => r.codigo === codigo);
+        // Ordenar por nombre_completo o como prefieras
+        registrosCodigo.sort((a, b) => (a.nombre_completo || '').localeCompare(b.nombre_completo || ''));
+        const registrosPorPagina = 15;
+        const totalPaginas = Math.ceil(registrosCodigo.length / registrosPorPagina) || 1;
+        let numeroGlobal = 1;
+        for (let pagina = 0; pagina < totalPaginas; pagina++) {
+            if (!primeraHoja) doc.addPage();
+            primeraHoja = false;
+            let registro = registrosCodigo[0] || {};
+            let nombreInstructor = registro.instructor || '';
+            let y = 12;
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const usableWidth = pageWidth - 28;
+            const colWidths = [usableWidth * 0.20, usableWidth * 0.40, usableWidth * 0.15, usableWidth * 0.25];
+            let x = 14;
+            doc.setDrawColor(0,0,0);
+            doc.setLineWidth(0.2);
+            doc.rect(x, y, colWidths[0], 16);
+            try {
+                if (typeof logoUTIC !== 'undefined' && logoUTIC) {
+                    const padding = 2;
+                    const logoWidth = colWidths[0] - 2 * padding;
+                    const logoHeight = 16 - 2 * padding;
+                    doc.addImage(logoUTIC, 'PNG', x + padding, y + padding, logoWidth, logoHeight);
+                } else {
+                    doc.setFontSize(16);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('UT.iC', x + 4, y + 10);
+                    doc.setFontSize(6);
+                    doc.setFont('helvetica', 'normal');
+                    const icWidth = doc.getTextWidth('iC');
+                    const integralWidth = doc.getTextWidth('INTEGRAL');
+                    const utWidth = doc.getTextWidth('UT.');
+                    const icStart = x + 4 + utWidth;
+                    const integralX = icStart + (icWidth/2) - (integralWidth/2);
+                    doc.text('INTEGRAL', integralX, y + 15);
+                }
+            } catch (e) {
                 doc.setFontSize(16);
                 doc.setFont('helvetica', 'bold');
                 doc.text('UT.iC', x + 4, y + 10);
@@ -88,261 +96,237 @@ async function generarPDFRegistroFormacion(datosExtra) {
                 const integralX = icStart + (icWidth/2) - (integralWidth/2);
                 doc.text('INTEGRAL', integralX, y + 15);
             }
-        } catch (e) {
-            doc.setFontSize(16);
+            x += colWidths[0];
+            doc.rect(x, y, colWidths[1], 16);
+            doc.setFontSize(14);
             doc.setFont('helvetica', 'bold');
-            doc.text('UT.iC', x + 4, y + 10);
-            doc.setFontSize(6);
+            doc.text('REGISTRO DE FORMACIÓN', x + colWidths[1]/2, y + 10, { align: 'center', baseline: 'middle' });
+            x += colWidths[1];
+            doc.rect(x, y, colWidths[2], 16);
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            doc.text('SCF-H003-9', x + colWidths[2]/2, y + 6, { align: 'center' });
+            doc.text('REV.0', x + colWidths[2]/2, y + 13, { align: 'center' });
+            x += colWidths[2];
+            doc.rect(x, y, colWidths[3], 16);
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            const pagText = `Pag ${pagina + 1} de ${totalPaginas}`;
+            doc.text(pagText, x + colWidths[3] - 3, y + 10, { align: 'right', baseline: 'middle' });
+            const finalX = x + colWidths[3];
+            doc.setDrawColor(0,0,0);
+            doc.setLineWidth(0.2);
+            doc.line(finalX, y, finalX, y + 16);
+            y += 20;
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(8);
+            const lineSpacing = 5;
+            doc.setFont('helvetica', 'bold');
+            doc.text('FECHA (D/M/A):', 14, y);
             doc.setFont('helvetica', 'normal');
-            const icWidth = doc.getTextWidth('iC');
-            const integralWidth = doc.getTextWidth('INTEGRAL');
-            const utWidth = doc.getTextWidth('UT.');
-            const icStart = x + 4 + utWidth;
-            const integralX = icStart + (icWidth/2) - (integralWidth/2);
-            doc.text('INTEGRAL', integralX, y + 15);
-        }
-        x += colWidths[0];
-        doc.rect(x, y, colWidths[1], 16);
-        doc.setFontSize(14);
-        doc.setFont('helvetica', 'bold');
-        doc.text('REGISTRO DE FORMACIÓN', x + colWidths[1]/2, y + 10, { align: 'center', baseline: 'middle' });
-        x += colWidths[1];
-        doc.rect(x, y, colWidths[2], 16);
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
-        doc.text('SCF-H003-9', x + colWidths[2]/2, y + 6, { align: 'center' });
-        doc.text('REV.0', x + colWidths[2]/2, y + 13, { align: 'center' });
-        x += colWidths[2];
-        doc.rect(x, y, colWidths[3], 16);
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
-        const pagText = `Pag ${pagina + 1} de ${totalPaginas}`;
-        doc.text(pagText, x + colWidths[3] - 3, y + 10, { align: 'right', baseline: 'middle' });
-        const finalX = x + colWidths[3];
-        doc.setDrawColor(0,0,0);
-        doc.setLineWidth(0.2);
-        doc.line(finalX, y, finalX, y + 16);
-        y += 20;
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8);
-        const lineSpacing = 5;
-        doc.setFont('helvetica', 'bold');
-        doc.text('FECHA (D/M/A):', 14, y);
-        doc.setFont('helvetica', 'normal');
-        let fechaFormateada = '___/___/___';
-        if (registro.fecha) {
-            const dateParts = registro.fecha.split('T')[0].split('-');
-            if (dateParts.length === 3) {
-                fechaFormateada = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
-            }
-        }
-        doc.text(fechaFormateada, 44, y);
-        doc.line(44, y + 1, 44 + doc.getTextWidth(fechaFormateada), y + 1);
-        doc.setFont('helvetica', 'bold');
-        doc.text('TIPO (marque con "X"):', 75, y);
-        doc.setFont('helvetica', 'normal');
-        doc.text('ENTRENAMIENTO', 120, y);
-        let entrenamientoDato = datosExtra.tipo === 'ENTRENAMIENTO' ? 'X' : '_____';
-        const entrenamientoLabelWidth = doc.getTextWidth('ENTRENAMIENTO ');
-        doc.text(entrenamientoDato, 120 + entrenamientoLabelWidth, y);
-        doc.text('CAPACITACIÓN', 155, y);
-        let capacitacionDato = datosExtra.tipo === 'CAPACITACIÓN' ? 'X' : '_____';
-        const capacitacionLabelWidth = doc.getTextWidth('CAPACITACIÓN ');
-        let capXOffset = datosExtra.tipo === 'CAPACITACIÓN' ? 3 : 0;
-        doc.text(capacitacionDato, 155 + capacitacionLabelWidth + capXOffset, y);
-        y += lineSpacing;
-        doc.setFont('helvetica', 'bold');
-        doc.text('CÓDIGO:', 14, y);
-        doc.setFont('helvetica', 'normal');
-        const codigo = registro.codigo || '________';
-        doc.text(codigo, 36, y);
-        doc.line(36, y + 1, 36 + doc.getTextWidth(codigo), y + 1);
-        doc.setFont('helvetica', 'bold');
-        doc.text('INSTRUCTOR:', 75, y);
-        doc.setFont('helvetica', 'normal');
-        const nombreInst = nombreInstructor || '________________________';
-        doc.text(nombreInst, 105, y);
-        doc.line(105, y + 1, 105 + doc.getTextWidth(nombreInst), y + 1);
-        y += lineSpacing;
-        doc.setFont('helvetica', 'bold');
-        doc.text('INTERNO', 14, y);
-        doc.setFont('helvetica', 'normal');
-        let internoDato = datosExtra.modalidad === 'INTERNO' ? 'X' : '_____';
-        doc.text(internoDato, 38, y);
-        doc.setFont('helvetica', 'bold');
-        doc.text('EXTERNO', 65, y);
-        doc.setFont('helvetica', 'normal');
-        let externoDato = datosExtra.modalidad === 'EXTERNO' ? 'X' : '_____';
-        doc.text(externoDato, 90, y);
-        doc.setFont('helvetica', 'bold');
-        doc.text('DURACIÓN (horas):', 120, y);
-        doc.setFont('helvetica', 'normal');
-        const duracion = datosExtra.duracion || '____';
-        doc.text(duracion, 160, y);
-        doc.text('hrs', 160 + doc.getTextWidth(duracion) + 2, y);
-        y += lineSpacing;
-        doc.setFont('helvetica', 'bold');
-        doc.text('TEMA CAPACITACIÓN:', 14, y);
-        doc.setFont('helvetica', 'normal');
-        const tema = registro.tema || datosExtra.tema || '__________________________________________';
-        doc.text(tema, 60, y);
-        doc.line(60, y + 1, 60 + doc.getTextWidth(tema), y + 1);
-        doc.setFont('helvetica', 'bold');
-        const areaLabelX = 60 + doc.getTextWidth(tema) + 10;
-        doc.text('ÁREA:', areaLabelX, y);
-        doc.setFont('helvetica', 'normal');
-        const area = datosExtra.area || '________________________';
-        doc.text(area, areaLabelX + 18, y);
-        doc.line(areaLabelX + 18, y + 1, areaLabelX + 18 + doc.getTextWidth(area), y + 1);
-        y += 4;
-
-        // --- DATOS DE LA TABLA: solo filas con datos reales, sin huecos ---
-        const tableData = [];
-        const asistentesPagina = [];
-        const start = pagina * registrosPorPagina;
-        const end = Math.min(start + registrosPorPagina, registros.length);
-        const filasReales = end - start;
-        const filasMinimas = 5;
-        const filasTotales = Math.max(filasReales, filasMinimas);
-        // Para los campos de descripción, usar el primer registro real de la página (si existe) o los datosExtra
-        const refAsistente = (start < registros.length) ? registros[start] : {};
-        for (let i = 0; i < filasTotales; i++) {
-            const idx = start + i;
-            const asistente = (idx < registros.length) ? registros[idx] : {};
-            let descripcion = '';
-            if (i === 0) {
-                descripcion = refAsistente.tema ? `TEMA: ${refAsistente.tema}` : (datosExtra.tema ? `TEMA: ${datosExtra.tema}` : '');
-            } else if (i === 1) {
-                descripcion = refAsistente.origen ? `ORIGEN: ${refAsistente.origen}` : (datosExtra.origen ? `ORIGEN: ${datosExtra.origen}` : '');
-            } else if (i === 2) {
-                descripcion = refAsistente.objetivo ? `OBJETIVO: ${refAsistente.objetivo}` : (datosExtra.objetivo ? `OBJETIVO: ${datosExtra.objetivo}` : '');
-            } else if (i === 3) {
-                descripcion = refAsistente.aspectos ? `ASPECTOS: ${refAsistente.aspectos}` : (datosExtra.aspectos ? `ASPECTOS: ${datosExtra.aspectos}` : '');
-            }
-
-            // Si es la última fila de la página, poner el bloque de evaluación
-            const esUltimaFilaPagina = (i === filasTotales - 1);
-            if (esUltimaFilaPagina) {
-                let realizado = (datosExtra.realizado || '').toUpperCase();
-                let siMarcado = realizado === 'SI' ? 'X' : ' ';
-                let noMarcado = realizado === 'NO' ? 'X' : ' ';
-                let resultado = datosExtra.resultado || '';
-                descripcion =
-                    'EVALUACIÓN\n\n' +
-                    'Se realizó:  Si [' + siMarcado + ']   No [' + noMarcado + ']\n' +
-                    'Resultado: ' + resultado;
-            }
-
-            tableData.push([
-                descripcion,
-                (idx < registros.length) ? numeroGlobal : '',
-                asistente.nombre_completo || '',
-                asistente.cedula || '',
-                asistente.cargo || '',
-                asistente.firma || '',
-                asistente.codigo_lec || ''
-            ]);
-            asistentesPagina.push(asistente);
-            if (idx < registros.length) numeroGlobal++;
-        }
-
-        // Ajustar anchos para que la tabla coincida con el encabezado
-        // colWidths: [logo, título, código, paginación] = [usableWidth*0.20, 0.40, 0.15, 0.25]
-        // Usaremos el mismo margen y ancho total
-        doc.autoTable({
-            startY: y,
-            head: [['DESCRIPCIÓN', '#', 'NOMBRE COMPLETO', 'CÉDULA', 'CARGO', 'FIRMA', 'CÓDIGO']],
-            body: tableData,
-            theme: 'grid',
-            styles: {
-                fontSize: 5.5,
-                cellPadding: 0.2,
-                valign: 'middle',
-                lineWidth: 0.1,
-                lineColor: [0, 0, 0],
-                minCellHeight: 10,
-                cellHeight: 10,
-                overflow: 'linebreak'
-            },
-            headStyles: {
-                fillColor: [96, 125, 139],
-                textColor: [255, 255, 255],
-                fontStyle: 'bold',
-                halign: 'center',
-                valign: 'middle',
-                minCellHeight: 10,
-                cellHeight: 10,
-                fontSize: 6.5
-            },
-            columnStyles: {
-                0: { cellWidth: usableWidth * 0.25, fontStyle: 'bold', valign: 'top', fontSize: 5.5 }, // DESCRIPCIÓN (igual que logo)
-                1: { halign: 'center', cellWidth: 5, valign: 'middle' }, // #
-                2: { cellWidth: usableWidth * 0.30, valign: 'middle', fontSize: 5.5 }, // NOMBRE COMPLETO (más ancho)
-                3: { halign: 'center', cellWidth: 18, valign: 'middle', fontSize: 5.5 }, // CÉDULA
-                4: { halign: 'center', cellWidth: 25, valign: 'middle', fontSize: 5.5 }, // CARGO
-                5: { halign: 'center', cellWidth: 22, valign: 'middle' }, // FIRMA
-                6: { halign: 'center', cellWidth: 15, valign: 'middle', fontSize: 5.5 } // CÓDIGO
-            },
-            willDrawCell: function(data) {
-                if (data.column.index === 5 && data.section === 'body') {
-                    data.cell.text = [];
+            let fechaFormateada = '___/___/___';
+            if (registro.fecha) {
+                const dateParts = registro.fecha.split('T')[0].split('-');
+                if (dateParts.length === 3) {
+                    fechaFormateada = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
                 }
-            },
-            didDrawCell: function(data) {
-                // Quitar líneas divisorias de la celda DESCRIPCIÓN
-                if (data.section === 'body' && data.column.index === 0) {
-                    // Eliminar borde derecho y borde inferior
-                    data.cell.styles.lineWidth = {top: 0.1, right: 0, bottom: 0, left: 0.1};
+            }
+            doc.text(fechaFormateada, 44, y);
+            doc.line(44, y + 1, 44 + doc.getTextWidth(fechaFormateada), y + 1);
+            doc.setFont('helvetica', 'bold');
+            doc.text('TIPO (marque con "X"):', 75, y);
+            doc.setFont('helvetica', 'normal');
+            doc.text('ENTRENAMIENTO', 120, y);
+            let entrenamientoDato = datosExtra.tipo === 'ENTRENAMIENTO' ? 'X' : '_____';
+            const entrenamientoLabelWidth = doc.getTextWidth('ENTRENAMIENTO ');
+            doc.text(entrenamientoDato, 120 + entrenamientoLabelWidth, y);
+            doc.text('CAPACITACIÓN', 155, y);
+            let capacitacionDato = datosExtra.tipo === 'CAPACITACIÓN' ? 'X' : '_____';
+            const capacitacionLabelWidth = doc.getTextWidth('CAPACITACIÓN ');
+            let capXOffset = datosExtra.tipo === 'CAPACITACIÓN' ? 3 : 0;
+            doc.text(capacitacionDato, 155 + capacitacionLabelWidth + capXOffset, y);
+            y += lineSpacing;
+            doc.setFont('helvetica', 'bold');
+            doc.text('CÓDIGO:', 14, y);
+            doc.setFont('helvetica', 'normal');
+            doc.text(codigo, 36, y);
+            doc.line(36, y + 1, 36 + doc.getTextWidth(codigo), y + 1);
+            doc.setFont('helvetica', 'bold');
+            doc.text('INSTRUCTOR:', 75, y);
+            doc.setFont('helvetica', 'normal');
+            const nombreInst = nombreInstructor || '________________________';
+            doc.text(nombreInst, 105, y);
+            doc.line(105, y + 1, 105 + doc.getTextWidth(nombreInst), y + 1);
+            y += lineSpacing;
+            doc.setFont('helvetica', 'bold');
+            doc.text('INTERNO', 14, y);
+            doc.setFont('helvetica', 'normal');
+            let internoDato = datosExtra.modalidad === 'INTERNO' ? 'X' : '_____';
+            doc.text(internoDato, 38, y);
+            doc.setFont('helvetica', 'bold');
+            doc.text('EXTERNO', 65, y);
+            doc.setFont('helvetica', 'normal');
+            let externoDato = datosExtra.modalidad === 'EXTERNO' ? 'X' : '_____';
+            doc.text(externoDato, 90, y);
+            doc.setFont('helvetica', 'bold');
+            doc.text('DURACIÓN (horas):', 120, y);
+            doc.setFont('helvetica', 'normal');
+            const duracion = datosExtra.duracion || '____';
+            doc.text(duracion, 160, y);
+            doc.text('hrs', 160 + doc.getTextWidth(duracion) + 2, y);
+            y += lineSpacing;
+            doc.setFont('helvetica', 'bold');
+            doc.text('TEMA CAPACITACIÓN:', 14, y);
+            doc.setFont('helvetica', 'normal');
+            const tema = registro.tema || datosExtra.tema || '__________________________________________';
+            doc.text(tema, 60, y);
+            doc.line(60, y + 1, 60 + doc.getTextWidth(tema), y + 1);
+            doc.setFont('helvetica', 'bold');
+            const areaLabelX = 60 + doc.getTextWidth(tema) + 10;
+            doc.text('ÁREA:', areaLabelX, y);
+            doc.setFont('helvetica', 'normal');
+            const area = datosExtra.area || '________________________';
+            doc.text(area, areaLabelX + 18, y);
+            doc.line(areaLabelX + 18, y + 1, areaLabelX + 18 + doc.getTextWidth(area), y + 1);
+            y += 4;
+
+            // --- DATOS DE LA TABLA: solo filas con datos reales, sin huecos ---
+            const tableData = [];
+            const asistentesPagina = [];
+            const start = pagina * registrosPorPagina;
+            const end = Math.min(start + registrosPorPagina, registrosCodigo.length);
+            const filasReales = end - start;
+            const filasMinimas = 5;
+            const filasTotales = Math.max(filasReales, filasMinimas);
+            const refAsistente = (start < registrosCodigo.length) ? registrosCodigo[start] : {};
+            for (let i = 0; i < filasTotales; i++) {
+                const idx = start + i;
+                const asistente = (idx < registrosCodigo.length) ? registrosCodigo[idx] : {};
+                let descripcion = '';
+                if (i === 0) {
+                    descripcion = refAsistente.tema ? `TEMA: ${refAsistente.tema}` : (datosExtra.tema ? `TEMA: ${datosExtra.tema}` : '');
+                } else if (i === 1) {
+                    descripcion = refAsistente.origen ? `ORIGEN: ${refAsistente.origen}` : (datosExtra.origen ? `ORIGEN: ${datosExtra.origen}` : '');
+                } else if (i === 2) {
+                    descripcion = refAsistente.objetivo ? `OBJETIVO: ${refAsistente.objetivo}` : (datosExtra.objetivo ? `OBJETIVO: ${datosExtra.objetivo}` : '');
+                } else if (i === 3) {
+                    descripcion = refAsistente.aspectos ? `ASPECTOS: ${refAsistente.aspectos}` : (datosExtra.aspectos ? `ASPECTOS: ${datosExtra.aspectos}` : '');
                 }
-                // Solo intentar dibujar firma si hay datos reales en la fila
-                if (data.column.index === 5 && data.section === 'body') {
-                    const asistente = asistentesPagina[data.row.index];
-                    if (asistente && asistente.nombre_completo) {
-                        const firmaUrl = asistente.firma;
-                        if (firmaUrl && firmaUrl.startsWith('http')) {
-                            const cell = data.cell;
-                            const padding = 0.3;
-                            const maxImgWidth = cell.width - (padding * 2);
-                            const maxImgHeight = cell.height - (padding * 2);
-                            const yOffset = padding;
-                            try {
-                                doc.addImage(
-                                    firmaUrl,
-                                    'PNG',
-                                    cell.x + padding,
-                                    cell.y + yOffset,
-                                    maxImgWidth,
-                                    maxImgHeight,
-                                    undefined,
-                                    'NONE'
-                                );
-                            } catch (e) {
-                                console.error('Error al cargar firma:', e);
+                const esUltimaFilaPagina = (i === filasTotales - 1);
+                if (esUltimaFilaPagina) {
+                    let realizado = (datosExtra.realizado || '').toUpperCase();
+                    let siMarcado = realizado === 'SI' ? 'X' : ' ';
+                    let noMarcado = realizado === 'NO' ? 'X' : ' ';
+                    let resultado = datosExtra.resultado || '';
+                    descripcion =
+                        'EVALUACIÓN\n\n' +
+                        'Se realizó:  Si [' + siMarcado + ']   No [' + noMarcado + ']\n' +
+                        'Resultado: ' + resultado;
+                }
+                tableData.push([
+                    descripcion,
+                    (idx < registrosCodigo.length) ? numeroGlobal : '',
+                    asistente.nombre_completo || '',
+                    asistente.cedula || '',
+                    asistente.cargo || '',
+                    asistente.firma || '',
+                    asistente.codigo_lec || ''
+                ]);
+                asistentesPagina.push(asistente);
+                if (idx < registrosCodigo.length) numeroGlobal++;
+            }
+            doc.autoTable({
+                startY: y,
+                head: [['DESCRIPCIÓN', '#', 'NOMBRE COMPLETO', 'CÉDULA', 'CARGO', 'FIRMA', 'CÓDIGO']],
+                body: tableData,
+                theme: 'grid',
+                styles: {
+                    fontSize: 5.5,
+                    cellPadding: 0.2,
+                    valign: 'middle',
+                    lineWidth: 0.1,
+                    lineColor: [0, 0, 0],
+                    minCellHeight: 10,
+                    cellHeight: 10,
+                    overflow: 'linebreak'
+                },
+                headStyles: {
+                    fillColor: [96, 125, 139],
+                    textColor: [255, 255, 255],
+                    fontStyle: 'bold',
+                    halign: 'center',
+                    valign: 'middle',
+                    minCellHeight: 10,
+                    cellHeight: 10,
+                    fontSize: 6.5
+                },
+                columnStyles: {
+                    0: { cellWidth: usableWidth * 0.25, fontStyle: 'bold', valign: 'top', fontSize: 5.5 },
+                    1: { halign: 'center', cellWidth: 5, valign: 'middle' },
+                    2: { cellWidth: usableWidth * 0.30, valign: 'middle', fontSize: 5.5 },
+                    3: { halign: 'center', cellWidth: 18, valign: 'middle', fontSize: 5.5 },
+                    4: { halign: 'center', cellWidth: 25, valign: 'middle', fontSize: 5.5 },
+                    5: { halign: 'center', cellWidth: 22, valign: 'middle' },
+                    6: { halign: 'center', cellWidth: 15, valign: 'middle', fontSize: 5.5 }
+                },
+                willDrawCell: function(data) {
+                    if (data.column.index === 5 && data.section === 'body') {
+                        data.cell.text = [];
+                    }
+                },
+                didDrawCell: function(data) {
+                    if (data.section === 'body' && data.column.index === 0) {
+                        data.cell.styles.lineWidth = {top: 0.1, right: 0, bottom: 0, left: 0.1};
+                    }
+                    if (data.column.index === 5 && data.section === 'body') {
+                        const asistente = asistentesPagina[data.row.index];
+                        if (asistente && asistente.nombre_completo) {
+                            const firmaUrl = asistente.firma;
+                            if (firmaUrl && firmaUrl.startsWith('http')) {
+                                const cell = data.cell;
+                                const padding = 0.3;
+                                const maxImgWidth = cell.width - (padding * 2);
+                                const maxImgHeight = cell.height - (padding * 2);
+                                const yOffset = padding;
+                                try {
+                                    doc.addImage(
+                                        firmaUrl,
+                                        'PNG',
+                                        cell.x + padding,
+                                        cell.y + yOffset,
+                                        maxImgWidth,
+                                        maxImgHeight,
+                                        undefined,
+                                        'NONE'
+                                    );
+                                } catch (e) {
+                                    console.error('Error al cargar firma:', e);
+                                }
                             }
                         }
                     }
+                },
+                margin: { left: 14, right: 14 }
+            });
+            const pageHeight = doc.internal.pageSize.getHeight();
+            const footerY = pageHeight - 8;
+            doc.line(14, footerY, 80, footerY);
+            doc.setFontSize(7);
+            doc.text('FIRMA DEL INSTRUCTOR', 30, footerY + 4);
+            if (registro.firma_sup && typeof registro.firma_sup === 'string' && registro.firma_sup.startsWith('http')) {
+                try {
+                    doc.addImage(
+                        registro.firma_sup,
+                        'PNG',
+                        14,
+                        footerY - 14,
+                        60,
+                        12
+                    );
+                } catch (e) {
+                    console.error('Error al cargar la firma del instructor:', e);
                 }
-            },
-            margin: { left: 14, right: 14 }
-        });
-        const pageHeight = doc.internal.pageSize.getHeight();
-        const footerY = pageHeight - 8;
-        doc.line(14, footerY, 80, footerY);
-        doc.setFontSize(7);
-        doc.text('FIRMA DEL INSTRUCTOR', 30, footerY + 4);
-        if (registro.firma_sup && typeof registro.firma_sup === 'string' && registro.firma_sup.startsWith('http')) {
-            try {
-                doc.addImage(
-                    registro.firma_sup,
-                    'PNG',
-                    14,
-                    footerY - 14,
-                    60,
-                    12
-                );
-            } catch (e) {
-                console.error('Error al cargar la firma del instructor:', e);
             }
         }
     }
