@@ -79,12 +79,9 @@ function renderTable(data) {
                 value = `<a href="${value}" target="_blank" style="color: #1976d2; text-decoration: underline;">📄 Ver PDF</a>`;
                 isPdfColumn = true;
             } else if (column.includes('fecha') || column.includes('date')) {
-                // Formatear fechas
-                if (value) {
-                    const date = new Date(value);
-                    if (!isNaN(date.getTime())) {
-                        value = date.toLocaleDateString('es-ES');
-                    }
+                // Mostrar la fecha tal como viene del backend para evitar desfase por zona horaria
+                if (typeof value === 'string' && value.length >= 10) {
+                    value = value.substring(0, 10);
                 }
             } else if (column.includes('hora') || column.includes('time')) {
                 // Formatear horas
