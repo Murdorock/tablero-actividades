@@ -19,7 +19,6 @@
         <div class="table-header">
             <h2>🗄️ Base</h2>
             <div class="table-actions">
-                <button class="btn btn-primary" onclick="openCreateModal()">➕ Nuevo</button>
                 <button class="btn btn-secondary" onclick="loadData()">🔄 Refrescar</button>
                 <button class="btn btn-success" onclick="openImportModal()">📤 Cargar CSV</button>
                 <button class="btn btn-primary" onclick="openUpdateModal()">🔄 Actualizar CSV</button>
@@ -79,7 +78,7 @@
     </div>
     <div id="dataModal" class="modal">
         <div class="modal-content">
-            <div class="modal-header"><h3 id="modalTitle">Nuevo Registro</h3></div>
+            <div class="modal-header"><h3 id="modalTitle"></h3></div>
             <form id="dataForm">
                 <input type="hidden" id="recordId">
                 <div id="formFields"></div>
