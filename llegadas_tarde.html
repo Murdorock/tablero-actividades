@@ -16,7 +16,6 @@
             <h2>⏰ Llegadas Tarde</h2>
             <div class="table-actions">
                 <input type="search" id="searchInput" placeholder="🔍 Buscar..." class="search-input" onkeyup="searchData(this.value)">
-                <button class="btn btn-primary" onclick="openCreateModal()">➕ Nuevo</button>
                 <button class="btn btn-secondary" onclick="loadData()">🔄 Actualizar</button>
                 <button class="btn btn-success" onclick="openExportModal()">📊 Exportar Excel</button>
             </div>
@@ -35,7 +34,7 @@
     </div>
     <div id="dataModal" class="modal">
         <div class="modal-content">
-            <div class="modal-header"><h3 id="modalTitle">Nuevo Registro</h3></div>
+            <div class="modal-header"><h3 id="modalTitle"></h3></div>
             <form id="dataForm">
                 <input type="hidden" id="recordId">
                 <div id="formFields"></div>
