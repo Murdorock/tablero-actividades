@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retenidas - Sistema</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script>
+        const TABLE_NAME = 'retenidas'; 
+        const TABLE_TITLE = '🔒 Retenidas';
+        const PRIMARY_KEY = 'id'; // Clave única para esta tabla
+    </script>
+    <script src="table-logic-retenidas.js"></script>
+</head>
+<body>
+    <div class="table-container">
+        <div class="table-header">
+            <h2>🔒 Retenidas</h2>
+            <div class="table-actions">
+                <button class="btn btn-primary" onclick="openCreateModal()">➕ Nuevo</button>
+                <button class="btn btn-secondary" onclick="loadData()">🔄 Actualizar</button>
+                <button class="btn btn-success" onclick="openImportModal()">📤 Cargar Excel</button>
+                <button class="btn btn-primary" onclick="exportToExcel()">📥 Exportar Excel</button>
+                <button class="btn btn-danger" onclick="limpiarTabla()">🗑️ Limpiar Tabla</button>
+            </div>
+        </div>
+        <div class="data-table-wrapper">
+            <div id="loadingIndicator" class="loading"><div class="spinner"></div><p>Cargando...</p></div>
+            <div id="tableContainer"></div>
+        </div>
+    </div>
+    <div id="dataModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header"><h3 id="modalTitle">Nuevo Registro</h3></div>
+            <form id="dataForm">
+                <input type="hidden" id="recordId">
+                <div id="formFields"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal para importar Excel -->
+    <div id="importModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Importar desde Excel</h3>
+            </div>
+            <div class="modal-body">
+                <p>Seleccione un archivo Excel (.xlsx) para importar:</p>
+                <input type="file" id="excelFileInput" accept=".xlsx, .xls" style="margin: 1rem 0;">
+                <div id="importStatus" style="margin: 1rem 0; font-weight: bold;"></div>
+                <div id="importProgress" style="display: none; margin: 1rem 0;">
+                    <div style="background: #ecf0f1; border-radius: 4px; overflow: hidden;">
+                        <div id="progressBar" style="width: 0%; height: 24px; background: #3498db; transition: width 0.3s;"></div>
+                    </div>
+                    <p id="progressText" style="margin-top: 0.5rem; text-align: center;">0%</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeImportModal()">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="importExcel()">Importar</button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</body>
+</html>
