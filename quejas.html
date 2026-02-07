@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quejas - Sistema</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script>
+        const TABLE_NAME = 'quejas'; 
+        const TABLE_TITLE = '📢 Quejas';
+        const PRIMARY_KEY = 'id'; // Clave única para esta tabla
+    </script>
+    <script src="table-logic-quejas.js"></script>
+</head>
+<body>
+    <div class="table-container">
+        <div class="table-header">
+            <h2>📢 Quejas</h2>
+            <div class="table-actions">
+                <button class="btn btn-primary" onclick="openCreateModal()">➕ Nuevo</button>
+                <button class="btn btn-secondary" onclick="loadData()">🔄 Actualizar</button>
+                <button class="btn btn-success" onclick="openImportModal()">📤 Cargar Excel</button>
+                <button class="btn btn-primary" onclick="exportToExcel()">📥 Exportar Excel</button>
+                <button class="btn btn-danger" onclick="limpiarTabla()">🗑️ Limpiar Tabla</button>
+            </div>
+        </div>
+        <div class="data-table-wrapper">
+            <div id="loadingIndicator" class="loading"><div class="spinner"></div><p>Cargando...</p></div>
+            <div id="tableContainer"></div>
+        </div>
+    </div>
+    <div id="dataModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header"><h3 id="modalTitle">Nuevo Registro</h3></div>
+            <form id="dataForm">
+                <input type="hidden" id="recordId">
+                <div id="formFields"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal para importar Excel -->
+    <div id="importModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📤 Cargar datos desde Excel</h3>
+            </div>
+            <div style="padding: 20px;">
+                <p style="margin-bottom: 15px; color: #555;">
+                    Selecciona un archivo Excel (.xlsx, .xls) con los datos a importar.
+                </p>
+                <div class="form-group">
+                    <label for="excelFile">Archivo Excel</label>
+                    <input type="file" id="excelFile" accept=".xlsx,.xls" style="padding: 5px;">
+                </div>
+                <div id="importPreview" style="margin-top: 15px; display: none;">
+                    <h4 style="color: #2c3e50; margin-bottom: 10px;">Vista previa:</h4>
+                    <div id="previewContent" style="max-height: 300px; overflow: auto; background: #f8f9fa; padding: 10px; border-radius: 4px;"></div>
+                    <p style="margin-top: 10px; font-size: 14px; color: #7f8c8d;">
+                        <strong id="previewCount">0</strong> registros encontrados
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeImportModal()">Cancelar</button>
+                <button type="button" class="btn btn-success" id="btnImport" onclick="importData()" disabled>Importar Datos</button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</body>
+</html>
