@@ -102,7 +102,20 @@ function formatValue(value, columnName) {
 
 function formatDate(dateString) {
     if (!dateString) return '-';
-    const date = new Date(dateString);
+    
+    // Extraer la parte YYYY-MM-DD para evitar problemas de zona horaria
+    let dateOnly = dateString;
+    if (typeof dateString === 'string') {
+        const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (match) {
+            dateOnly = match[0]; // Solo YYYY-MM-DD
+        }
+    }
+    
+    // Crear fecha desde los componentes para evitar interpretación como UTC
+    const parts = dateOnly.split('-');
+    const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    
     return date.toLocaleString('es-ES', {
         year: 'numeric',
         month: '2-digit',
