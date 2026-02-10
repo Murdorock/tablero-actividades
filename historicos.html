@@ -686,7 +686,7 @@
                 updateConnectionStatus('Verificando...', 'warning');
                 
                 const { data, error } = await supabaseHistoricos
-                    .from('historicos')
+                    .from('hystoricos')
                     .select('*')
                     .limit(1);
                 
@@ -711,9 +711,9 @@
             try {
                 logEvent('📊 Cargando ciclos disponibles...', 'info');
                 
-                // Obtener todos los registros de la tabla historicos
+                // Obtener todos los registros de la tabla hystoricos
                 const { data, error } = await supabaseHistoricos
-                    .from('historicos')
+                    .from('hystoricos')
                     .select('cod_ciclo');
                 
                 if (error) {
@@ -1026,7 +1026,7 @@
                     document.getElementById('controlsSection').style.display = 'block';
                     
                     logEvent(`✅ Archivo CSV procesado: ${validRows.toLocaleString()} registros válidos, ${skippedRows} filas omitidas`, 'success');
-                    logEvent(`📋 Estructura preparada para insertar en tabla 'historicos'`, 'info');
+                    logEvent(`📋 Estructura preparada para insertar en tabla 'hystoricos'`, 'info');
                     logEvent(`⚡ Procesamiento CSV completado en tiempo record!`, 'success');
                     
                     // Restaurar la sección de upload
@@ -1284,7 +1284,7 @@
                     while (retryCount <= maxRetries) {
                         try {
                             const { error } = await supabaseHistoricos
-                                .from('historicos')
+                                .from('hystoricos')
                                 .insert(batch);
                             
                             if (error) {

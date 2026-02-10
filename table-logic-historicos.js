@@ -1,5 +1,5 @@
 // Configuración específica para la tabla de históricos
-const TABLE_NAME = 'historicos';
+const TABLE_NAME = 'hystoricos';
 
 document.addEventListener('DOMContentLoaded', function() {
     loadData();
