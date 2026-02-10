@@ -47,8 +47,7 @@ async function loadMetricsTable(tableKey) {
         const { data, error } = await supabase
             .from(tableName)
             .select('*')
-            .order('fecha_evento', { ascending: false })
-            .limit(500);
+            .order('fecha_evento', { ascending: false });
         
         if (error) throw error;
         
