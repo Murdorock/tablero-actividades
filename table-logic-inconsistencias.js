@@ -244,7 +244,7 @@ function renderTable() {
 function openEstadisticasModal() {
     let estadisticasHTML = `
         <div class="estadisticas-content">
-            <h3>📈 Estadísticas de Revisores</h3>
+            <h3 style="color: #212529;">📈 Estadísticas de Revisores</h3>
             <div class="estadisticas-grid" style="display: grid; gap: 1rem; margin-top: 1rem;">
     `;
     
@@ -257,12 +257,12 @@ function openEstadisticasModal() {
     // Resumen general
     estadisticasHTML += `
         <div class="estadistica-card" style="background: #e9ecef; padding: 1rem; border-radius: 0.5rem; border-left: 4px solid #6c757d;">
-            <h4>📊 Resumen General</h4>
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; margin-top: 0.5rem;">
-                <div><strong>Total Registros:</strong> ${totalRegistros}</div>
-                <div><strong>Avance General:</strong> ${promedioAvance}%</div>
-                <div><strong>Con PDF:</strong> <span style="color: #28a745;">${totalConPdf}</span></div>
-                <div><strong>Sin PDF:</strong> <span style="color: #dc3545;">${totalSinPdf}</span></div>
+            <h4 style="color: #212529;">📊 Resumen General</h4>
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; margin-top: 0.5rem; color: #212529;">
+                <div><strong style="color: #212529;">Total Registros:</strong> ${totalRegistros}</div>
+                <div><strong style="color: #212529;">Avance General:</strong> ${promedioAvance}%</div>
+                <div><strong style="color: #212529;">Con PDF:</strong> <span style="color: #28a745;">${totalConPdf}</span></div>
+                <div><strong style="color: #212529;">Sin PDF:</strong> <span style="color: #dc3545;">${totalSinPdf}</span></div>
             </div>
         </div>
     `;
@@ -280,7 +280,7 @@ function openEstadisticasModal() {
                     
                     <div style="margin-bottom: 0.5rem;">
                         <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
-                            <span>Avance:</span>
+                            <span style="color: #212529; font-weight: 500;">Avance:</span>
                             <strong style="color: ${colorBarra};">${stats.porcentajeAvance}%</strong>
                         </div>
                         <div style="background: #e9ecef; border-radius: 0.25rem; overflow: hidden;">
@@ -288,10 +288,10 @@ function openEstadisticasModal() {
                         </div>
                     </div>
                     
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; font-size: 0.875rem;">
-                        <div><strong>Total:</strong> ${stats.totalAsignados}</div>
-                        <div style="color: #28a745;"><strong>Con PDF:</strong> ${stats.conPdf}</div>
-                        <div style="color: #dc3545;"><strong>Pendientes:</strong> ${stats.sinPdf}</div>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; font-size: 0.875rem; color: #212529;">
+                        <div><strong style="color: #212529;">Total:</strong> ${stats.totalAsignados}</div>
+                        <div><strong style="color: #28a745;">Con PDF:</strong> ${stats.conPdf}</div>
+                        <div><strong style="color: #dc3545;">Pendientes:</strong> ${stats.sinPdf}</div>
                     </div>
                 </div>
             `;

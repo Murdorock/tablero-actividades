@@ -21,9 +21,9 @@
             </div>
         </div>
         <div class="filter-bar" style="padding: 10px; background: #f5f5f5; border-bottom: 1px solid #ddd; display: flex; gap: 10px; align-items: center;">
-            <label style="font-weight: bold;">Filtrar por fecha:</label>
+            <label style="font-weight: bold; color: #212529;">Filtrar por fecha:</label>
             <input type="date" id="fechaInicio" class="form-control" style="width: auto;" onchange="filterByDateRange()">
-            <span>hasta</span>
+            <span style="color: #212529;">hasta</span>
             <input type="date" id="fechaFin" class="form-control" style="width: auto;" onchange="filterByDateRange()">
             <button class="btn btn-sm btn-secondary" onclick="clearDateFilter()">Limpiar</button>
         </div>
@@ -50,11 +50,11 @@
             <div class="modal-header"><h3>📊 Exportar a Excel</h3></div>
             <div style="padding: 20px;">
                 <div class="form-group">
-                    <label>Fecha Inicio:</label>
+                    <label style="color: #212529; font-weight: 600;">Fecha Inicio:</label>
                     <input type="date" id="exportFechaInicio" class="form-control">
                 </div>
                 <div class="form-group">
-                    <label>Fecha Fin:</label>
+                    <label style="color: #212529; font-weight: 600;">Fecha Fin:</label>
                     <input type="date" id="exportFechaFin" class="form-control">
                 </div>
                 <p style="color: #666; font-size: 0.9em; margin-top: 10px;">Dejar vacío para exportar todos los registros</p>

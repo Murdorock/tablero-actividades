@@ -78,7 +78,7 @@ function generateFilters() {
         
         filtersHTML += `
             <div class="filter-group">
-                <label for="filtro-${columnId}">${columnLabel}:</label>
+                <label for="filtro-${columnId}" style="color: #e2e8f0;">${columnLabel}:</label>
                 <input type="text" id="filtro-${columnId}" placeholder="Buscar..." oninput="debounceApplyFilters()">
             </div>
         `;
