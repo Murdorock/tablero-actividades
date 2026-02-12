@@ -10,70 +10,70 @@
         /* --- INICIO CSS NUEVO --- */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
-        .dashboard { max-width: 1400px; margin: 0 auto; background: white; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); overflow: hidden; }
+        .dashboard { max-width: 1400px; margin: 0 auto; background: #1e293b; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); overflow: hidden; }
         .header { background: linear-gradient(135deg, #9C27B0 0%, #673AB7 100%); color: white; padding: 30px; text-align: center; }
         .header h1 { font-size: 2.5rem; margin-bottom: 10px; font-weight: 300; }
         .header p { font-size: 1.1rem; opacity: 0.9; }
         .main-content { padding: 30px; }
         .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 30px; }
-        .status-card { background: #f8f9fa; border-radius: 15px; padding: 25px; border-left: 5px solid #9C27B0; transition: transform 0.3s ease, box-shadow 0.3s ease; }
+        .status-card { background: #334155; border-radius: 15px; padding: 25px; border-left: 5px solid #9C27B0; transition: transform 0.3s ease, box-shadow 0.3s ease; }
         .status-card:hover { transform: translateY(-5px); box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
-        .status-card.success { border-left-color: #4CAF50; background: linear-gradient(135deg, #e8f5e8 0%, #f1f8e9 100%); }
-        .status-card.error { border-left-color: #f44336; background: linear-gradient(135deg, #ffebee 0%, #fce4ec 100%); }
-        .status-card.warning { border-left-color: #ff9800; background: linear-gradient(135deg, #fff3e0 0%, #fce4ec 100%); }
-        .status-card h3 { margin-bottom: 15px; font-size: 1.3rem; color: #333; }
-        .status-indicator { display: flex; align-items: center; gap: 10px; font-size: 1.1rem; margin-bottom: 10px; }
-        .indicator-dot { width: 12px; height: 12px; border-radius: 50%; background: #ccc; animation: pulse 2s infinite; }
-        .indicator-dot.connected { background: #4CAF50; }
-        .indicator-dot.error { background: #f44336; }
-        .indicator-dot.warning { background: #ff9800; }
+        .status-card.success { border-left-color: #22c55e; background: linear-gradient(135deg, #1e3a2e 0%, #1f4330 100%); }
+        .status-card.error { border-left-color: #ef4444; background: linear-gradient(135deg, #3e1f1f 0%, #431f23 100%); }
+        .status-card.warning { border-left-color: #eab308; background: linear-gradient(135deg, #3e3420 0%, #43341f 100%); }
+        .status-card h3 { margin-bottom: 15px; font-size: 1.3rem; color: #e2e8f0; }
+        .status-indicator { display: flex; align-items: center; gap: 10px; font-size: 1.1rem; margin-bottom: 10px; color: #cbd5e1; }
+        .indicator-dot { width: 12px; height: 12px; border-radius: 50%; background: #64748b; animation: pulse 2s infinite; }
+        .indicator-dot.connected { background: #22c55e; }
+        .indicator-dot.error { background: #ef4444; }
+        .indicator-dot.warning { background: #eab308; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
-        .upload-section { background: white; border-radius: 15px; padding: 30px; margin-bottom: 30px; border: 2px dashed #ddd; transition: all 0.3s ease; }
-        .upload-section.drag-over { border-color: #9C27B0; background: #f3e5f5; transform: scale(1.02); }
+        .upload-section { background: #1e293b; border-radius: 15px; padding: 30px; margin-bottom: 30px; border: 2px dashed #475569; transition: all 0.3s ease; }
+        .upload-section.drag-over { border-color: #9C27B0; background: #2d3a4f; transform: scale(1.02); }
         .upload-area { text-align: center; padding: 40px 20px; }
         .upload-icon { font-size: 4rem; color: #9C27B0; margin-bottom: 20px; }
         .btn { background: linear-gradient(135deg, #9C27B0 0%, #673AB7 100%); color: white; border: none; padding: 15px 30px; border-radius: 50px; font-size: 1rem; cursor: pointer; transition: all 0.3s ease; text-decoration: none; display: inline-block; margin: 5px; box-shadow: 0 4px 15px rgba(156, 39, 176, 0.3); }
         .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(156, 39, 176, 0.4); }
-        .btn:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
-        .btn-success { background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%); box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3); }
-        .btn-danger { background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%); box-shadow: 0 4px 15px rgba(244, 67, 54, 0.3); }
-        .btn-warning { background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%); box-shadow: 0 4px 15px rgba(255, 152, 0, 0.3); }
-        .progress-section { background: white; border-radius: 15px; padding: 30px; margin-bottom: 30px; display: none; }
-        .progress-bar { width: 100%; height: 20px; background: #e0e0e0; border-radius: 10px; overflow: hidden; margin: 20px 0; position: relative; }
-        .progress-fill { height: 100%; background: linear-gradient(90deg, #4CAF50 0%, #8BC34A 100%); width: 0%; transition: width 0.3s ease; border-radius: 10px; }
-        .progress-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: bold; color: #333; font-size: 0.9rem; }
+        .btn:disabled { background: #64748b; cursor: not-allowed; transform: none; box-shadow: none; }
+        .btn-success { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); box-shadow: 0 4px 15px rgba(34, 197, 94, 0.3); }
+        .btn-danger { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3); }
+        .btn-warning { background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%); box-shadow: 0 4px 15px rgba(234, 179, 8, 0.3); }
+        .progress-section { background: #1e293b; border-radius: 15px; padding: 30px; margin-bottom: 30px; display: none; }
+        .progress-bar { width: 100%; height: 20px; background: #475569; border-radius: 10px; overflow: hidden; margin: 20px 0; position: relative; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #22c55e 0%, #84cc16 100%); width: 0%; transition: width 0.3s ease; border-radius: 10px; }
+        .progress-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: bold; color: #1e293b; font-size: 0.9rem; }
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }
-        .stat-item { background: #f8f9fa; padding: 20px; border-radius: 10px; text-align: center; }
-        .stat-number { font-size: 2rem; font-weight: bold; color: #9C27B0; margin-bottom: 5px; }
-        .stat-label { color: #666; font-size: 0.9rem; }
-        .file-info { background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); border: 1px solid #9C27B0; border-radius: 15px; padding: 20px; margin: 20px 0; display: none; }
+        .stat-item { background: #334155; padding: 20px; border-radius: 10px; text-align: center; }
+        .stat-number { font-size: 2rem; font-weight: bold; color: #a78bfa; margin-bottom: 5px; }
+        .stat-label { color: #94a3b8; font-size: 0.9rem; }
+        .file-info { background: linear-gradient(135deg, #2d1f42 0%, #3e2959 100%); border: 1px solid #9C27B0; border-radius: 15px; padding: 20px; margin: 20px 0; display: none; }
         .file-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 15px; }
         .log-section { background: #1a1a1a; color: #00ff00; border-radius: 15px; padding: 20px; margin-top: 30px; font-family: 'Courier New', monospace; max-height: 300px; overflow-y: auto; }
         .log-entry { margin-bottom: 5px; padding: 2px 0; }
-        .log-entry.success { color: #4CAF50; }
-        .log-entry.error { color: #f44336; }
-        .log-entry.warning { color: #ff9800; }
+        .log-entry.success { color: #22c55e; }
+        .log-entry.error { color: #ef4444; }
+        .log-entry.warning { color: #eab308; }
         .log-entry.info { color: #9C27B0; }
-        .controls-section { background: white; border-radius: 15px; padding: 25px; margin-bottom: 20px; }
+        .controls-section { background: #1e293b; border-radius: 15px; padding: 25px; margin-bottom: 20px; }
         .control-group { display: flex; align-items: center; gap: 15px; margin-bottom: 15px; }
-        .control-group label { font-weight: bold; min-width: 150px; }
-        select, input { padding: 10px; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem; transition: border-color 0.3s ease; }
+        .control-group label { font-weight: bold; min-width: 150px; color: #e2e8f0; }
+        select, input { padding: 10px; border: 2px solid #475569; border-radius: 8px; font-size: 1rem; transition: border-color 0.3s ease; background: #334155; color: #e2e8f0; }
         select:focus, input:focus { outline: none; border-color: #9C27B0; }
         .hidden { display: none !important; }
-        .table-preview { max-height: 400px; overflow: auto; border: 1px solid #ddd; border-radius: 8px; margin: 20px 0; }
+        .table-preview { max-height: 400px; overflow: auto; border: 1px solid #475569; border-radius: 8px; margin: 20px 0; }
         .table-preview table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
-        .table-preview th, .table-preview td { padding: 6px 8px; border-bottom: 1px solid #eee; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
-        .table-preview th { background: #f8f9fa; font-weight: bold; position: sticky; top: 0; }
-        .table-preview tr:hover { background: #f5f5f5; }
-        .columns-info { background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); border: 1px solid #ff9800; border-radius: 10px; padding: 15px; margin: 15px 0; font-size: 0.9rem; }
-        .columns-info h4 { color: #ef6c00; margin-bottom: 10px; }
+        .table-preview th, .table-preview td { padding: 6px 8px; border-bottom: 1px solid #475569; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; color: #e2e8f0; }
+        .table-preview th { background: #475569; font-weight: bold; position: sticky; top: 0; }
+        .table-preview tr:hover { background: #475569; }
+        .columns-info { background: linear-gradient(135deg, #3e3420 0%, #43341f 100%); border: 1px solid #eab308; border-radius: 10px; padding: 15px; margin: 15px 0; font-size: 0.9rem; color: #fef3c7; }
+        .columns-info h4 { color: #fbbf24; margin-bottom: 10px; }
         /* --- FIN CSS NUEVO --- */
     </style>
 </head>
 <body>
     <div class="dashboard">
         <div class="header">
-            <h1>📊 Tablero de Secuencias Sin Lectura (CSV)</h1>
+            <h1>📊 Carga de Secuencias Sin Lectura (CSV)</h1>
             <p>Sistema de importación masiva de secuencias sin lectura a Supabase - Ultra optimizado</p>
         </div>
         <div class="main-content">
@@ -93,7 +93,7 @@
                         <div class="indicator-dot" id="tableDot"></div>
                         <span id="tableStatus">Sin verificar</span>
                     </div>
-                    <div id="ciclosInfoSinLectura" style="margin:8px 0 0 0; font-size:0.95em; color:#673AB7;"></div>
+                    <div id="ciclosInfoSinLectura" style="margin:8px 0 0 0; font-size:0.95em; color:#a78bfa;"></div>
                     <button class="btn" onclick="checkTable()">📊 Verificar Tabla</button>
                 </div>
                 <div class="status-card">
@@ -176,9 +176,9 @@
                     <div class="progress-fill" id="progressFill"></div>
                     <div class="progress-text" id="progressText">0%</div>
                 </div>
-                <div id="progressSummary" style="text-align: center; margin: 15px 0; font-size: 1.1rem; font-weight: bold; color: #9C27B0;">
+                <div id="progressSummary" style="text-align: center; margin: 15px 0; font-size: 1.1rem; font-weight: bold; color: #a78bfa;">
                     <div id="progressMainText">Preparando carga...</div>
-                    <div id="progressSubText" style="font-size: 0.9rem; color: #666; margin-top: 5px;">Inicializando proceso</div>
+                    <div id="progressSubText" style="font-size: 0.9rem; color: #94a3b8; margin-top: 5px;">Inicializando proceso</div>
                 </div>
                 <div class="stats-grid">
                     <div class="stat-item">
@@ -895,7 +895,7 @@
             const contenido = document.getElementById('contenidoModalTabla');
             
             // Mostrar indicador de carga
-            contenido.innerHTML = '<div style="text-align: center; padding: 40px;"><div style="display: inline-block;"><div style="border: 4px solid #f3f3f3; border-top: 4px solid #9C27B0; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;"></div></div><p style="margin-top: 20px;">Cargando todos los datos de la tabla...</p></div>';
+            contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #e2e8f0;"><div style="display: inline-block;"><div style="border: 4px solid #475569; border-top: 4px solid #9C27B0; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;"></div></div><p style="margin-top: 20px;">Cargando todos los datos de la tabla...</p></div>';
             
             modal.style.display = 'block';
             
@@ -922,7 +922,7 @@
                         from += batchSize;
                         
                         // Actualizar mensaje de carga
-                        contenido.innerHTML = '<div style="text-align: center; padding: 40px;"><div style="display: inline-block;"><div style="border: 4px solid #f3f3f3; border-top: 4px solid #9C27B0; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;"></div></div><p style="margin-top: 20px;">Cargando datos... ' + allData.length.toLocaleString() + ' registros</p></div>';
+                        contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #e2e8f0;"><div style="display: inline-block;"><div style="border: 4px solid #475569; border-top: 4px solid #9C27B0; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;"></div></div><p style="margin-top: 20px;">Cargando datos... ' + allData.length.toLocaleString() + ' registros</p></div>';
                         
                         // Si recibimos menos registros que el tamaño del lote, ya terminamos
                         if (data.length < batchSize) {
@@ -934,7 +934,7 @@
                 }
                 
                 if (allData.length === 0) {
-                    contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">No hay datos disponibles en la tabla</div>';
+                    contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #94a3b8;">No hay datos disponibles en la tabla</div>';
                     return;
                 }
                 
@@ -942,7 +942,7 @@
                 console.log('Columnas disponibles:', Object.keys(allData[0]));
                 
                 // Procesar los datos
-                contenido.innerHTML = '<div style="text-align: center; padding: 40px;"><p>Procesando ' + allData.length.toLocaleString() + ' registros...</p></div>';
+                contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #e2e8f0;"><p>Procesando ' + allData.length.toLocaleString() + ' registros...</p></div>';
                 
                 const datosProcessados = procesarDatosTabla(allData);
                 
@@ -951,7 +951,7 @@
                 
             } catch (error) {
                 console.error('Error cargando tabla:', error);
-                contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #f44336;"><strong>Error al cargar los datos:</strong> ' + error.message + '</div>';
+                contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #ef4444;"><strong>Error al cargar los datos:</strong> ' + error.message + '</div>';
             }
         }
 
@@ -1083,14 +1083,15 @@
             let html = '<style>';
             html += '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }';
             html += '.tabla-secuencia { width: 100%; border-collapse: collapse; margin: 20px 0; }';
-            html += '.tabla-secuencia th { background: #9C27B0; color: white; padding: 15px; text-align: left; font-weight: bold; border: 1px solid #333; }';
-            html += '.tabla-secuencia td { padding: 12px 15px; border: 1px solid #ddd; }';
-            html += '.tabla-secuencia tr:nth-child(even) { background: #f9f9f9; }';
-            html += '.tabla-secuencia tr:hover { background: #e8d5f2; }';
+            html += '.tabla-secuencia th { background: #475569; color: #f1f5f9; padding: 15px; text-align: left; font-weight: bold; border: 1px solid #475569; }';
+            html += '.tabla-secuencia td { padding: 12px 15px; border: 1px solid #475569; color: #e2e8f0; }';
+            html += '.tabla-secuencia tr:nth-child(even) { background: #334155; }';
+            html += '.tabla-secuencia tr:nth-child(odd) { background: #1e293b; }';
+            html += '.tabla-secuencia tr:hover { background: #475569; }';
             html += '</style>';
             
             // Información de valores únicos
-            html += '<div style="background: #f0f0f0; padding: 15px; border-radius: 8px; margin-bottom: 20px;">';
+            html += '<div style="background: #334155; padding: 15px; border-radius: 8px; margin-bottom: 20px; color: #e2e8f0;">';
             html += '<p><strong>📊 Ciclo:</strong> ' + (datos.ciclosUnicos.length > 0 ? datos.ciclosUnicos.join(', ') : 'Sin datos') + '</p>';
             html += '<p><strong>📍 Correrías:</strong> ' + datos.totalCorrerias + '</p>';
             html += '<p><strong>📋 Rangos:</strong> ' + datos.datos.length + '</p>';
@@ -1138,14 +1139,14 @@
         async function abrirModalRangosLectura() {
             const modal = document.getElementById('modalRangosLectura');
             const contenido = document.getElementById('contenidoModalRangosLectura');
-            contenido.innerHTML = '<div style="text-align: center; padding: 40px;"><div style="display: inline-block;"><div style="border: 4px solid #f3f3f3; border-top: 4px solid #9C27B0; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;"></div></div><p style="margin-top: 20px;">Cargando rangos de lectura únicos...</p></div>';
+            contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #e2e8f0;"><div style="display: inline-block;"><div style="border: 4px solid #475569; border-top: 4px solid #9C27B0; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;"></div></div><p style="margin-top: 20px;">Cargando rangos de lectura únicos...</p></div>';
             modal.style.display = 'block';
             try {
                 const { data, error } = await supabaseSecuencia.rpc('rangos_lectura_unicos');
                 if (error) throw new Error('Error al cargar datos: ' + error.message);
                 const allData = data || [];
                 if (allData.length === 0) {
-                    contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">No hay datos disponibles</div>';
+                    contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #94a3b8;">No hay datos disponibles</div>';
                     return;
                 }
                 // Agrupar por correria y dirección, y quitar ceros a la izquierda en ciclo
@@ -1174,7 +1175,7 @@
                 });
                 // Generar y descargar Excel
                 if (resultado.length === 0) {
-                    contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">No hay datos agrupados</div>';
+                    contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #94a3b8;">No hay datos agrupados</div>';
                     return;
                 }
                 const rows = resultado.map(row => ({
@@ -1188,10 +1189,10 @@
                 const workbook = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(workbook, worksheet, 'rangos_lectura');
                 XLSX.writeFile(workbook, 'rangos_lectura.xlsx');
-                contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #4CAF50; font-size:1.2em;">✅ Archivo Excel generado y descargado.<br>Puedes cerrar esta ventana.</div>';
+                contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #22c55e; font-size:1.2em;">✅ Archivo Excel generado y descargado.<br>Puedes cerrar esta ventana.</div>';
             } catch (error) {
                 console.error('Error cargando rangos:', error);
-                contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #f44336;"><strong>Error:</strong> ' + error.message + '</div>';
+                contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #ef4444;"><strong>Error:</strong> ' + error.message + '</div>';
             }
         }
 
@@ -1247,7 +1248,7 @@
             const modal = document.getElementById('modalCoordenadas');
             const contenido = document.getElementById('contenidoModalCoordenadas');
             
-            contenido.innerHTML = '<div style="text-align: center; padding: 40px;"><div style="display: inline-block;"><div style="border: 4px solid #f3f3f3; border-top: 4px solid #9C27B0; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;"></div></div><p style="margin-top: 20px;">Cargando coordenadas únicas...</p></div>';
+            contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #e2e8f0;"><div style="display: inline-block;"><div style="border: 4px solid #475569; border-top: 4px solid #9C27B0; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;"></div></div><p style="margin-top: 20px;">Cargando coordenadas únicas...</p></div>';
             
             modal.style.display = 'block';
             
@@ -1258,20 +1259,20 @@
                 const allData = data || [];
 
                 if (allData.length === 0) {
-                    contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">No hay datos disponibles</div>';
+                    contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #94a3b8;">No hay datos disponibles</div>';
                     return;
                 }
                 
                 console.log('Total datos cargados (únicos por instalación vía RPC):', allData.length);
                 
-                contenido.innerHTML = '<div style="text-align: center; padding: 40px;"><p>Procesando ' + allData.length.toLocaleString() + ' registros únicos...</p></div>';
+                contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #e2e8f0;"><p>Procesando ' + allData.length.toLocaleString() + ' registros únicos...</p></div>';
                 
                 const datosCoordenadas = procesarCoordenadas(allData);
                 generarTablaCoordenadas(datosCoordenadas, contenido);
                 
             } catch (error) {
                 console.error('Error cargando coordenadas:', error);
-                contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #f44336;"><strong>Error:</strong> ' + error.message + '</div>';
+                contenido.innerHTML = '<div style="text-align: center; padding: 40px; color: #ef4444;"><strong>Error:</strong> ' + error.message + '</div>';
             }
         }
 
@@ -1339,16 +1340,17 @@
             let html = '<style>';
             html += '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }';
             html += '.tabla-secuencia { width: 100%; border-collapse: collapse; margin: 20px 0; }';
-            html += '.tabla-secuencia th { background: #9C27B0; color: white; padding: 15px; text-align: left; font-weight: bold; border: 1px solid #333; }';
-            html += '.tabla-secuencia td { padding: 12px 15px; border: 1px solid #ddd; }';
-            html += '.tabla-secuencia tr:nth-child(even) { background: #f9f9f9; }';
-            html += '.tabla-secuencia tr:hover { background: #e8d5f2; }';
+            html += '.tabla-secuencia th { background: #475569; color: #f1f5f9; padding: 15px; text-align: left; font-weight: bold; border: 1px solid #475569; }';
+            html += '.tabla-secuencia td { padding: 12px 15px; border: 1px solid #475569; color: #e2e8f0; }';
+            html += '.tabla-secuencia tr:nth-child(even) { background: #334155; }';
+            html += '.tabla-secuencia tr:nth-child(odd) { background: #1e293b; }';
+            html += '.tabla-secuencia tr:hover { background: #475569; }';
             html += '</style>';
             
-            html += '<div style="background: #f0f0f0; padding: 15px; border-radius: 8px; margin-bottom: 20px;">';
+            html += '<div style="background: #334155; padding: 15px; border-radius: 8px; margin-bottom: 20px; color: #e2e8f0;">';
             html += '<p><strong>📊 Ciclos únicos:</strong> ' + (datos.ciclosUnicos.length > 0 ? datos.ciclosUnicos.join(', ') : 'Sin datos') + '</p>';
             html += '<p><strong>📍 Total instalaciones únicas:</strong> ' + datos.total + '</p>';
-            html += '<p style="color: #666; font-size: 0.9rem; margin-top: 10px;"><em>Datos procesados de ' + datos.totalProcesados + ' registros cargados</em></p>';
+            html += '<p style="color: #94a3b8; font-size: 0.9rem; margin-top: 10px;"><em>Datos procesados de ' + datos.totalProcesados + ' registros cargados</em></p>';
             html += '</div>';
             
             // Botón de exportación
@@ -1356,7 +1358,7 @@
             html += '<button class="btn" style="padding: 10px 16px;" onclick="exportarExcelCoordenadas()">⬇️ Exportar Excel</button>';
             html += '</div>';
             
-            html += '<p style="text-align: center; color: #999; padding: 20px;">✅ Datos procesados correctamente. Los resultados están listos para exportar.</p>';
+            html += '<p style="text-align: center; color: #94a3b8; padding: 20px;">✅ Datos procesados correctamente. Los resultados están listos para exportar.</p>';
             
             contenedor.innerHTML = html;
         }
@@ -1390,10 +1392,10 @@
 
     <!-- Modal de Tabla Secuencia Sin Lectura -->
     <div id="modalTabla" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; overflow: auto;">
-        <div style="background: white; margin: 20px auto; padding: 30px; border-radius: 15px; width: 95%; max-width: 1400px; max-height: 90vh; overflow: auto; box-shadow: 0 20px 40px rgba(0,0,0,0.3);">
+        <div style="background: #1e293b; margin: 20px auto; padding: 30px; border-radius: 15px; width: 95%; max-width: 1400px; max-height: 90vh; overflow: auto; box-shadow: 0 20px 40px rgba(0,0,0,0.3);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h2>📊 Tabla Secuencia Sin Lectura</h2>
-                <button onclick="cerrarModalTabla()" style="background: #f44336; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 1rem;">✕ Cerrar</button>
+                <h2 style="color: #e2e8f0;">📊 Tabla Secuencia Sin Lectura</h2>
+                <button onclick="cerrarModalTabla()" style="background: #ef4444; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 1rem;">✕ Cerrar</button>
             </div>
             <div id="contenidoModalTabla" style="overflow-x: auto;">
                 <!-- Tabla se generará aquí -->
@@ -1403,10 +1405,10 @@
 
     <!-- Modal de Coordenadas -->
     <div id="modalCoordenadas" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; overflow: auto;">
-        <div style="background: white; margin: 20px auto; padding: 30px; border-radius: 15px; width: 95%; max-width: 1400px; max-height: 90vh; overflow: auto; box-shadow: 0 20px 40px rgba(0,0,0,0.3);">
+        <div style="background: #1e293b; margin: 20px auto; padding: 30px; border-radius: 15px; width: 95%; max-width: 1400px; max-height: 90vh; overflow: auto; box-shadow: 0 20px 40px rgba(0,0,0,0.3);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h2>🗺️ Coordenadas Instalaciones</h2>
-                <button onclick="cerrarModalCoordenadas()" style="background: #f44336; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 1rem;">✕ Cerrar</button>
+                <h2 style="color: #e2e8f0;">🗺️ Coordenadas Instalaciones</h2>
+                <button onclick="cerrarModalCoordenadas()" style="background: #ef4444; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 1rem;">✕ Cerrar</button>
             </div>
             <div id="contenidoModalCoordenadas" style="overflow-x: auto;">
                 <!-- Tabla se generará aquí -->
@@ -1416,10 +1418,10 @@
 
     <!-- Modal de Rangos de Lectura -->
     <div id="modalRangosLectura" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; overflow: auto;">
-        <div style="background: white; margin: 20px auto; padding: 30px; border-radius: 15px; width: 95%; max-width: 1400px; max-height: 90vh; overflow: auto; box-shadow: 0 20px 40px rgba(0,0,0,0.3);">
+        <div style="background: #1e293b; margin: 20px auto; padding: 30px; border-radius: 15px; width: 95%; max-width: 1400px; max-height: 90vh; overflow: auto; box-shadow: 0 20px 40px rgba(0,0,0,0.3);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h2>📊 Rangos de Lectura</h2>
-                <button onclick="cerrarModalRangosLectura()" style="background: #f44336; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 1rem;">✕ Cerrar</button>
+                <h2 style="color: #e2e8f0;">📊 Rangos de Lectura</h2>
+                <button onclick="cerrarModalRangosLectura()" style="background: #ef4444; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 1rem;">✕ Cerrar</button>
             </div>
             <div id="contenidoModalRangosLectura" style="overflow-x: auto;">
                 <!-- Tabla se generará aquí -->

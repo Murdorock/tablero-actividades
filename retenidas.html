@@ -16,8 +16,8 @@
         
         <div style="padding: 2rem; max-width: 800px; margin: 0 auto;">
             <div style="background: #fff; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                <h3 style="margin-top: 0;">📤 Cargar Archivo Excel</h3>
-                <p style="color: #7f8c8d; margin-bottom: 1.5rem;">
+                <h3 style="margin-top: 0; color: #212529;">📤 Cargar Archivo Excel</h3>
+                <p style="color: #495057; margin-bottom: 1.5rem;">
                     Cargue un archivo Excel (.xls o .xlsx) con las columnas: <strong>instalacion</strong>, <strong>contrato</strong>, <strong>retenidas</strong>, <strong>personalizado</strong>
                 </p>
                 
@@ -25,8 +25,8 @@
                     <input type="file" id="excelFileInput" accept=".xlsx, .xls" style="display: none;">
                     <div onclick="document.getElementById('excelFileInput').click()">
                         <div style="font-size: 48px; margin-bottom: 1rem;">📁</div>
-                        <p style="font-size: 16px; margin: 0.5rem 0;">Haga clic o arrastre el archivo aquí</p>
-                        <p style="font-size: 12px; color: #95a5a6;">Formatos aceptados: .xls, .xlsx</p>
+                        <p style="font-size: 16px; margin: 0.5rem 0; color: #212529;">Haga clic o arrastre el archivo aquí</p>
+                        <p style="font-size: 12px; color: #495057;">Formatos aceptados: .xls, .xlsx</p>
                     </div>
                 </div>
                 
@@ -37,12 +37,12 @@
                 </div>
                 
                 <div id="importProgress" style="display: none; margin-top: 1.5rem;">
-                    <h4>Progreso de Carga</h4>
+                    <h4 style="color: #212529;">Progreso de Carga</h4>
                     <div style="background: #ecf0f1; border-radius: 8px; overflow: hidden; height: 32px; position: relative;">
                         <div id="progressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #3498db, #2ecc71); transition: width 0.3s;"></div>
                         <div id="progressText" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: bold; color: #2c3e50;">0%</div>
                     </div>
-                    <p id="progressDetails" style="margin-top: 0.5rem; text-align: center; color: #7f8c8d;">Preparando...</p>
+                    <p id="progressDetails" style="margin-top: 0.5rem; text-align: center; color: #495057;">Preparando...</p>
                 </div>
                 
                 <div id="importStatus" style="margin-top: 1rem; padding: 1rem; border-radius: 4px; display: none;"></div>
@@ -67,17 +67,17 @@
                 </div>
                 
                 <div style="margin-top: 1.5rem;">
-                    <h4>📊 Estadísticas de la tabla</h4>
+                    <h4 style="color: #212529;">📊 Estadísticas de la tabla</h4>
                     <button class="btn btn-secondary" onclick="obtenerEstadisticas()" style="margin-top: 0.5rem;">
                         🔄 Actualizar Estadísticas
                     </button>
                     <div id="statsContainer" style="margin-top: 1rem; display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
                         <div style="padding: 1rem; background: #fff; border: 1px solid #e0e0e0; border-radius: 4px;">
-                            <div style="font-size: 12px; color: #7f8c8d;">Total de Registros</div>
+                            <div style="font-size: 12px; color: #495057; font-weight: 600;">Total de Registros</div>
                             <div id="totalRecords" style="font-size: 24px; font-weight: bold; color: #2c3e50;">-</div>
                         </div>
                         <div style="padding: 1rem; background: #fff; border: 1px solid #e0e0e0; border-radius: 4px;">
-                            <div style="font-size: 12px; color: #7f8c8d;">Última Actualización</div>
+                            <div style="font-size: 12px; color: #495057; font-weight: 600;">Última Actualización</div>
                             <div id="lastUpdate" style="font-size: 14px; font-weight: bold; color: #2c3e50;">-</div>
                         </div>
                     </div>

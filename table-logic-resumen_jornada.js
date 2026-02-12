@@ -209,15 +209,15 @@ function renderTable() {
         <div style="overflow-x: auto;">
             <table class="data-table" style="width: 100%; border-collapse: collapse;">
                 <thead>
-                    <tr style="background-color: #f8f9fa;">
-                        <th style="padding: 0.75rem; border: 1px solid #dee2e6; text-align: left; color: #212529; font-weight: bold;">👤 Supervisor</th>
-                        <th style="padding: 0.75rem; border: 1px solid #dee2e6; text-align: center; color: #212529; font-weight: bold;">📊 Cantidad</th>
-                        <th style="padding: 0.75rem; border: 1px solid #dee2e6; text-align: center; color: #212529; font-weight: bold;">✅ Registrados</th>
-                        <th style="padding: 0.75rem; border: 1px solid #dee2e6; text-align: center; color: #212529; font-weight: bold;">⏳ Pendientes por Registrar</th>
-                        <th style="padding: 0.75rem; border: 1px solid #dee2e6; text-align: center; color: #212529; font-weight: bold;">📈 Porcentaje Registrado</th>
-                        <th style="padding: 0.75rem; border: 1px solid #dee2e6; text-align: center; color: #212529; font-weight: bold;">⬇️ Descargas Confirmadas</th>
-                        <th style="padding: 0.75rem; border: 1px solid #dee2e6; text-align: center; color: #212529; font-weight: bold;">⏰ Descargas Pendientes</th>
-                        <th style="padding: 0.75rem; border: 1px solid #dee2e6; text-align: center; color: #212529; font-weight: bold;">📊 Porcentaje Descargado</th>
+                    <tr style="background-color: #475569;">
+                        <th style="padding: 0.75rem; border: 1px solid #475569; text-align: left; color: #f1f5f9; font-weight: bold;">👤 Supervisor</th>
+                        <th style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #f1f5f9; font-weight: bold;">📊 Cantidad</th>
+                        <th style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #f1f5f9; font-weight: bold;">✅ Registrados</th>
+                        <th style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #f1f5f9; font-weight: bold;">⏳ Pendientes por Registrar</th>
+                        <th style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #f1f5f9; font-weight: bold;">📈 Porcentaje Registrado</th>
+                        <th style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #f1f5f9; font-weight: bold;">⬇️ Descargas Confirmadas</th>
+                        <th style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #f1f5f9; font-weight: bold;">⏰ Descargas Pendientes</th>
+                        <th style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #f1f5f9; font-weight: bold;">📊 Porcentaje Descargado</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -225,41 +225,41 @@ function renderTable() {
     
     supervisoresData.forEach((supervisor, index) => {        
         tableHTML += `
-            <tr style="background: ${index % 2 === 0 ? '#ffffff' : '#f8f9fa'};">
-                <td style="padding: 0.75rem; border: 1px solid #dee2e6; font-weight: bold;">
+            <tr style="background: ${index % 2 === 0 ? '#1e293b' : '#334155'};">
+                <td style="padding: 0.75rem; border: 1px solid #475569; font-weight: bold; color: #e2e8f0;">
                     ${supervisor.supervisor}
                 </td>
-                <td style="padding: 0.75rem; border: 1px solid #dee2e6; text-align: center; font-weight: bold; color: #495057;">
+                <td style="padding: 0.75rem; border: 1px solid #475569; text-align: center; font-weight: bold; color: #cbd5e1;">
                     ${supervisor.cantidad.toLocaleString()}
                 </td>
-                <td style="padding: 0.75rem; border: 1px solid #dee2e6; text-align: center; color: #28a745; font-weight: bold;">
+                <td style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #22c55e; font-weight: bold;">
                     ${supervisor.registrados.toLocaleString()}
                 </td>
-                <td style="padding: 0.75rem; border: 1px solid #dee2e6; text-align: center; color: ${supervisor.pendientes > 0 ? '#dc3545' : '#28a745'}; font-weight: bold;">
+                <td style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: ${supervisor.pendientes > 0 ? '#ef4444' : '#22c55e'}; font-weight: bold;">
                     ${supervisor.pendientes.toLocaleString()}
                 </td>
-                <td style="padding: 0.75rem; border: 1px solid #dee2e6; text-align: center;">
+                <td style="padding: 0.75rem; border: 1px solid #475569; text-align: center;">
                     <div style="display: flex; align-items: center; justify-content: center; flex-direction: column;">
-                        <div style="background: #e9ecef; border-radius: 10px; overflow: hidden; width: 80px; height: 18px; margin-bottom: 4px; position: relative;">
-                            <div style="background: ${supervisor.porcentajeRegistrado >= 80 ? '#28a745' : supervisor.porcentajeRegistrado >= 50 ? '#ffc107' : '#dc3545'}; height: 100%; width: ${supervisor.porcentajeRegistrado}%; transition: width 0.5s ease; border-radius: 10px;"></div>
+                        <div style="background: #475569; border-radius: 10px; overflow: hidden; width: 80px; height: 18px; margin-bottom: 4px; position: relative;">
+                            <div style="background: ${supervisor.porcentajeRegistrado >= 80 ? '#22c55e' : supervisor.porcentajeRegistrado >= 50 ? '#eab308' : '#ef4444'}; height: 100%; width: ${supervisor.porcentajeRegistrado}%; transition: width 0.5s ease; border-radius: 10px;"></div>
                         </div>
-                        <span style="font-size: 0.75rem; font-weight: bold; color: ${supervisor.porcentajeRegistrado >= 80 ? '#28a745' : supervisor.porcentajeRegistrado >= 50 ? '#ffc107' : '#dc3545'};">
+                        <span style="font-size: 0.75rem; font-weight: bold; color: ${supervisor.porcentajeRegistrado >= 80 ? '#22c55e' : supervisor.porcentajeRegistrado >= 50 ? '#eab308' : '#ef4444'};">
                             ${supervisor.porcentajeRegistrado}%
                         </span>
                     </div>
                 </td>
-                <td style="padding: 0.75rem; border: 1px solid #dee2e6; text-align: center; color: #007bff; font-weight: bold;">
+                <td style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #3b82f6; font-weight: bold;">
                     ${supervisor.descargasConfirmadas.toLocaleString()}
                 </td>
-                <td style="padding: 0.75rem; border: 1px solid #dee2e6; text-align: center; color: ${supervisor.descargasPendientes > 0 ? '#ffc107' : '#28a745'}; font-weight: bold;">
+                <td style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: ${supervisor.descargasPendientes > 0 ? '#eab308' : '#22c55e'}; font-weight: bold;">
                     ${supervisor.descargasPendientes.toLocaleString()}
                 </td>
-                <td style="padding: 0.75rem; border: 1px solid #dee2e6; text-align: center;">
+                <td style="padding: 0.75rem; border: 1px solid #475569; text-align: center;">
                     <div style="display: flex; align-items: center; justify-content: center; flex-direction: column;">
-                        <div style="background: #e9ecef; border-radius: 10px; overflow: hidden; width: 80px; height: 18px; margin-bottom: 4px; position: relative;">
-                            <div style="background: ${supervisor.porcentajeDescargado >= 80 ? '#28a745' : supervisor.porcentajeDescargado >= 50 ? '#ffc107' : '#dc3545'}; height: 100%; width: ${supervisor.porcentajeDescargado}%; transition: width 0.5s ease; border-radius: 10px;"></div>
+                        <div style="background: #475569; border-radius: 10px; overflow: hidden; width: 80px; height: 18px; margin-bottom: 4px; position: relative;">
+                            <div style="background: ${supervisor.porcentajeDescargado >= 80 ? '#22c55e' : supervisor.porcentajeDescargado >= 50 ? '#eab308' : '#ef4444'}; height: 100%; width: ${supervisor.porcentajeDescargado}%; transition: width 0.5s ease; border-radius: 10px;"></div>
                         </div>
-                        <span style="font-size: 0.75rem; font-weight: bold; color: ${supervisor.porcentajeDescargado >= 80 ? '#28a745' : supervisor.porcentajeDescargado >= 50 ? '#ffc107' : '#dc3545'};">
+                        <span style="font-size: 0.75rem; font-weight: bold; color: ${supervisor.porcentajeDescargado >= 80 ? '#22c55e' : supervisor.porcentajeDescargado >= 50 ? '#eab308' : '#ef4444'};">
                             ${supervisor.porcentajeDescargado}%
                         </span>
                     </div>
@@ -274,32 +274,32 @@ function renderTable() {
         </div>
         
         <!-- Resumen estadístico -->
-        <div style="margin-top: 2rem; padding: 1rem; background: #f8f9fa; border-radius: 0.5rem; border-left: 4px solid #007bff;">
-            <h5 style="margin: 0 0 1rem 0; color: #495057;">📈 Resumen Estadístico - Totales</h5>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
+        <div style="margin-top: 2rem; padding: 1rem; background: #334155; border-radius: 0.5rem; border-left: 4px solid #3b82f6;">
+            <h5 style="margin: 0 0 1rem 0; color: #f1f5f9;">📈 Resumen Estadístico - Totales</h5>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; color: #e2e8f0;">
                 <div>
-                    <strong>👥 Total Supervisores:</strong> ${supervisoresData.length}
+                    <strong style="color: #f1f5f9;">👥 Total Supervisores:</strong> ${supervisoresData.length}
                 </div>
                 <div>
-                    <strong>📊 Total Cantidad:</strong> ${totalRegistros.toLocaleString()}
+                    <strong style="color: #f1f5f9;">📊 Total Cantidad:</strong> ${totalRegistros.toLocaleString()}
                 </div>
                 <div>
-                    <strong>✅ Total Registrados:</strong> <span style="color: #28a745;">${totalRegistrados.toLocaleString()}</span>
+                    <strong style="color: #f1f5f9;">✅ Total Registrados:</strong> <span style="color: #22c55e;">${totalRegistrados.toLocaleString()}</span>
                 </div>
                 <div>
-                    <strong>⏳ Total Pendientes Registrar:</strong> <span style="color: ${totalPendientes > 0 ? '#dc3545' : '#28a745'};">${totalPendientes.toLocaleString()}</span>
+                    <strong style="color: #f1f5f9;">⏳ Total Pendientes Registrar:</strong> <span style="color: ${totalPendientes > 0 ? '#ef4444' : '#22c55e'};">${totalPendientes.toLocaleString()}</span>
                 </div>
                 <div>
-                    <strong>📈 Promedio % Registrado:</strong> <span style="color: ${promedioRegistrado >= 80 ? '#28a745' : promedioRegistrado >= 50 ? '#ffc107' : '#dc3545'};">${promedioRegistrado}%</span>
+                    <strong style="color: #f1f5f9;">📈 Promedio % Registrado:</strong> <span style="color: ${promedioRegistrado >= 80 ? '#22c55e' : promedioRegistrado >= 50 ? '#eab308' : '#ef4444'};">${promedioRegistrado}%</span>
                 </div>
                 <div>
-                    <strong>⬇️ Total Descargas Confirmadas:</strong> <span style="color: #007bff;">${totalDescargasConfirmadas.toLocaleString()}</span>
+                    <strong style="color: #f1f5f9;">⬇️ Total Descargas Confirmadas:</strong> <span style="color: #3b82f6;">${totalDescargasConfirmadas.toLocaleString()}</span>
                 </div>
                 <div>
-                    <strong>⏰ Total Descargas Pendientes:</strong> <span style="color: ${totalDescargasPendientes > 0 ? '#ffc107' : '#28a745'};">${totalDescargasPendientes.toLocaleString()}</span>
+                    <strong style="color: #f1f5f9;">⏰ Total Descargas Pendientes:</strong> <span style="color: ${totalDescargasPendientes > 0 ? '#eab308' : '#22c55e'};">${totalDescargasPendientes.toLocaleString()}</span>
                 </div>
                 <div>
-                    <strong>📊 Promedio % Descargado:</strong> <span style="color: ${promedioDescargado >= 80 ? '#28a745' : promedioDescargado >= 50 ? '#ffc107' : '#dc3545'};">${promedioDescargado}%</span>
+                    <strong style="color: #f1f5f9;">📊 Promedio % Descargado:</strong> <span style="color: ${promedioDescargado >= 80 ? '#22c55e' : promedioDescargado >= 50 ? '#eab308' : '#ef4444'};">${promedioDescargado}%</span>
                 </div>
             </div>
         </div>
@@ -458,17 +458,17 @@ function abrirModalCompacto() {
     
     let html = `
         <div style="font-size: 0.6rem;">
-            <table style="width: auto; border-collapse: collapse; border: 2px solid #333; margin: 0 auto;">
+            <table style="width: auto; border-collapse: collapse; border: 2px solid #475569; margin: 0 auto;">
                 <thead>
-                    <tr style="background: #607d8b; color: white;">
-                        <th style="padding: 0.2rem 0.15rem; border: 1px solid #333; font-size: 0.6rem; text-align: center; width: 50px;">Supervisor</th>
-                        <th style="padding: 0.2rem 0.15rem; border: 1px solid #333; font-size: 0.6rem; text-align: center; width: 35px;">Cantidad</th>
-                        <th style="padding: 0.2rem 0.15rem; border: 1px solid #333; font-size: 0.6rem; text-align: center; width: 35px;">Registrados</th>
-                        <th style="padding: 0.2rem 0.15rem; border: 1px solid #333; font-size: 0.6rem; text-align: center; width: 35px;">Pend.<br>Registrar</th>
-                        <th style="padding: 0.2rem 0.15rem; border: 1px solid #333; font-size: 0.6rem; text-align: center; width: 35px;">%<br>Registrado</th>
-                        <th style="padding: 0.2rem 0.15rem; border: 1px solid #333; font-size: 0.6rem; text-align: center; width: 35px;">Desc.<br>Confirmadas</th>
-                        <th style="padding: 0.2rem 0.15rem; border: 1px solid #333; font-size: 0.6rem; text-align: center; width: 35px;">Desc.<br>Pendientes</th>
-                        <th style="padding: 0.2rem 0.15rem; border: 1px solid #333; font-size: 0.6rem; text-align: center; width: 35px;">%<br>Descargado</th>
+                    <tr style="background: #475569; color: white;">
+                        <th style="padding: 0.2rem 0.15rem; border: 1px solid #475569; font-size: 0.6rem; text-align: center; width: 50px;">Supervisor</th>
+                        <th style="padding: 0.2rem 0.15rem; border: 1px solid #475569; font-size: 0.6rem; text-align: center; width: 35px;">Cantidad</th>
+                        <th style="padding: 0.2rem 0.15rem; border: 1px solid #475569; font-size: 0.6rem; text-align: center; width: 35px;">Registrados</th>
+                        <th style="padding: 0.2rem 0.15rem; border: 1px solid #475569; font-size: 0.6rem; text-align: center; width: 35px;">Pend.<br>Registrar</th>
+                        <th style="padding: 0.2rem 0.15rem; border: 1px solid #475569; font-size: 0.6rem; text-align: center; width: 35px;">%<br>Registrado</th>
+                        <th style="padding: 0.2rem 0.15rem; border: 1px solid #475569; font-size: 0.6rem; text-align: center; width: 35px;">Desc.<br>Confirmadas</th>
+                        <th style="padding: 0.2rem 0.15rem; border: 1px solid #475569; font-size: 0.6rem; text-align: center; width: 35px;">Desc.<br>Pendientes</th>
+                        <th style="padding: 0.2rem 0.15rem; border: 1px solid #475569; font-size: 0.6rem; text-align: center; width: 35px;">%<br>Descargado</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -476,35 +476,35 @@ function abrirModalCompacto() {
     
     supervisoresData.forEach((sup, index) => {
         html += `
-            <tr style="background: ${index % 2 === 0 ? '#fff' : '#f8f9fa'};">
-                <td style="padding: 0.15rem 0.2rem; border: 1px solid #333; font-weight: bold; font-size: 0.6rem; width: 50px;">${sup.supervisor}</td>
-                <td style="padding: 0.15rem 0.2rem; border: 1px solid #333; text-align: center; font-size: 0.6rem; width: 35px;">${sup.cantidad}</td>
-                <td style="padding: 0.15rem 0.2rem; border: 1px solid #333; text-align: center; font-size: 0.6rem; color: #28a745; font-weight: bold; width: 35px;">${sup.registrados}</td>
-                <td style="padding: 0.15rem 0.2rem; border: 1px solid #333; text-align: center; font-size: 0.6rem; color: ${sup.pendientes > 0 ? '#dc3545' : '#28a745'}; font-weight: bold; width: 35px;">${sup.pendientes}</td>
-                <td style="padding: 0.15rem 0.2rem; border: 1px solid #333; text-align: center; font-size: 0.6rem; font-weight: bold; width: 35px;">${sup.porcentajeRegistrado}%</td>
-                <td style="padding: 0.15rem 0.2rem; border: 1px solid #333; text-align: center; font-size: 0.6rem; color: #28a745; font-weight: bold; width: 35px;">${sup.descargasConfirmadas}</td>
-                <td style="padding: 0.15rem 0.2rem; border: 1px solid #333; text-align: center; font-size: 0.6rem; color: ${sup.descargasPendientes > 0 ? '#dc3545' : '#28a745'}; font-weight: bold; width: 35px;">${sup.descargasPendientes}</td>
-                <td style="padding: 0.15rem 0.2rem; border: 1px solid #333; text-align: center; font-size: 0.6rem; font-weight: bold; width: 35px;">${sup.porcentajeDescargado}%</td>
+            <tr style="background: ${index % 2 === 0 ? '#1e293b' : '#334155'};">
+                <td style="padding: 0.15rem 0.2rem; border: 1px solid #475569; font-weight: bold; font-size: 0.6rem; width: 50px; color: #e2e8f0;">${sup.supervisor}</td>
+                <td style="padding: 0.15rem 0.2rem; border: 1px solid #475569; text-align: center; font-size: 0.6rem; width: 35px; color: #cbd5e1;">${sup.cantidad}</td>
+                <td style="padding: 0.15rem 0.2rem; border: 1px solid #475569; text-align: center; font-size: 0.6rem; color: #22c55e; font-weight: bold; width: 35px;">${sup.registrados}</td>
+                <td style="padding: 0.15rem 0.2rem; border: 1px solid #475569; text-align: center; font-size: 0.6rem; color: ${sup.pendientes > 0 ? '#ef4444' : '#22c55e'}; font-weight: bold; width: 35px;">${sup.pendientes}</td>
+                <td style="padding: 0.15rem 0.2rem; border: 1px solid #475569; text-align: center; font-size: 0.6rem; font-weight: bold; width: 35px; color: #e2e8f0;">${sup.porcentajeRegistrado}%</td>
+                <td style="padding: 0.15rem 0.2rem; border: 1px solid #475569; text-align: center; font-size: 0.6rem; color: #22c55e; font-weight: bold; width: 35px;">${sup.descargasConfirmadas}</td>
+                <td style="padding: 0.15rem 0.2rem; border: 1px solid #475569; text-align: center; font-size: 0.6rem; color: ${sup.descargasPendientes > 0 ? '#ef4444' : '#22c55e'}; font-weight: bold; width: 35px;">${sup.descargasPendientes}</td>
+                <td style="padding: 0.15rem 0.2rem; border: 1px solid #475569; text-align: center; font-size: 0.6rem; font-weight: bold; width: 35px; color: #e2e8f0;">${sup.porcentajeDescargado}%</td>
             </tr>
         `;
     });
     
     // Fila de totales
     html += `
-                <tr style="background: #607d8b; color: white; font-weight: bold;">
-                    <td style="padding: 0.2rem 0.2rem; border: 2px solid #333; text-align: center; font-size: 0.65rem; width: 50px;">TOTALES</td>
-                    <td style="padding: 0.2rem 0.15rem; border: 2px solid #333; text-align: center; font-size: 0.65rem; width: 35px;">${totalCantidad}</td>
-                    <td style="padding: 0.2rem 0.15rem; border: 2px solid #333; text-align: center; font-size: 0.65rem; width: 35px;">${totalRegistrados}</td>
-                    <td style="padding: 0.2rem 0.15rem; border: 2px solid #333; text-align: center; font-size: 0.65rem; width: 35px;">${totalPendientes}</td>
-                    <td style="padding: 0.2rem 0.15rem; border: 2px solid #333; text-align: center; font-size: 0.65rem; width: 35px;">${promedioRegistrado}%</td>
-                    <td style="padding: 0.2rem 0.15rem; border: 2px solid #333; text-align: center; font-size: 0.65rem; width: 35px;">${totalConfirmadas}</td>
-                    <td style="padding: 0.2rem 0.15rem; border: 2px solid #333; text-align: center; font-size: 0.65rem; width: 35px;">${totalPendientesDesc}</td>
-                    <td style="padding: 0.2rem 0.15rem; border: 2px solid #333; text-align: center; font-size: 0.65rem; width: 35px;">${promedioDescargado}%</td>
+                <tr style="background: #475569; color: white; font-weight: bold;">
+                    <td style="padding: 0.2rem 0.2rem; border: 2px solid #475569; text-align: center; font-size: 0.65rem; width: 50px;">TOTALES</td>
+                    <td style="padding: 0.2rem 0.15rem; border: 2px solid #475569; text-align: center; font-size: 0.65rem; width: 35px;">${totalCantidad}</td>
+                    <td style="padding: 0.2rem 0.15rem; border: 2px solid #475569; text-align: center; font-size: 0.65rem; width: 35px;">${totalRegistrados}</td>
+                    <td style="padding: 0.2rem 0.15rem; border: 2px solid #475569; text-align: center; font-size: 0.65rem; width: 35px;">${totalPendientes}</td>
+                    <td style="padding: 0.2rem 0.15rem; border: 2px solid #475569; text-align: center; font-size: 0.65rem; width: 35px;">${promedioRegistrado}%</td>
+                    <td style="padding: 0.2rem 0.15rem; border: 2px solid #475569; text-align: center; font-size: 0.65rem; width: 35px;">${totalConfirmadas}</td>
+                    <td style="padding: 0.2rem 0.15rem; border: 2px solid #475569; text-align: center; font-size: 0.65rem; width: 35px;">${totalPendientesDesc}</td>
+                    <td style="padding: 0.2rem 0.15rem; border: 2px solid #475569; text-align: center; font-size: 0.65rem; width: 35px;">${promedioDescargado}%</td>
                 </tr>
             </tbody>
         </table>
         
-        <div style="margin-top: 0.8rem; text-align: center; color: #666; font-size: 0.65rem;">
+        <div style="margin-top: 0.8rem; text-align: center; color: #94a3b8; font-size: 0.65rem;">
             💡 Tip: Usa la tecla "Impr Pant" o captura de pantalla para compartir por WhatsApp
         </div>
     </div>

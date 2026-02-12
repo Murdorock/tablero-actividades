@@ -263,18 +263,18 @@ function renderTable() {
     // Fila de datos
     html += '<tbody>';
     html += '<tr style="background: #fff;">';
-    html += `<td style="padding: 0.6rem 0.5rem; border: 2px solid #333; text-align: center;">${resumenData.ciclo}</td>`;
-    html += `<td style="padding: 0.6rem 0.5rem; border: 2px solid #333; text-align: center;">${resumenData.totalCorrerias.toLocaleString()}</td>`;
-    html += `<td style="padding: 0.6rem 0.5rem; border: 2px solid #333; text-align: center;">${resumenData.correriasEjecutadas.toLocaleString()}</td>`;
-    html += `<td style="padding: 0.6rem 0.5rem; border: 2px solid #333; text-align: center;">${resumenData.correriasPendientesDescargar.toLocaleString()}</td>`;
-    html += `<td style="padding: 0.6rem 0.5rem; border: 2px solid #333; text-align: center;">${resumenData.ordenesTotales.toLocaleString()}</td>`;
-    html += `<td style="padding: 0.6rem 0.5rem; border: 2px solid #333; text-align: center;">${resumenData.cantidadOrdenesDescargadas.toLocaleString()}</td>`;
-    html += `<td style="padding: 0.6rem 0.5rem; border: 2px solid #333; text-align: center;">${resumenData.ordenesPendientesDescargar.toLocaleString()}</td>`;
-    html += `<td style="padding: 0.6rem 0.5rem; border: 2px solid #333; text-align: center;">${resumenData.ordenesPendientesLegalizar.toLocaleString()}</td>`;
-    html += `<td style="padding: 0.6rem 0.5rem; border: 2px solid #333; text-align: center;">${resumenData.porcentajeEjecutado}</td>`;
-    html += `<td style="padding: 0.6rem 0.5rem; border: 2px solid #333; text-align: center;">${resumenData.porcentajePendiente}</td>`;
-    html += `<td style="padding: 0.6rem 0.5rem; border: 2px solid #333; text-align: center;">${resumenData.mesFacturacion}</td>`;
-    html += `<td style="padding: 0.6rem 0.5rem; border: 2px solid #333; text-align: center;">${resumenData.cicloRelecturas}</td>`;
+    html += `<td style="padding: 0.6rem 0.5rem; border: 2px solid #333; text-align: center; color: #212529; font-weight: 600;">${resumenData.ciclo}</td>`;
+    html += `<td style="padding: 0.6rem 0.5rem; border: 2px solid #333; text-align: center; color: #212529; font-weight: 600;">${resumenData.totalCorrerias.toLocaleString()}</td>`;
+    html += `<td style="padding: 0.6rem 0.5rem; border: 2px solid #333; text-align: center; color: #212529; font-weight: 600;">${resumenData.correriasEjecutadas.toLocaleString()}</td>`;
+    html += `<td style="padding: 0.6rem 0.5rem; border: 2px solid #333; text-align: center; color: #212529; font-weight: 600;">${resumenData.correriasPendientesDescargar.toLocaleString()}</td>`;
+    html += `<td style="padding: 0.6rem 0.5rem; border: 2px solid #333; text-align: center; color: #212529; font-weight: 600;">${resumenData.ordenesTotales.toLocaleString()}</td>`;
+    html += `<td style="padding: 0.6rem 0.5rem; border: 2px solid #333; text-align: center; color: #212529; font-weight: 600;">${resumenData.cantidadOrdenesDescargadas.toLocaleString()}</td>`;
+    html += `<td style="padding: 0.6rem 0.5rem; border: 2px solid #333; text-align: center; color: #212529; font-weight: 600;">${resumenData.ordenesPendientesDescargar.toLocaleString()}</td>`;
+    html += `<td style="padding: 0.6rem 0.5rem; border: 2px solid #333; text-align: center; color: #212529; font-weight: 600;">${resumenData.ordenesPendientesLegalizar.toLocaleString()}</td>`;
+    html += `<td style="padding: 0.6rem 0.5rem; border: 2px solid #333; text-align: center; color: #212529; font-weight: 600;">${resumenData.porcentajeEjecutado}</td>`;
+    html += `<td style="padding: 0.6rem 0.5rem; border: 2px solid #333; text-align: center; color: #212529; font-weight: 600;">${resumenData.porcentajePendiente}</td>`;
+    html += `<td style="padding: 0.6rem 0.5rem; border: 2px solid #333; text-align: center; color: #212529; font-weight: 600;">${resumenData.mesFacturacion}</td>`;
+    html += `<td style="padding: 0.6rem 0.5rem; border: 2px solid #333; text-align: center; color: #212529; font-weight: 600;">${resumenData.cicloRelecturas}</td>`;
     html += '</tr>';
     html += '</tbody>';
     
@@ -287,19 +287,19 @@ function renderTable() {
     
     // Novedades Lectura
     html += '<div>';
-    html += '<label style="display: block; font-weight: bold; margin-bottom: 0.5rem; color: #1e3a5f;">NOVEDADES LECTURA</label>';
+    html += '<label style="display: block; font-weight: bold; margin-bottom: 0.5rem; color: #e2e8f0;">NOVEDADES LECTURA</label>';
     html += `<textarea id="novedadesLectura" class="form-control" style="width: 100%; min-height: 120px; resize: vertical; padding: 0.5rem; font-size: 0.9rem; border: 1px solid #ddd; border-radius: 4px;">${resumenData.novedadesLectura}</textarea>`;
     html += '</div>';
     
     // Novedades Reparto
     html += '<div>';
-    html += '<label style="display: block; font-weight: bold; margin-bottom: 0.5rem; color: #1e3a5f;">NOVEDADES REPARTO</label>';
+    html += '<label style="display: block; font-weight: bold; margin-bottom: 0.5rem; color: #e2e8f0;">NOVEDADES REPARTO</label>';
     html += `<textarea id="novedadesReparto" class="form-control" style="width: 100%; min-height: 120px; resize: vertical; padding: 0.5rem; font-size: 0.9rem; border: 1px solid #ddd; border-radius: 4px;">${resumenData.novedadesReparto}</textarea>`;
     html += '</div>';
     
     // Novedades Relecturas
     html += '<div>';
-    html += '<label style="display: block; font-weight: bold; margin-bottom: 0.5rem; color: #1e3a5f;">NOVEDADES RELECTURAS</label>';
+    html += '<label style="display: block; font-weight: bold; margin-bottom: 0.5rem; color: #e2e8f0;">NOVEDADES RELECTURAS</label>';
     html += `<textarea id="novedadesRelecturas" class="form-control" style="width: 100%; min-height: 120px; resize: vertical; padding: 0.5rem; font-size: 0.9rem; border: 1px solid #ddd; border-radius: 4px;">${resumenData.novedadesRelecturas}</textarea>`;
     html += '</div>';
     

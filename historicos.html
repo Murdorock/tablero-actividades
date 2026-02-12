@@ -22,7 +22,7 @@
         .dashboard {
             max-width: 1400px;
             margin: 0 auto;
-            background: white;
+            background: #1e293b;
             border-radius: 20px;
             box-shadow: 0 20px 40px rgba(0,0,0,0.1);
             overflow: hidden;
@@ -58,7 +58,7 @@
         }
         
         .status-card {
-            background: #f8f9fa;
+            background: #334155;
             border-radius: 15px;
             padding: 25px;
             border-left: 5px solid #2196F3;
@@ -71,24 +71,24 @@
         }
         
         .status-card.success {
-            border-left-color: #4CAF50;
-            background: linear-gradient(135deg, #e8f5e8 0%, #f1f8e9 100%);
+            border-left-color: #22c55e;
+            background: linear-gradient(135deg, #1e3a2e 0%, #1f4330 100%);
         }
         
         .status-card.error {
-            border-left-color: #f44336;
-            background: linear-gradient(135deg, #ffebee 0%, #fce4ec 100%);
+            border-left-color: #ef4444;
+            background: linear-gradient(135deg, #3e1f1f 0%, #431f23 100%);
         }
         
         .status-card.warning {
-            border-left-color: #ff9800;
-            background: linear-gradient(135deg, #fff3e0 0%, #fce4ec 100%);
+            border-left-color: #eab308;
+            background: linear-gradient(135deg, #3e3420 0%, #43341f 100%);
         }
         
         .status-card h3 {
             margin-bottom: 15px;
             font-size: 1.3rem;
-            color: #333;
+            color: #e2e8f0;
         }
         
         .status-indicator {
@@ -97,26 +97,27 @@
             gap: 10px;
             font-size: 1.1rem;
             margin-bottom: 10px;
+            color: #cbd5e1;
         }
         
         .indicator-dot {
             width: 12px;
             height: 12px;
             border-radius: 50%;
-            background: #ccc;
+            background: #64748b;
             animation: pulse 2s infinite;
         }
         
         .indicator-dot.connected {
-            background: #4CAF50;
+            background: #22c55e;
         }
         
         .indicator-dot.error {
-            background: #f44336;
+            background: #ef4444;
         }
         
         .indicator-dot.warning {
-            background: #ff9800;
+            background: #eab308;
         }
         
         @keyframes pulse {
@@ -126,17 +127,17 @@
         }
         
         .upload-section {
-            background: white;
+            background: #1e293b;
             border-radius: 15px;
             padding: 30px;
             margin-bottom: 30px;
-            border: 2px dashed #ddd;
+            border: 2px dashed #475569;
             transition: all 0.3s ease;
         }
         
         .upload-section.drag-over {
             border-color: #2196F3;
-            background: #f0f8ff;
+            background: #2d3a4f;
             transform: scale(1.02);
         }
         
@@ -172,29 +173,29 @@
         }
         
         .btn:disabled {
-            background: #ccc;
+            background: #64748b;
             cursor: not-allowed;
             transform: none;
             box-shadow: none;
         }
         
         .btn-success {
-            background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
-            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            box-shadow: 0 4px 15px rgba(34, 197, 94, 0.3);
         }
         
         .btn-danger {
-            background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
-            box-shadow: 0 4px 15px rgba(244, 67, 54, 0.3);
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
         }
         
         .btn-warning {
-            background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
-            box-shadow: 0 4px 15px rgba(255, 152, 0, 0.3);
+            background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%);
+            box-shadow: 0 4px 15px rgba(234, 179, 8, 0.3);
         }
         
         .progress-section {
-            background: white;
+            background: #1e293b;
             border-radius: 15px;
             padding: 30px;
             margin-bottom: 30px;
@@ -204,7 +205,7 @@
         .progress-bar {
             width: 100%;
             height: 20px;
-            background: #e0e0e0;
+            background: #475569;
             border-radius: 10px;
             overflow: hidden;
             margin: 20px 0;
@@ -213,7 +214,7 @@
         
         .progress-fill {
             height: 100%;
-            background: linear-gradient(90deg, #4CAF50 0%, #8BC34A 100%);
+            background: linear-gradient(90deg, #22c55e 0%, #84cc16 100%);
             width: 0%;
             transition: width 0.3s ease;
             border-radius: 10px;
@@ -225,7 +226,7 @@
             left: 50%;
             transform: translate(-50%, -50%);
             font-weight: bold;
-            color: #333;
+            color: #1e293b;
             font-size: 0.9rem;
         }
         
@@ -237,7 +238,7 @@
         }
         
         .stat-item {
-            background: #f8f9fa;
+            background: #334155;
             padding: 20px;
             border-radius: 10px;
             text-align: center;
@@ -246,17 +247,17 @@
         .stat-number {
             font-size: 2rem;
             font-weight: bold;
-            color: #2196F3;
+            color: #60a5fa;
             margin-bottom: 5px;
         }
         
         .stat-label {
-            color: #666;
+            color: #94a3b8;
             font-size: 0.9rem;
         }
         
         .file-info {
-            background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+            background: linear-gradient(135deg, #1e3a52 0%, #2d1f42 100%);
             border: 1px solid #2196F3;
             border-radius: 15px;
             padding: 20px;
@@ -273,7 +274,7 @@
         
         .log-section {
             background: #1a1a1a;
-            color: #00ff00;
+            color: #22c55e;
             border-radius: 15px;
             padding: 20px;
             margin-top: 30px;
@@ -288,23 +289,23 @@
         }
         
         .log-entry.success {
-            color: #4CAF50;
+            color: #22c55e;
         }
         
         .log-entry.error {
-            color: #f44336;
+            color: #ef4444;
         }
         
         .log-entry.warning {
-            color: #ff9800;
+            color: #eab308;
         }
         
         .log-entry.info {
-            color: #2196F3;
+            color: #60a5fa;
         }
         
         .controls-section {
-            background: white;
+            background: #1e293b;
             border-radius: 15px;
             padding: 25px;
             margin-bottom: 20px;
@@ -320,14 +321,17 @@
         .control-group label {
             font-weight: bold;
             min-width: 150px;
+            color: #e2e8f0;
         }
         
         select, input {
             padding: 10px;
-            border: 2px solid #ddd;
+            border: 2px solid #475569;
             border-radius: 8px;
             font-size: 1rem;
             transition: border-color 0.3s ease;
+            background: #334155;
+            color: #e2e8f0;
         }
         
         select:focus, input:focus {
@@ -342,7 +346,7 @@
         .table-preview {
             max-height: 400px;
             overflow: auto;
-            border: 1px solid #ddd;
+            border: 1px solid #475569;
             border-radius: 8px;
             margin: 20px 0;
         }
@@ -356,27 +360,28 @@
         .table-preview th,
         .table-preview td {
             padding: 8px 12px;
-            border-bottom: 1px solid #eee;
+            border-bottom: 1px solid #475569;
             text-align: left;
+            color: #e2e8f0;
         }
         
         .table-preview th {
-            background: #f8f9fa;
+            background: #475569;
             font-weight: bold;
             position: sticky;
             top: 0;
         }
         
         .table-preview tr:hover {
-            background: #f5f5f5;
+            background: #475569;
         }
         
         .ciclos-table {
             width: 100%;
             border-collapse: collapse;
             font-size: 0.95rem;
-            background: white;
-            border: 1px solid #e0e0e0;
+            background: #1e293b;
+            border: 1px solid #475569;
             border-radius: 8px;
             overflow: hidden;
         }
@@ -397,8 +402,8 @@
         
         .ciclos-table td {
             padding: 12px 16px;
-            border-bottom: 1px solid #e0e0e0;
-            color: #333;
+            border-bottom: 1px solid #475569;
+            color: #e2e8f0;
         }
         
         .ciclos-table tbody tr {
@@ -406,7 +411,7 @@
         }
         
         .ciclos-table tbody tr:hover {
-            background-color: #f5f5f5;
+            background-color: #334155;
         }
         
         .ciclos-table tbody tr:last-child td {
@@ -414,7 +419,7 @@
         }
         
         .ciclos-count {
-            background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
             color: white;
             font-weight: bold;
             text-align: center;
@@ -433,7 +438,7 @@
 <body>
     <div class="dashboard">
         <div class="header">
-            <h1>🚰 Tablero de Carga Masiva (CSV)</h1>
+            <h1>🚰 Carga de Históricos de Lectura (CSV)</h1>
             <p>Sistema de importación de datos históricos a Supabase - Optimizado para CSV</p>
         </div>
         
@@ -572,9 +577,9 @@
                     <div class="progress-text" id="progressText">0%</div>
                 </div>
                 
-                <div id="progressSummary" style="text-align: center; margin: 15px 0; font-size: 1.1rem; font-weight: bold; color: #2196F3;">
+                <div id="progressSummary" style="text-align: center; margin: 15px 0; font-size: 1.1rem; font-weight: bold; color: #60a5fa;">
                     <div id="progressMainText">Preparando carga...</div>
-                    <div id="progressSubText" style="font-size: 0.9rem; color: #666; margin-top: 5px;">Inicializando proceso</div>
+                    <div id="progressSubText" style="font-size: 0.9rem; color: #94a3b8; margin-top: 5px;">Inicializando proceso</div>
                 </div>
                 
                 <div class="stats-grid">

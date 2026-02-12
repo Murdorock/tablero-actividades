@@ -147,7 +147,7 @@ async function addRow() {
             } else if (col === 'lector') {
                 inputHtml = `<input type="text" id="new_${col}" class="form-control" />`;
             } else if (col === 'foto') {
-                inputHtml = `<input type="file" id="new_${col}" class="form-control" accept="image/*" />`;
+                inputHtml = `<input type="file" id="new_${col}" class="form-control" accept="image/*" style="color: #212529;" />`;
             } else if (col === 'servicio') {
                 inputHtml = `<input type="text" id="new_${col}" class="form-control" style="text-transform: uppercase;" />`;
             } else if (col === 'lectura') {
@@ -158,7 +158,7 @@ async function addRow() {
             
             return `
                 <div style="margin-bottom: 10px;">
-                    <label style="display: block; margin-bottom: 5px; font-weight: bold;">${label}:</label>
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #212529;">${label}:</label>
                     ${inputHtml}
                 </div>
             `;
@@ -169,7 +169,7 @@ async function addRow() {
     modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000;';
     modal.innerHTML = `
         <div style="background: white; padding: 20px; border-radius: 8px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto;">
-            <h3>Agregar Nueva Evidencia</h3>
+            <h3 style="color: #212529;">Agregar Nueva Evidencia</h3>
             ${formHtml}
             <div style="margin-top: 20px; display: flex; gap: 10px;">
                 <button class="btn btn-primary" onclick="saveNewRow()">💾 Guardar</button>
@@ -277,7 +277,7 @@ async function editRow(id) {
                 inputHtml = `<input type="text" id="edit_${col}" class="form-control" value="${value}" />`;
             } else if (col === 'foto') {
                 inputHtml = `
-                    <input type="file" id="edit_${col}" class="form-control" accept="image/*" />
+                    <input type="file" id="edit_${col}" class="form-control" accept="image/*" style="color: #212529;" />
                     <small style="display: block; margin-top: 5px; color: #666;">
                         ${value ? `<a href="${value}" target="_blank">Ver foto actual</a> | ` : ''}Dejar vacío para mantener foto actual
                     </small>
@@ -292,7 +292,7 @@ async function editRow(id) {
             
             return `
                 <div style="margin-bottom: 10px;">
-                    <label style="display: block; margin-bottom: 5px; font-weight: bold;">${label}:</label>
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #212529;">${label}:</label>
                     ${inputHtml}
                 </div>
             `;
