@@ -3,105 +3,165 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bienvenido - Sistema de Gestión</title>
+    <title>LECTRA - Bienvenido</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- DaisyUI -->
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.7.2/dist/full.min.css" rel="stylesheet" type="text/css" />
     <link rel="stylesheet" href="styles.css">
 </head>
-<body>
-    <div class="table-container">
-        <div style="text-align: center; padding: 60px 20px;">
-            <h1 style="font-size: 48px; color: #2c3e50; margin-bottom: 20px;">📊 Sistema de Gestión</h1>
-            <p style="font-size: 18px; color: #7f8c8d; margin-bottom: 40px;">
-                Bienvenido al tablero de control de Supabase
+<body class="bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 min-h-screen">
+    <div class="table-container p-8">
+        <!-- Encabezado Principal -->
+        <div class="bg-gradient-to-r from-slate-950 to-slate-900 rounded-3xl p-12 mb-8 shadow-2xl text-center text-white">
+            <div class="text-6xl mb-4">📊</div>
+            <h1 class="text-5xl font-bold mb-3">LECTRA</h1>
+            <p class="text-xl text-blue-200">
+                Tablero de control inteligente
             </p>
-            
-            <div style="max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                <h2 style="color: #3498db; margin-bottom: 20px;">📋 Tablas Disponibles</h2>
-                <p style="text-align: left; line-height: 1.8; color: #555; margin-bottom: 20px;">
-                    Selecciona una tabla del menú lateral para visualizar y gestionar los datos. El sistema incluye:
-                </p>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; text-align: left; margin-top: 20px;">
-                    <div style="background: #ecf0f1; padding: 10px; border-radius: 5px;">
-                        <strong>📍 Aproximados</strong>
+        </div>
+
+        <!-- Sección Principal -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Tarjeta Principal - Tablas Disponibles -->
+            <div class="lg:col-span-2">
+                <div class="bg-slate-800 rounded-2xl shadow-2xl overflow-hidden border border-slate-700">
+                    <!-- Encabezado de la tarjeta -->
+                    <div class="bg-gradient-to-r from-slate-700 to-slate-600 p-6 text-white">
+                        <h2 class="text-2xl font-bold flex items-center gap-2">
+                            <span>📋</span> Tablas Disponibles
+                        </h2>
                     </div>
-                    <div style="background: #ecf0f1; padding: 10px; border-radius: 5px;">
-                        <strong>🗄️ Base</strong>
-                    </div>
-                    <div style="background: #ecf0f1; padding: 10px; border-radius: 5px;">
-                        <strong>📊 CMLEC</strong>
-                    </div>
-                    <div style="background: #ecf0f1; padding: 10px; border-radius: 5px;">
-                        <strong>⬇️ Control Descargas</strong>
-                    </div>
-                    <div style="background: #ecf0f1; padding: 10px; border-radius: 5px;">
-                        <strong>🚚 Controles Reparto</strong>
-                    </div>
-                    <div style="background: #ecf0f1; padding: 10px; border-radius: 5px;">
-                        <strong>🗺️ Coordenadas</strong>
-                    </div>
-                    <div style="background: #ecf0f1; padding: 10px; border-radius: 5px;">
-                        <strong>📖 Historial Lectura</strong>
-                    </div>
-                    <div style="background: #ecf0f1; padding: 10px; border-radius: 5px;">
-                        <strong>📜 Históricos</strong>
-                    </div>
-                    <div style="background: #ecf0f1; padding: 10px; border-radius: 5px;">
-                        <strong>⚠️ Inconsistencias</strong>
-                    </div>
-                    <div style="background: #ecf0f1; padding: 10px; border-radius: 5px;">
-                        <strong>⏰ Llegadas Tarde</strong>
-                    </div>
-                    <div style="background: #ecf0f1; padding: 10px; border-radius: 5px;">
-                        <strong>👤 Perfiles</strong>
-                    </div>
-                    <div style="background: #ecf0f1; padding: 10px; border-radius: 5px;">
-                        <strong>👥 Personal</strong>
-                    </div>
-                    <div style="background: #ecf0f1; padding: 10px; border-radius: 5px;">
-                        <strong>📅 Programación Lectura</strong>
-                    </div>
-                    <div style="background: #ecf0f1; padding: 10px; border-radius: 5px;">
-                        <strong>📏 Rangos</strong>
-                    </div>
-                    <div style="background: #ecf0f1; padding: 10px; border-radius: 5px;">
-                        <strong>📦 Rangos Reparto</strong>
-                    </div>
-                    <div style="background: #ecf0f1; padding: 10px; border-radius: 5px;">
-                        <strong>🔄 Refutar Errores</strong>
-                    </div>
-                    <div style="background: #ecf0f1; padding: 10px; border-radius: 5px;">
-                        <strong>📋 Resumen Descargas</strong>
-                    </div>
-                    <div style="background: #ecf0f1; padding: 10px; border-radius: 5px;">
-                        <strong>🔢 Secuencia Lectura</strong>
-                    </div>
-                    <div style="background: #ecf0f1; padding: 10px; border-radius: 5px;">
-                        <strong>❌ Secuencia Sin Lectura</strong>
+                    
+                    <!-- Contenido -->
+                    <div class="p-8">
+                        <p class="text-slate-300 mb-6 text-lg leading-relaxed">
+                            Selecciona una tabla del menú lateral para visualizar y gestionar los datos. El sistema incluye:
+                        </p>
+                        
+                        <!-- Grid de Tablas -->
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            <div class="bg-gradient-to-br from-slate-700 to-slate-600 border-l-4 border-slate-400 p-4 rounded-lg hover:shadow-lg transition-all cursor-pointer">
+                                <strong class="text-slate-100">📍 Aproximados</strong>
+                            </div>
+                            <div class="bg-gradient-to-br from-slate-700 to-slate-600 border-l-4 border-slate-400 p-4 rounded-lg hover:shadow-lg transition-all cursor-pointer">
+                                <strong class="text-slate-100">🗄️ Base</strong>
+                            </div>
+                            <div class="bg-gradient-to-br from-slate-700 to-slate-600 border-l-4 border-slate-400 p-4 rounded-lg hover:shadow-lg transition-all cursor-pointer">
+                                <strong class="text-slate-100">📊 CMLEC</strong>
+                            </div>
+                            <div class="bg-gradient-to-br from-slate-700 to-slate-600 border-l-4 border-slate-400 p-4 rounded-lg hover:shadow-lg transition-all cursor-pointer">
+                                <strong class="text-slate-100">⬇️ Control Descargas</strong>
+                            </div>
+                            <div class="bg-gradient-to-br from-slate-700 to-slate-600 border-l-4 border-slate-400 p-4 rounded-lg hover:shadow-lg transition-all cursor-pointer">
+                                <strong class="text-slate-100">🚚 Controles Reparto</strong>
+                            </div>
+                            <div class="bg-gradient-to-br from-slate-700 to-slate-600 border-l-4 border-slate-400 p-4 rounded-lg hover:shadow-lg transition-all cursor-pointer">
+                                <strong class="text-slate-100">🗺️ Coordenadas</strong>
+                            </div>
+                            <div class="bg-gradient-to-br from-slate-700 to-slate-600 border-l-4 border-slate-400 p-4 rounded-lg hover:shadow-lg transition-all cursor-pointer">
+                                <strong class="text-slate-100">📖 Historial Lectura</strong>
+                            </div>
+                            <div class="bg-gradient-to-br from-slate-700 to-slate-600 border-l-4 border-slate-400 p-4 rounded-lg hover:shadow-lg transition-all cursor-pointer">
+                                <strong class="text-slate-100">📜 Históricos</strong>
+                            </div>
+                            <div class="bg-gradient-to-br from-slate-700 to-slate-600 border-l-4 border-slate-400 p-4 rounded-lg hover:shadow-lg transition-all cursor-pointer">
+                                <strong class="text-slate-100">⚠️ Inconsistencias</strong>
+                            </div>
+                            <div class="bg-gradient-to-br from-slate-700 to-slate-600 border-l-4 border-slate-400 p-4 rounded-lg hover:shadow-lg transition-all cursor-pointer">
+                                <strong class="text-slate-100">⏰ Llegadas Tarde</strong>
+                            </div>
+                            <div class="bg-gradient-to-br from-slate-700 to-slate-600 border-l-4 border-slate-400 p-4 rounded-lg hover:shadow-lg transition-all cursor-pointer">
+                                <strong class="text-slate-100">👤 Perfiles</strong>
+                            </div>
+                            <div class="bg-gradient-to-br from-slate-700 to-slate-600 border-l-4 border-slate-400 p-4 rounded-lg hover:shadow-lg transition-all cursor-pointer">
+                                <strong class="text-slate-100">👥 Personal</strong>
+                            </div>
+                            <div class="bg-gradient-to-br from-slate-700 to-slate-600 border-l-4 border-slate-400 p-4 rounded-lg hover:shadow-lg transition-all cursor-pointer">
+                                <strong class="text-slate-100">📅 Programación</strong>
+                            </div>
+                            <div class="bg-gradient-to-br from-slate-700 to-slate-600 border-l-4 border-slate-400 p-4 rounded-lg hover:shadow-lg transition-all cursor-pointer">
+                                <strong class="text-slate-100">📏 Rangos</strong>
+                            </div>
+                            <div class="bg-gradient-to-br from-slate-700 to-slate-600 border-l-4 border-slate-400 p-4 rounded-lg hover:shadow-lg transition-all cursor-pointer">
+                                <strong class="text-slate-100">📦 Rangos Reparto</strong>
+                            </div>
+                            <div class="bg-gradient-to-br from-slate-700 to-slate-600 border-l-4 border-slate-400 p-4 rounded-lg hover:shadow-lg transition-all cursor-pointer">
+                                <strong class="text-slate-100">🔄 Refutar Errores</strong>
+                            </div>
+                            <div class="bg-gradient-to-br from-slate-700 to-slate-600 border-l-4 border-slate-400 p-4 rounded-lg hover:shadow-lg transition-all cursor-pointer">
+                                <strong class="text-slate-100">📋 Resumen Descargas</strong>
+                            </div>
+                            <div class="bg-gradient-to-br from-slate-700 to-slate-600 border-l-4 border-slate-400 p-4 rounded-lg hover:shadow-lg transition-all cursor-pointer">
+                                <strong class="text-slate-100">📊 Resumen Jornada</strong>
+                            </div>
+                            <div class="bg-gradient-to-br from-slate-700 to-slate-600 border-l-4 border-slate-400 p-4 rounded-lg hover:shadow-lg transition-all cursor-pointer">
+                                <strong class="text-slate-100">🔢 Secuencia Lectura</strong>
+                            </div>
+                            <div class="bg-gradient-to-br from-slate-700 to-slate-600 border-l-4 border-slate-400 p-4 rounded-lg hover:shadow-lg transition-all cursor-pointer">
+                                <strong class="text-slate-100">❌ Secuencia Sin Lectura</strong>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-            
-            <div style="margin-top: 40px; padding: 20px; background: #e8f4f8; border-radius: 8px; max-width: 800px; margin-left: auto; margin-right: auto;">
-                <h3 style="color: #2980b9; margin-bottom: 15px;">✨ Funcionalidades</h3>
-                <div style="display: flex; gap: 20px; justify-content: center; flex-wrap: wrap;">
-                    <div style="text-align: center;">
-                        <div style="font-size: 32px; margin-bottom: 5px;">👁️</div>
-                        <p style="font-size: 14px; color: #555;">Visualizar datos</p>
+
+            <!-- Panel Lateral - Características -->
+            <div class="space-y-6">
+                <!-- Tarjeta de Características -->
+                <div class="bg-slate-800 rounded-2xl shadow-2xl overflow-hidden border border-slate-700">
+                    <div class="bg-gradient-to-r from-slate-700 to-slate-600 p-6 text-white">
+                        <h3 class="text-2xl font-bold flex items-center gap-2">
+                            <span>✨</span> Funcionalidades
+                        </h3>
                     </div>
-                    <div style="text-align: center;">
-                        <div style="font-size: 32px; margin-bottom: 5px;">➕</div>
-                        <p style="font-size: 14px; color: #555;">Crear registros</p>
+                    <div class="p-6 space-y-4">
+                        <div class="flex items-center gap-3 p-3 bg-slate-700 rounded-lg hover:bg-slate-600 transition-all">
+                            <div class="text-2xl">👁️</div>
+                            <div>
+                                <p class="font-semibold text-slate-100">Ver Datos</p>
+                                <p class="text-xs text-slate-400">Visualización completa</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3 p-3 bg-slate-700 rounded-lg hover:bg-slate-600 transition-all">
+                            <div class="text-2xl">➕</div>
+                            <div>
+                                <p class="font-semibold text-slate-100">Crear</p>
+                                <p class="text-xs text-slate-400">Nuevos registros</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3 p-3 bg-slate-700 rounded-lg hover:bg-slate-600 transition-all">
+                            <div class="text-2xl">✏️</div>
+                            <div>
+                                <p class="font-semibold text-slate-100">Editar</p>
+                                <p class="text-xs text-slate-400">Modificar datos</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3 p-3 bg-slate-700 rounded-lg hover:bg-slate-600 transition-all">
+                            <div class="text-2xl">🗑️</div>
+                            <div>
+                                <p class="font-semibold text-slate-100">Eliminar</p>
+                                <p class="text-xs text-slate-400">Borrar registros</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3 p-3 bg-slate-700 rounded-lg hover:bg-slate-600 transition-all">
+                            <div class="text-2xl">🔄</div>
+                            <div>
+                                <p class="font-semibold text-slate-100">Actualizar</p>
+                                <p class="text-xs text-slate-400">Tiempo real</p>
+                            </div>
+                        </div>
                     </div>
-                    <div style="text-align: center;">
-                        <div style="font-size: 32px; margin-bottom: 5px;">✏️</div>
-                        <p style="font-size: 14px; color: #555;">Editar datos</p>
-                    </div>
-                    <div style="text-align: center;">
-                        <div style="font-size: 32px; margin-bottom: 5px;">🗑️</div>
-                        <p style="font-size: 14px; color: #555;">Eliminar registros</p>
-                    </div>
-                    <div style="text-align: center;">
-                        <div style="font-size: 32px; margin-bottom: 5px;">🔄</div>
-                        <p style="font-size: 14px; color: #555;">Actualizar en tiempo real</p>
+                </div>
+
+                <!-- Tarjeta de Info -->
+                <div class="bg-gradient-to-br from-slate-950 to-slate-900 rounded-2xl shadow-2xl p-6 text-white">
+                    <h4 class="text-lg font-bold mb-3 text-slate-100">🚀 Comenzar</h4>
+                    <p class="text-slate-300 text-sm leading-relaxed mb-4">
+                        Selecciona una opción del menú para empezar a gestionar tus datos
+                    </p>
+                    <div class="bg-slate-800 rounded-lg p-3 text-xs text-slate-300">
+                        💡 Tip: Usa el filtro del menú para encontrar rápidamente lo que necesitas
                     </div>
                 </div>
             </div>

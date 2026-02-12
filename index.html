@@ -1,78 +1,165 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tablero Supabase - Sistema de Gestión</title>
+    <title>LECTRA - Tablero de Gestión</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- DaisyUI -->
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.7.2/dist/full.min.css" rel="stylesheet" type="text/css" />
     <link rel="stylesheet" href="styles.css">
+    <style>
+        .login-gradient {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 50%, #1e293b 100%);
+        }
+        .logo-text {
+            font-weight: 700;
+            font-size: 2.25rem;
+            background: linear-gradient(135deg, #64748b 0%, #94a3b8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+    </style>
 </head>
-<body>
+<body class="bg-gray-50">
     <!-- Botón global para mostrar/ocultar sidebar -->
-    <button id="toggle-sidebar" style="position: fixed; left: 280px; top: 20px; z-index: 1001; background: #2c3e50; color: #fff; border: none; border-radius: 0 4px 4px 0; padding: 6px 10px; cursor: pointer; font-size: 18px; transition: left 0.2s;">⏴</button>
+    <button id="toggle-sidebar" class="fixed left-80 top-5 z-50 bg-slate-700 hover:bg-slate-800 text-white border-none rounded-r-lg px-3 py-1.5 cursor-pointer text-lg font-semibold transition-all duration-200">⏴</button>
 
-    <!-- Formulario de autenticación -->
-    <div id="auth-container" style="display: flex; justify-content: center; align-items: center; height: 100vh;">
-        <form id="login-form" style="background: #fff; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); min-width: 320px;">
-            <h2>Iniciar sesión</h2>
-            <div style="margin-bottom: 1rem;">
-                <label for="email">Correo electrónico</label><br>
-                <input type="email" id="email" name="email" required style="width: 100%; padding: 0.5rem;">
+    <!-- Formulario de autenticación - Pantalla de Login Moderna -->
+    <div id="auth-container" class="login-gradient min-h-screen flex items-center justify-center px-4">
+        <div class="w-full max-w-md">
+            <!-- Tarjeta de Login -->
+            <div class="bg-white rounded-2xl shadow-2xl p-8 space-y-8">
+                <!-- Logo y Título -->
+                <div class="text-center space-y-2">
+                    <div class="text-5xl mb-3">📊</div>
+                    <h1 class="logo-text text-4xl">LECTRA</h1>
+                    <p class="text-gray-500 text-sm">Tablero de Gestión</p>
+                </div>
+
+                <!-- Formulario -->
+                <form id="login-form" class="space-y-6">
+                    <!-- Email -->
+                    <div class="form-control w-full">
+                        <label class="label">
+                            <span class="label-text font-semibold text-gray-700">Correo Electrónico</span>
+                        </label>
+                        <input 
+                            type="email" 
+                            id="email" 
+                            name="email" 
+                            placeholder="tu@email.com"
+                            required
+                            class="input input-bordered w-full border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 placeholder-gray-400"
+                        />
+                    </div>
+
+                    <!-- Password -->
+                    <div class="form-control w-full">
+                        <label class="label">
+                            <span class="label-text font-semibold text-gray-700">Contraseña</span>
+                        </label>
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            placeholder="••••••••"
+                            required
+                            class="input input-bordered w-full border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 placeholder-gray-400"
+                        />
+                    </div>
+
+                    <!-- Mensaje de Error -->
+                    <div id="login-error" class="hidden alert alert-error shadow-lg">
+                        <div>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l-2-2m0 0l-2-2m2 2l2-2m-2 2l-2 2m2-2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            <span id="login-error-text"></span>
+                        </div>
+                    </div>
+
+                    <!-- Botón Entrar -->
+                    <button 
+                        type="submit"
+                        class="btn btn-primary w-full bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-800 hover:to-blue-700 border-none text-white font-semibold py-3 text-lg transition-all"
+                    >
+                        <span>🔐 Entrar al Sistema</span>
+                    </button>
+                </form>
+
+                <!-- Footer -->
+                <div class="text-center text-xs text-gray-500 space-y-1">
+                    <p>Sistema de Gestión v1.3</p>
+                    <p>Powered by Supabase</p>
+                </div>
             </div>
-            <div style="margin-bottom: 1rem;">
-                <label for="password">Contraseña</label><br>
-                <input type="password" id="password" name="password" required style="width: 100%; padding: 0.5rem;">
-            </div>
-            <button type="submit" style="width: 100%; padding: 0.5rem; background: #2c3e50; color: #fff; border: none; border-radius: 4px;">Entrar</button>
-            <div id="login-error" style="color: red; margin-top: 1rem; display: none;"></div>
-        </form>
+
+            <!-- Información Adicional -->
+            <p class="text-center text-white text-sm mt-8">
+                Solo administradores pueden acceder al sistema
+            </p>
+        </div>
     </div>
 
     <!-- Contenido principal oculto hasta autenticación -->
-    <div class="main-container" id="main-container" style="display: none;">
+    <div class="main-container flex h-screen bg-gray-100" id="main-container" style="display: none;">
         <!-- Barra lateral de navegación -->
-        <aside class="sidebar">
-            <div class="sidebar-header">
-                </style>
-                <h1>📊 Sistema de Gestión</h1>
-                <p style="font-size: 12px; color: #95a5a6; margin-top: 5px;">Panel de Control</p>
-                <input type="text" id="menu-filter" placeholder="Filtrar menú..." style="width: 100%; margin-top: 10px; padding: 6px; border-radius: 4px; border: 1px solid #34495e; font-size: 14px;">
+        <aside class="sidebar w-80 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white flex flex-col shadow-2xl transition-all duration-300 overflow-hidden">
+            <!-- Header del Sidebar -->
+            <div class="sidebar-header bg-slate-950 p-6 border-b border-slate-800">
+                <div class="space-y-3">
+                    <h1 class="text-3xl font-bold">LECTRA</h1>
+                    <p class="text-blue-200 text-sm">Panel de Control</p>
+                    <input 
+                        type="text" 
+                        id="menu-filter" 
+                        placeholder="Filtrar menú..." 
+                        class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
+                    />
+                </div>
             </div>
-            <nav class="sidebar-nav">
-                <a href="#" class="nav-item active" data-page="welcome.html">🏠 Inicio</a>                
-                <a href="#" class="nav-item" data-page="aproximados.html">📍 Aproximados</a>
-                <a href="#" class="nav-item" data-page="base.html">🗄️ Base</a>
-                <a href="#" class="nav-item" data-page="cmlec.html">📊 CMLEC</a>
-                <a href="#" class="nav-item" data-page="control_descargas.html">⬇️ Control Descargas</a>
-                <a href="#" class="nav-item" data-page="controles_reparto.html">🚚 Controles Reparto</a>
-                <a href="#" class="nav-item" data-page="coordenadas.html">🗺️ Coordenadas</a>
-                <a href="#" class="nav-item" data-page="evidencias.html">📸 Evidencias</a>
-                <a href="#" class="nav-item" data-page="hist_lectura.html">📖 Historial Lectura</a>
-                <a href="#" class="nav-item" data-page="historicos.html">📜 Históricos</a>
-                <a href="#" class="nav-item" data-page="inconsistencias.html">⚠️ Inconsistencias</a>
-                <a href="#" class="nav-item" data-page="llegadas_tarde.html">⏰ Llegadas Tarde</a>
-                <a href="#" class="nav-item" data-page="metricas.html">📈 Métricas</a>
-                <a href="#" class="nav-item" data-page="perfiles.html">👤 Perfiles</a>
-                <a href="#" class="nav-item" data-page="personal.html">👥 Personal</a>
-                <a href="#" class="nav-item" data-page="programacion_lectura.html">📅 Programación Lectura</a>
-                <a href="#" class="nav-item" data-page="quejas.html">📢 Quejas</a>
-                <a href="#" class="nav-item" data-page="rangos.html">📏 Rangos</a>
-                <a href="#" class="nav-item" data-page="rangos_reparto.html">📦 Rangos Reparto</a>
-                <a href="#" class="nav-item" data-page="refutar_errores.html">🔄 Refutar Errores</a>
-                <a href="#" class="nav-item" data-page="registro_formacion.html">📝 Registro Formación</a>
-                <a href="#" class="nav-item" data-page="retenidas.html">🔒 Retenidas</a>
-                <a href="#" class="nav-item" data-page="resumen_descargas.html">📋 Resumen Descargas</a>
-                <a href="#" class="nav-item" data-page="resumen_jornada.html">📊 Resumen Jornada</a>
-                <a href="#" class="nav-item" data-page="secuencia_lectura.html">🔢 Secuencia Lectura</a>
-                <a href="#" class="nav-item" data-page="secuencia_sin_lectura.html">❌ Secuencia Sin Lectura</a>
+
+            <!-- Menú de Navegación -->
+            <nav class="sidebar-nav flex-1 overflow-y-auto px-3 py-4 space-y-1">
+                <a href="#" class="nav-item active flex items-center gap-3 px-4 py-3 rounded-lg text-white hover:bg-slate-800 transition-all" data-page="welcome.html">🏠 <span>Inicio</span></a>                
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="aproximados.html">📍 <span>Aproximados</span></a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="base.html">🗄️ <span>Base</span></a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="cmlec.html">📊 <span>CMLEC</span></a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="control_descargas.html">⬇️ <span>Control Descargas</span></a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="controles_reparto.html">🚚 <span>Controles Reparto</span></a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="coordenadas.html">🗺️ <span>Coordenadas</span></a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="evidencias.html">📸 <span>Evidencias</span></a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="hist_lectura.html">📖 <span>Historial Lectura</span></a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="historicos.html">📜 <span>Históricos</span></a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="inconsistencias.html">⚠️ <span>Inconsistencias</span></a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="llegadas_tarde.html">⏰ <span>Llegadas Tarde</span></a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="metricas.html">📈 <span>Métricas</span></a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="perfiles.html">👤 <span>Perfiles</span></a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="personal.html">👥 <span>Personal</span></a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="programacion_lectura.html">📅 <span>Programación Lectura</span></a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="quejas.html">📢 <span>Quejas</span></a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="rangos.html">📏 <span>Rangos</span></a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="rangos_reparto.html">📦 <span>Rangos Reparto</span></a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="refutar_errores.html">🔄 <span>Refutar Errores</span></a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="registro_formacion.html">📝 <span>Registro Formación</span></a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="retenidas.html">🔒 <span>Retenidas</span></a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="resumen_descargas.html">📋 <span>Resumen Descargas</span></a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="resumen_jornada.html">📊 <span>Resumen Jornada</span></a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="secuencia_lectura.html">🔢 <span>Secuencia Lectura</span></a>
+                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="secuencia_sin_lectura.html">❌ <span>Secuencia Sin Lectura</span></a>
             </nav>
-            <div style="padding: 20px; border-top: 1px solid #34495e; font-size: 12px; color: #95a5a6;">
-                <p>Sistema de Gestión v1.3</p>
-                <p style="margin-top: 5px;">Supabase Dashboard</p>
+
+            <!-- Footer del Sidebar -->
+            <div class="border-t border-slate-800 p-4 bg-slate-950 text-center text-xs text-slate-400">
+                <p class="font-semibold">LECTRA v1.3</p>
+                <p class="text-blue-400 mt-1">Powered by Supabase</p>
             </div>
         </aside>
+
         <!-- Área de contenido -->
-        <main class="content-area">
-            <iframe id="contentFrame" class="content-frame" src="welcome.html"></iframe>
+        <main class="content-area flex-1 flex flex-col overflow-hidden">
+            <iframe id="contentFrame" class="content-frame flex-1 w-full border-0" src="welcome.html"></iframe>
         </main>
     </div>
     
@@ -86,31 +173,27 @@
                             const mainContainer = document.getElementById('main-container');
                             if (toggleBtn && sidebar) {
                                 toggleBtn.addEventListener('click', function() {
-                                    if (sidebar.style.display === 'none') {
-                                        sidebar.style.display = '';
+                                    if (sidebar.classList.contains('hidden')) {
+                                        sidebar.classList.remove('hidden');
                                         toggleBtn.innerHTML = '⏴';
-                                        toggleBtn.style.left = '280px';
-                                        if (mainContainer) mainContainer.style.marginLeft = '';
+                                        toggleBtn.style.left = '320px';
                                     } else {
-                                        sidebar.style.display = 'none';
+                                        sidebar.classList.add('hidden');
                                         toggleBtn.innerHTML = '⏵';
                                         toggleBtn.style.left = '0px';
-                                        if (mainContainer) mainContainer.style.marginLeft = '0';
                                     }
                                 });
                             }
                             // Ocultar automáticamente en pantallas pequeñas
                             function autoHideSidebar() {
-                                if (window.innerWidth < 700) {
-                                    sidebar.style.display = 'none';
+                                if (window.innerWidth < 1024) {
+                                    sidebar.classList.add('hidden');
                                     toggleBtn.innerHTML = '⏵';
                                     toggleBtn.style.left = '0px';
-                                    if (mainContainer) mainContainer.style.marginLeft = '0';
                                 } else {
-                                    sidebar.style.display = '';
+                                    sidebar.classList.remove('hidden');
                                     toggleBtn.innerHTML = '⏴';
-                                    toggleBtn.style.left = '280px';
-                                    if (mainContainer) mainContainer.style.marginLeft = '';
+                                    toggleBtn.style.left = '320px';
                                 }
                             }
                             window.addEventListener('resize', autoHideSidebar);
@@ -125,9 +208,9 @@
                             document.querySelectorAll('.sidebar-nav .nav-item').forEach(item => {
                                 const text = item.textContent.toLowerCase();
                                 if (text.includes(filter)) {
-                                    item.style.display = '';
+                                    item.classList.remove('hidden');
                                 } else {
-                                    item.style.display = 'none';
+                                    item.classList.add('hidden');
                                 }
                             });
                         });
@@ -140,6 +223,7 @@
             const mainContainer = document.getElementById('main-container');
             const loginForm = document.getElementById('login-form');
             const loginError = document.getElementById('login-error');
+            const loginErrorText = document.getElementById('login-error-text');
 
             // Verificar si el usuario ya está autenticado
             supabase.auth.getSession().then(({ data: { session } }) => {
@@ -155,12 +239,12 @@
                 e.preventDefault();
                 const email = document.getElementById('email').value;
                 const password = document.getElementById('password').value;
-                loginError.style.display = 'none';
+                loginError.classList.add('hidden');
                 // Autenticación con Supabase
                 const { data, error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) {
-                    loginError.textContent = error.message;
-                    loginError.style.display = 'block';
+                    loginErrorText.textContent = error.message;
+                    loginError.classList.remove('hidden');
                     return;
                 }
                 // Verificar rol en la tabla perfiles
@@ -170,8 +254,8 @@
                     .eq('email', email)
                     .single();
                 if (errorPerfil || !perfiles || perfiles.rol !== 'ADMINISTRADOR') {
-                    loginError.textContent = 'Acceso denegado: solo administradores pueden ingresar.';
-                    loginError.style.display = 'block';
+                    loginErrorText.textContent = 'Acceso denegado: solo administradores pueden ingresar.';
+                    loginError.classList.remove('hidden');
                     // Cerrar sesión si no es administrador
                     await supabase.auth.signOut();
                     return;
