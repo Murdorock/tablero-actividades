@@ -11,221 +11,381 @@
     <link rel="stylesheet" href="styles.css">
     <style>
         .login-gradient {
-            background: linear-gradient(135deg, #1e293b 0%, #0f172a 50%, #1e293b 100%);
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
         }
         .logo-text {
             font-weight: 700;
             font-size: 2.25rem;
-            background: linear-gradient(135deg, #64748b 0%, #94a3b8 100%);
+            background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
+        .bento-card {
+            backdrop-filter: blur(16px);
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+        .bento-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .stat-card {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.05) 100%);
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+        .float-animation {
+            animation: float 3s ease-in-out infinite;
+        }
     </style>
 </head>
 <body class="bg-gray-50">
-    <!-- Botón global para mostrar/ocultar sidebar -->
-    <button id="toggle-sidebar" class="fixed left-80 top-5 z-50 bg-slate-700 hover:bg-slate-800 text-white border-none rounded-r-lg px-3 py-1.5 cursor-pointer text-lg font-semibold transition-all duration-200">⏴</button>
 
-    <!-- Formulario de autenticación - Pantalla de Login Moderna -->
-    <div id="auth-container" class="login-gradient min-h-screen flex items-center justify-center px-4">
-        <div class="w-full max-w-md">
-            <!-- Tarjeta de Login -->
-            <div class="bg-white rounded-2xl shadow-2xl p-8 space-y-8">
-                <!-- Logo y Título -->
-                <div class="text-center space-y-2">
-                    <div class="text-5xl mb-3">📊</div>
-                    <h1 class="logo-text text-4xl">LECTRA</h1>
-                    <p class="text-gray-500 text-sm">Tablero de Gestión</p>
+    <!-- Formulario de autenticación - Bento Grid Layout -->
+    <div id="auth-container" class="login-gradient min-h-screen flex items-center justify-center p-4 md:p-8">
+        <div class="w-full max-w-7xl">
+            <!-- Bento Grid Container -->
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
+                
+                <!-- Card 1: Logo Principal (Top Left) -->
+                <div class="bento-card md:col-span-4 rounded-3xl p-8 flex flex-col justify-center items-center text-center space-y-4">
+                    <div class="text-7xl md:text-8xl float-animation">📊</div>
+                    <h1 class="logo-text text-5xl md:text-6xl">LECTRA</h1>
+                    <p class="text-gray-600 text-lg font-medium">Tablero de Gestión</p>
+                    <div class="mt-4 px-4 py-2 bg-blue-50 rounded-full">
+                        <span class="text-blue-600 text-sm font-semibold">v1.3</span>
+                    </div>
                 </div>
 
-                <!-- Formulario -->
-                <form id="login-form" class="space-y-6">
-                    <!-- Email -->
-                    <div class="form-control w-full">
-                        <label class="label">
-                            <span class="label-text font-semibold text-gray-700">Correo Electrónico</span>
-                        </label>
-                        <input 
-                            type="email" 
-                            id="email" 
-                            name="email" 
-                            placeholder="tu@email.com"
-                            required
-                            class="input input-bordered w-full border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 placeholder-gray-400"
-                        />
-                    </div>
+                <!-- Card 4: Formulario de Login (Center Main) -->
+                <div class="bento-card md:col-span-8 rounded-3xl p-8 md:p-10 shadow-2xl">
+                    <div class="max-w-md mx-auto space-y-8">
+                        <!-- Título del Formulario -->
+                        <div class="space-y-2">
+                            <h2 class="text-3xl font-bold text-gray-800">Iniciar Sesión</h2>
+                            <p class="text-gray-500">Accede al panel de administración</p>
+                        </div>
 
-                    <!-- Password -->
-                    <div class="form-control w-full">
-                        <label class="label">
-                            <span class="label-text font-semibold text-gray-700">Contraseña</span>
-                        </label>
-                        <input 
-                            type="password" 
-                            id="password" 
-                            name="password" 
-                            placeholder="••••••••"
-                            required
-                            class="input input-bordered w-full border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 placeholder-gray-400"
-                        />
-                    </div>
+                        <!-- Formulario -->
+                        <form id="login-form" class="space-y-6">
+                            <!-- Email -->
+                            <div class="form-control w-full">
+                                <label class="label">
+                                    <span class="label-text font-semibold text-gray-700 text-sm">Correo Electrónico</span>
+                                </label>
+                                <input 
+                                    type="email" 
+                                    id="email" 
+                                    name="email" 
+                                    placeholder="administrador@lectra.com"
+                                    required
+                                    class="input input-bordered w-full bg-gray-50 border-2 border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder-gray-400 text-gray-900 rounded-xl h-14 text-base transition-all"
+                                />
+                            </div>
 
-                    <!-- Mensaje de Error -->
-                    <div id="login-error" class="hidden alert alert-error shadow-lg">
-                        <div>
-                            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l-2-2m0 0l-2-2m2 2l2-2m-2 2l-2 2m2-2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            <span id="login-error-text"></span>
+                            <!-- Password -->
+                            <div class="form-control w-full">
+                                <label class="label">
+                                    <span class="label-text font-semibold text-gray-700 text-sm">Contraseña</span>
+                                </label>
+                                <input 
+                                    type="password" 
+                                    id="password" 
+                                    name="password" 
+                                    placeholder="••••••••"
+                                    required
+                                    class="input input-bordered w-full bg-gray-50 border-2 border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder-gray-400 text-gray-900 rounded-xl h-14 text-base transition-all"
+                                />
+                            </div>
+
+                            <!-- Mensaje de Error -->
+                            <div id="login-error" class="hidden bg-red-50 border-2 border-red-200 rounded-xl p-4">
+                                <div class="flex items-center gap-3">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span id="login-error-text" class="text-red-700 text-sm font-medium"></span>
+                                </div>
+                            </div>
+
+                            <!-- Botón Entrar -->
+                            <button 
+                                type="submit"
+                                class="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-4 px-6 rounded-xl text-lg transition-all hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3"
+                            >
+                                <span>🔐</span>
+                                <span>Entrar al Sistema</span>
+                            </button>
+                        </form>
+
+                        <!-- Nota de Seguridad -->
+                        <div class="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                            <p class="text-amber-800 text-sm text-center font-medium">
+                                🔐 Solo administradores autorizados
+                            </p>
                         </div>
                     </div>
-
-                    <!-- Botón Entrar -->
-                    <button 
-                        type="submit"
-                        class="btn btn-primary w-full bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-800 hover:to-blue-700 border-none text-white font-semibold py-3 text-lg transition-all"
-                    >
-                        <span>🔐 Entrar al Sistema</span>
-                    </button>
-                </form>
-
-                <!-- Footer -->
-                <div class="text-center text-xs text-gray-500 space-y-1">
-                    <p>Sistema de Gestión v1.3</p>
-                    <p>Powered by Supabase</p>
                 </div>
-            </div>
 
-            <!-- Información Adicional -->
-            <p class="text-center text-white text-sm mt-8">
-                Solo administradores pueden acceder al sistema
-            </p>
+            </div>
         </div>
     </div>
 
     <!-- Contenido principal oculto hasta autenticación -->
-    <div class="main-container flex h-screen bg-gray-100" id="main-container" style="display: none;">
-        <!-- Barra lateral de navegación -->
-        <aside class="sidebar w-80 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white flex flex-col shadow-2xl transition-all duration-300 overflow-hidden">
-            <!-- Header del Sidebar -->
-            <div class="sidebar-header bg-slate-950 p-6 border-b border-slate-800">
-                <div class="space-y-3">
-                    <h1 class="text-3xl font-bold">LECTRA</h1>
-                    <p class="text-blue-200 text-sm">Panel de Control</p>
-                    <input 
-                        type="text" 
-                        id="menu-filter" 
-                        placeholder="Filtrar menú..." 
-                        class="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 placeholder-slate-400 text-white focus:outline-none focus:ring-2 focus:ring-slate-500 transition-all"
-                    />
+    <div class="main-container min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50" id="main-container" style="display: none;">
+        
+        <!-- Header Top Bar -->
+        <header class="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-40">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-20">
+                    <!-- Logo y Título -->
+                    <div class="flex items-center gap-4">
+                        <div class="text-4xl">📊</div>
+                        <div>
+                            <h1 class="text-2xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">LECTRA</h1>
+                            <p class="text-xs text-gray-500">Panel de Control v1.3</p>
+                        </div>
+                    </div>
+
+                    <!-- Barra de Búsqueda -->
+                    <div class="flex-1 max-w-md mx-8">
+                        <input 
+                            type="text" 
+                            id="menu-filter" 
+                            placeholder="Buscar módulo..." 
+                            class="w-full px-4 py-2 rounded-xl bg-gray-50 border-2 border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder-gray-400 text-gray-900 transition-all"
+                        />
+                    </div>
+
+                    <!-- Botón Cerrar Sesión -->
+                    <button id="logout-btn" class="px-6 py-2 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-xl transition-all hover:shadow-lg">
+                        🚪 Cerrar Sesión
+                    </button>
                 </div>
             </div>
+        </header>
 
-            <!-- Menú de Navegación -->
-            <nav class="sidebar-nav flex-1 overflow-y-auto px-3 py-4 space-y-1">
-                <a href="#" class="nav-item active flex items-center gap-3 px-4 py-3 rounded-lg text-white hover:bg-slate-800 transition-all" data-page="welcome.html">🏠 <span>Inicio</span></a>                
-                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="aproximados.html">📍 <span>Aproximados</span></a>
-                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="base.html">🗄️ <span>Base</span></a>
-                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="cmlec.html">📊 <span>CMLEC</span></a>
-                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="control_descargas.html">⬇️ <span>Control Descargas</span></a>
-                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="controles_reparto.html">🚚 <span>Controles Reparto</span></a>
-                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="coordenadas.html">🗺️ <span>Coordenadas</span></a>
-                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="evidencias.html">📸 <span>Evidencias</span></a>
-                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="hist_lectura.html">📖 <span>Historial Lectura</span></a>
-                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="historicos.html">📜 <span>Históricos</span></a>
-                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="inconsistencias.html">⚠️ <span>Inconsistencias</span></a>
-                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="llegadas_tarde.html">⏰ <span>Llegadas Tarde</span></a>
-                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="metricas.html">📈 <span>Métricas</span></a>
-                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="perfiles.html">👤 <span>Perfiles</span></a>
-                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="personal.html">👥 <span>Personal</span></a>
-                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="programacion_lectura.html">📅 <span>Programación Lectura</span></a>
-                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="quejas.html">📢 <span>Quejas</span></a>
-                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="rangos.html">📏 <span>Rangos</span></a>
-                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="rangos_reparto.html">📦 <span>Rangos Reparto</span></a>
-                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="refutar_errores.html">🔄 <span>Refutar Errores</span></a>
-                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="registro_formacion.html">📝 <span>Registro Formación</span></a>
-                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="retenidas.html">🔒 <span>Retenidas</span></a>
-                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="resumen_descargas.html">📋 <span>Resumen Descargas</span></a>
-                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="resumen_jornada.html">📊 <span>Resumen Jornada</span></a>
-                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="secuencia_lectura.html">🔢 <span>Secuencia Lectura</span></a>
-                <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-lg text-slate-100 hover:bg-slate-800 transition-all" data-page="secuencia_sin_lectura.html">❌ <span>Secuencia Sin Lectura</span></a>
-            </nav>
-
-            <!-- Footer del Sidebar -->
-            <div class="border-t border-slate-800 p-4 bg-slate-950 text-center text-xs text-slate-400">
-                <p class="font-semibold">LECTRA v1.3</p>
-                <p class="text-blue-400 mt-1">Powered by Supabase</p>
+        <!-- Dashboard Bento Grid -->
+        <div id="dashboard-view" class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-gray-900 mb-2">Dashboard</h2>
+                <p class="text-gray-600">Selecciona un módulo para comenzar</p>
             </div>
-        </aside>
 
-        <!-- Área de contenido -->
-        <main class="content-area flex-1 flex flex-col overflow-hidden">
-            <iframe id="contentFrame" class="content-frame flex-1 w-full border-0" src="welcome.html"></iframe>
-        </main>
+            <!-- Grid de Módulos -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                
+                <!-- Aproximados -->
+                <div class="bento-card nav-card bg-gradient-to-br from-gray-700 to-gray-900 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="aproximados.html">
+                    <div class="text-4xl">📍</div>
+                    <h3 class="text-white font-bold text-lg">Aproximados</h3>
+                </div>
+
+                <!-- Base -->
+                <div class="bento-card nav-card bg-gradient-to-br from-slate-700 to-slate-900 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="base.html">
+                    <div class="text-4xl">🗄️</div>
+                    <h3 class="text-white font-bold text-lg">Base</h3>
+                </div>
+
+                <!-- CMLEC -->
+                <div class="bento-card nav-card bg-gradient-to-br from-blue-900 to-indigo-950 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="cmlec.html">
+                    <div class="text-4xl">📊</div>
+                    <div>
+                        <h3 class="text-white font-bold text-lg">CMLEC</h3>
+                        <p class="text-blue-200 text-sm">Control de medidores</p>
+                    </div>
+                </div>
+
+                <!-- Control Descargas -->
+                <div class="bento-card nav-card bg-gradient-to-br from-zinc-700 to-zinc-900 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="control_descargas.html">
+                    <div class="text-4xl">⬇️</div>
+                    <h3 class="text-white font-bold text-lg">Control Descargas</h3>
+                </div>
+
+                <!-- Controles Reparto -->
+                <div class="bento-card nav-card bg-gradient-to-br from-gray-800 to-gray-950 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="controles_reparto.html">
+                    <div class="text-4xl">🚚</div>
+                    <h3 class="text-white font-bold text-lg">Controles Reparto</h3>
+                </div>
+
+                <!-- Coordenadas -->
+                <div class="bento-card nav-card bg-gradient-to-br from-slate-600 to-slate-800 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="coordenadas.html">
+                    <div class="text-4xl">🗺️</div>
+                    <h3 class="text-white font-bold text-lg">Coordenadas</h3>
+                </div>
+
+                <!-- Evidencias -->
+                <div class="bento-card nav-card bg-gradient-to-br from-blue-800 to-blue-950 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="evidencias.html">
+                    <div class="text-4xl">📸</div>
+                    <h3 class="text-white font-bold text-lg">Evidencias</h3>
+                </div>
+
+                <!-- Historial Lectura -->
+                <div class="bento-card nav-card bg-gradient-to-br from-slate-600 to-slate-800 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="hist_lectura.html">
+                    <div class="text-4xl">📖</div>
+                    <h3 class="text-white font-bold text-lg">Historial Lectura</h3>
+                </div>
+
+                <!-- Históricos -->
+                <div class="bento-card nav-card bg-gradient-to-br from-zinc-700 to-zinc-900 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="historicos.html">
+                    <div class="text-4xl">📜</div>
+                    <h3 class="text-white font-bold text-lg">Históricos</h3>
+                </div>
+
+                <!-- Inconsistencias -->
+                <div class="bento-card nav-card bg-gradient-to-br from-slate-700 to-slate-900 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="inconsistencias.html">
+                    <div class="text-4xl">⚠️</div>
+                    <h3 class="text-white font-bold text-lg">Inconsistencias</h3>
+                </div>
+
+                <!-- Inicio -->
+                <div class="bento-card nav-card bg-gradient-to-br from-slate-700 to-slate-900 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="welcome.html">
+                    <div class="text-4xl">🏠</div>
+                    <div>
+                        <h3 class="text-white font-bold text-lg">Inicio</h3>
+                        <p class="text-slate-300 text-sm">Dashboard principal</p>
+                    </div>
+                </div>
+
+                <!-- Llegadas Tarde -->
+                <div class="bento-card nav-card bg-gradient-to-br from-gray-700 to-gray-900 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="llegadas_tarde.html">
+                    <div class="text-4xl">⏰</div>
+                    <h3 class="text-white font-bold text-lg">Llegadas Tarde</h3>
+                </div>
+
+                <!-- Métricas -->
+                <div class="bento-card nav-card bg-gradient-to-br from-blue-800 to-blue-950 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="metricas.html">
+                    <div class="text-4xl">📈</div>
+                    <h3 class="text-white font-bold text-lg">Métricas</h3>
+                </div>
+
+                <!-- Perfiles -->
+                <div class="bento-card nav-card bg-gradient-to-br from-slate-600 to-slate-800 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="perfiles.html">
+                    <div class="text-4xl">👤</div>
+                    <h3 class="text-white font-bold text-lg">Perfiles</h3>
+                </div>
+
+                <!-- Personal -->
+                <div class="bento-card nav-card bg-gradient-to-br from-zinc-700 to-zinc-900 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="personal.html">
+                    <div class="text-4xl">👥</div>
+                    <h3 class="text-white font-bold text-lg">Personal</h3>
+                </div>
+
+                <!-- Programación Lectura -->
+                <div class="bento-card nav-card bg-gradient-to-br from-indigo-900 to-indigo-950 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="programacion_lectura.html">
+                    <div class="text-4xl">📅</div>
+                    <h3 class="text-white font-bold text-lg">Programación Lectura</h3>
+                </div>
+
+                <!-- Quejas -->
+                <div class="bento-card nav-card bg-gradient-to-br from-zinc-700 to-zinc-900 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="quejas.html">
+                    <div class="text-4xl">📢</div>
+                    <h3 class="text-white font-bold text-lg">Quejas</h3>
+                </div>
+
+                <!-- Rangos -->
+                <div class="bento-card nav-card bg-gradient-to-br from-gray-800 to-gray-950 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="rangos.html">
+                    <div class="text-4xl">📏</div>
+                    <h3 class="text-white font-bold text-lg">Rangos</h3>
+                </div>
+
+                <!-- Rangos Reparto -->
+                <div class="bento-card nav-card bg-gradient-to-br from-slate-700 to-slate-900 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="rangos_reparto.html">
+                    <div class="text-4xl">📦</div>
+                    <h3 class="text-white font-bold text-lg">Rangos Reparto</h3>
+                </div>
+
+                <!-- Refutar Errores -->
+                <div class="bento-card nav-card bg-gradient-to-br from-zinc-700 to-zinc-900 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="refutar_errores.html">
+                    <div class="text-4xl">🔄</div>
+                    <h3 class="text-white font-bold text-lg">Refutar Errores</h3>
+                </div>
+
+                <!-- Registro Formación -->
+                <div class="bento-card nav-card bg-gradient-to-br from-blue-900 to-blue-950 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="registro_formacion.html">
+                    <div class="text-4xl">📝</div>
+                    <h3 class="text-white font-bold text-lg">Registro Formación</h3>
+                </div>
+
+                <!-- Resumen Descargas -->
+                <div class="bento-card nav-card bg-gradient-to-br from-slate-700 to-slate-900 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="resumen_descargas.html">
+                    <div class="text-4xl">📋</div>
+                    <h3 class="text-white font-bold text-lg">Resumen Descargas</h3>
+                </div>
+
+                <!-- Resumen Jornada -->
+                <div class="bento-card nav-card bg-gradient-to-br from-zinc-700 to-zinc-900 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="resumen_jornada.html">
+                    <div class="text-4xl">📊</div>
+                    <h3 class="text-white font-bold text-lg">Resumen Jornada</h3>
+                </div>
+
+                <!-- Retenidas -->
+                <div class="bento-card nav-card bg-gradient-to-br from-gray-700 to-gray-900 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="retenidas.html">
+                    <div class="text-4xl">🔒</div>
+                    <h3 class="text-white font-bold text-lg">Retenidas</h3>
+                </div>
+
+                <!-- Secuencia Lectura -->
+                <div class="bento-card nav-card bg-gradient-to-br from-indigo-900 to-indigo-950 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="secuencia_lectura.html">
+                    <div class="text-4xl">🔢</div>
+                    <h3 class="text-white font-bold text-lg">Secuencia Lectura</h3>
+                </div>
+
+                <!-- Secuencia Sin Lectura -->
+                <div class="bento-card nav-card bg-gradient-to-br from-gray-800 to-gray-950 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="secuencia_sin_lectura.html">
+                    <div class="text-4xl">❌</div>
+                    <h3 class="text-white font-bold text-lg">Secuencia Sin Lectura</h3>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Vista del Módulo (Iframe) - Oculta inicialmente -->
+        <div id="module-view" class="hidden fixed inset-0 bg-gray-100 z-50">
+            <!-- Header del Módulo -->
+            <div class="bg-white border-b border-gray-200 shadow-sm">
+                <div class="px-4 sm:px-6 lg:px-8">
+                    <div class="flex items-center justify-between h-16">
+                        <button id="back-to-dashboard" class="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all font-semibold text-gray-700">
+                            <span>←</span>
+                            <span>Volver al Dashboard</span>
+                        </button>
+                        <h2 id="module-title" class="text-xl font-bold text-gray-800"></h2>
+                        <div class="w-40"></div> <!-- Spacer para centrar el título -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Iframe del Módulo -->
+            <iframe id="contentFrame" class="w-full h-[calc(100vh-4rem)] border-0"></iframe>
+        </div>
+
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <script src="config.js"></script>
     <script>
-                        // Funcionalidad para ocultar/mostrar el panel lateral
-                        document.addEventListener('DOMContentLoaded', function() {
-                            const sidebar = document.querySelector('.sidebar');
-                            const toggleBtn = document.getElementById('toggle-sidebar');
-                            const mainContainer = document.getElementById('main-container');
-                            if (toggleBtn && sidebar) {
-                                toggleBtn.addEventListener('click', function() {
-                                    if (sidebar.classList.contains('hidden')) {
-                                        sidebar.classList.remove('hidden');
-                                        toggleBtn.innerHTML = '⏴';
-                                        toggleBtn.style.left = '320px';
-                                    } else {
-                                        sidebar.classList.add('hidden');
-                                        toggleBtn.innerHTML = '⏵';
-                                        toggleBtn.style.left = '0px';
-                                    }
-                                });
-                            }
-                            // Ocultar automáticamente en pantallas pequeñas
-                            function autoHideSidebar() {
-                                if (window.innerWidth < 1024) {
-                                    sidebar.classList.add('hidden');
-                                    toggleBtn.innerHTML = '⏵';
-                                    toggleBtn.style.left = '0px';
-                                } else {
-                                    sidebar.classList.remove('hidden');
-                                    toggleBtn.innerHTML = '⏴';
-                                    toggleBtn.style.left = '320px';
-                                }
-                            }
-                            window.addEventListener('resize', autoHideSidebar);
-                            autoHideSidebar();
-                        });
-                // Filtro de menú lateral
-                document.addEventListener('DOMContentLoaded', function() {
-                    const filterInput = document.getElementById('menu-filter');
-                    if (filterInput) {
-                        filterInput.addEventListener('input', function() {
-                            const filter = filterInput.value.toLowerCase();
-                            document.querySelectorAll('.sidebar-nav .nav-item').forEach(item => {
-                                const text = item.textContent.toLowerCase();
-                                if (text.includes(filter)) {
-                                    item.classList.remove('hidden');
-                                } else {
-                                    item.classList.add('hidden');
-                                }
-                            });
-                        });
-                    }
-                });
         // Manejo de la navegación y autenticación
         document.addEventListener('DOMContentLoaded', function() {
-            // --- Autenticación con Supabase ---
+            // --- Referencias DOM ---
             const authContainer = document.getElementById('auth-container');
             const mainContainer = document.getElementById('main-container');
             const loginForm = document.getElementById('login-form');
             const loginError = document.getElementById('login-error');
             const loginErrorText = document.getElementById('login-error-text');
+            const dashboardView = document.getElementById('dashboard-view');
+            const moduleView = document.getElementById('module-view');
+            const contentFrame = document.getElementById('contentFrame');
+            const moduleTitle = document.getElementById('module-title');
+            const backToDashboard = document.getElementById('back-to-dashboard');
+            const logoutBtn = document.getElementById('logout-btn');
+            const filterInput = document.getElementById('menu-filter');
 
-            // Verificar si el usuario ya está autenticado
+            // --- Autenticación con Supabase ---
             supabase.auth.getSession().then(({ data: { session } }) => {
                 if (session) {
                     mostrarContenido();
@@ -240,6 +400,7 @@
                 const email = document.getElementById('email').value;
                 const password = document.getElementById('password').value;
                 loginError.classList.add('hidden');
+                
                 // Autenticación con Supabase
                 const { data, error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) {
@@ -247,45 +408,84 @@
                     loginError.classList.remove('hidden');
                     return;
                 }
+                
                 // Verificar rol en la tabla perfiles
                 const { data: perfiles, error: errorPerfil } = await supabase
                     .from('perfiles')
                     .select('rol')
                     .eq('email', email)
                     .single();
+                    
                 if (errorPerfil || !perfiles || perfiles.rol !== 'ADMINISTRADOR') {
                     loginErrorText.textContent = 'Acceso denegado: solo administradores pueden ingresar.';
                     loginError.classList.remove('hidden');
-                    // Cerrar sesión si no es administrador
                     await supabase.auth.signOut();
                     return;
                 }
+                
                 mostrarContenido();
             });
 
             // Función para mostrar el contenido principal
             function mostrarContenido() {
                 authContainer.style.display = 'none';
-                mainContainer.style.display = 'flex';
+                mainContainer.style.display = 'block';
             }
+            
             // Función para mostrar el login
             function mostrarLogin() {
                 authContainer.style.display = 'flex';
                 mainContainer.style.display = 'none';
             }
 
-            // Manejo de la navegación interna
-            const navItems = document.querySelectorAll('.nav-item');
-            const contentFrame = document.getElementById('contentFrame');
-            navItems.forEach(item => {
-                item.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    navItems.forEach(nav => nav.classList.remove('active'));
-                    this.classList.add('active');
+            // --- Navegación del Bento Grid ---
+            const navCards = document.querySelectorAll('.nav-card');
+            navCards.forEach(card => {
+                card.addEventListener('click', function() {
                     const page = this.getAttribute('data-page');
+                    const title = this.querySelector('h3').textContent;
+                    
+                    // Cargar el módulo
                     contentFrame.src = page;
+                    moduleTitle.textContent = title;
+                    
+                    // Mostrar vista de módulo
+                    dashboardView.classList.add('hidden');
+                    moduleView.classList.remove('hidden');
                 });
             });
+
+            // Botón volver al dashboard
+            backToDashboard.addEventListener('click', function() {
+                dashboardView.classList.remove('hidden');
+                moduleView.classList.add('hidden');
+            });
+
+            // --- Filtro de búsqueda ---
+            if (filterInput) {
+                filterInput.addEventListener('input', function() {
+                    const filter = filterInput.value.toLowerCase();
+                    navCards.forEach(card => {
+                        const text = card.textContent.toLowerCase();
+                        if (text.includes(filter)) {
+                            card.classList.remove('hidden');
+                        } else {
+                            card.classList.add('hidden');
+                        }
+                    });
+                });
+            }
+
+            // --- Logout ---
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', async function() {
+                    await supabase.auth.signOut();
+                    mostrarLogin();
+                    // Resetear vistas
+                    dashboardView.classList.remove('hidden');
+                    moduleView.classList.add('hidden');
+                });
+            }
         });
     </script>
 </body>
