@@ -21,9 +21,9 @@
             <div class="table-actions">
                 <button class="btn btn-primary" onclick="openCreateModal()">➕ Nuevo</button>
                 <button class="btn btn-secondary" onclick="loadData()">🔄 Actualizar</button>
-                <button class="btn btn-success" onclick="openImportModal()">📤 Cargar Excel</button>
-                <button class="btn btn-primary" onclick="exportToExcel()">📥 Exportar Excel</button>
-                <button class="btn btn-danger" onclick="limpiarTabla()">🗑️ Limpiar Tabla</button>
+                <button class="btn btn-success" onclick="openImportModal()">📤 Cargar</button>
+                <button class="btn btn-primary" onclick="exportToExcel()">📥 Exportar</button>
+                <button class="btn btn-danger" onclick="limpiarTabla()">🗑️ Limpiar</button>
             </div>
         </div>
         <div class="data-table-wrapper">
@@ -52,18 +52,21 @@
                 <h3>📤 Cargar datos desde Excel</h3>
             </div>
             <div style="padding: 20px;">
-                <p style="margin-bottom: 15px; color: #555;">
+                <p style="margin-bottom: 15px; color: #cbd5e1;">
                     Selecciona un archivo Excel (.xlsx, .xls) con los datos a importar.
                 </p>
                 <div class="form-group">
                     <label for="excelFile">Archivo Excel</label>
                     <input type="file" id="excelFile" accept=".xlsx,.xls" style="padding: 5px;">
                 </div>
-                <div id="importPreview" style="margin-top: 15px; display: none;">
-                    <h4 style="color: #2c3e50; margin-bottom: 10px;">Vista previa:</h4>
-                    <div id="previewContent" style="max-height: 300px; overflow: auto; background: #f8f9fa; padding: 10px; border-radius: 4px;"></div>
-                    <p style="margin-top: 10px; font-size: 14px; color: #7f8c8d;">
-                        <strong id="previewCount">0</strong> registros encontrados
+                <div id="importProgress" style="margin-top: 18px; display: none;">
+                    <h4 style="color: #e2e8f0; margin-bottom: 10px;">Progreso de importación</h4>
+                    <div style="height: 12px; border-radius: 999px; background: #334155; overflow: hidden; border: 1px solid #475569;">
+                        <div id="importProgressBar" style="width: 0%; height: 100%; background: linear-gradient(135deg, #10b981 0%, #059669 100%); transition: width 0.25s ease;"></div>
+                    </div>
+                    <p id="importProgressText" style="margin-top: 10px; font-size: 14px; color: #e2e8f0;">Esperando archivo...</p>
+                    <p id="importProgressDetails" style="margin-top: 6px; font-size: 13px; color: #cbd5e1;">
+                        Selecciona un archivo para iniciar.
                     </p>
                 </div>
             </div>

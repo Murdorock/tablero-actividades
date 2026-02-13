@@ -170,9 +170,10 @@ let importedData = [];
 function openImportModal() {
     document.getElementById('importModal').classList.add('show');
     document.getElementById('excelFile').value = '';
-    document.getElementById('importPreview').style.display = 'none';
+    document.getElementById('importProgress').style.display = 'none';
     document.getElementById('btnImport').disabled = true;
     importedData = [];
+    resetImportProgress();
 }
 
 function closeImportModal() {
@@ -184,6 +185,10 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('excelFile')?.addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
+
+        document.getElementById('importProgress').style.display = 'block';
+        resetImportProgress();
+        updateImportProgress(0, 0, 'Validando archivo...');
         
         const reader = new FileReader();
         reader.onload = function(event) {
@@ -195,51 +200,47 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 if (jsonData.length === 0) {
                     showMessage('El archivo está vacío', 'error');
+                    updateImportProgress(0, 0, 'El archivo no contiene registros válidos.');
                     return;
                 }
                 
                 importedData = jsonData;
-                showPreview(jsonData);
+                updateImportProgress(0, importedData.length, `Archivo validado: ${importedData.length} registros listos para importar.`);
                 document.getElementById('btnImport').disabled = false;
             } catch (error) {
                 showMessage('Error al leer el archivo: ' + error.message, 'error');
+                updateImportProgress(0, 0, 'Error al procesar el archivo.');
             }
         };
         reader.readAsArrayBuffer(file);
     });
 });
 
-function showPreview(data) {
-    const previewContent = document.getElementById('previewContent');
-    const previewCount = document.getElementById('previewCount');
-    
-    previewCount.textContent = data.length;
-    
-    // Mostrar primeros 5 registros
-    const preview = data.slice(0, 5);
-    let html = '<table style="width: 100%; border-collapse: collapse; font-size: 12px;"><thead><tr>';
-    
-    const columns = Object.keys(preview[0]);
-    columns.forEach(col => {
-        html += `<th style="border: 1px solid #ddd; padding: 8px; background: #34495e; color: white;">${col}</th>`;
-    });
-    html += '</tr></thead><tbody>';
-    
-    preview.forEach(row => {
-        html += '<tr>';
-        columns.forEach(col => {
-            html += `<td style="border: 1px solid #ddd; padding: 8px;">${row[col] || '-'}</td>`;
-        });
-        html += '</tr>';
-    });
-    html += '</tbody></table>';
-    
-    if (data.length > 5) {
-        html += `<p style="margin-top: 10px; font-style: italic; color: #7f8c8d;">... y ${data.length - 5} registros más</p>`;
+function resetImportProgress() {
+    const progressBar = document.getElementById('importProgressBar');
+    const progressText = document.getElementById('importProgressText');
+    const progressDetails = document.getElementById('importProgressDetails');
+
+    progressBar.style.width = '0%';
+    progressText.textContent = 'Esperando archivo...';
+    progressDetails.textContent = 'Selecciona un archivo para iniciar.';
+}
+
+function updateImportProgress(totalImported, total, statusMessage) {
+    const progressBar = document.getElementById('importProgressBar');
+    const progressText = document.getElementById('importProgressText');
+    const progressDetails = document.getElementById('importProgressDetails');
+
+    const percentage = total > 0 ? Math.min((totalImported / total) * 100, 100) : 0;
+    progressBar.style.width = `${percentage}%`;
+    progressText.textContent = `${percentage.toFixed(1)}%`;
+
+    if (statusMessage) {
+        progressDetails.textContent = statusMessage;
+        return;
     }
-    
-    previewContent.innerHTML = html;
-    document.getElementById('importPreview').style.display = 'block';
+
+    progressDetails.textContent = `Procesados ${totalImported} de ${total} registros.`;
 }
 
 async function importData() {
@@ -255,6 +256,8 @@ async function importData() {
     const btnImport = document.getElementById('btnImport');
     btnImport.disabled = true;
     btnImport.textContent = 'Importando...';
+    document.getElementById('importProgress').style.display = 'block';
+    updateImportProgress(0, importedData.length, `Iniciando importación de ${importedData.length} registros...`);
     
     try {
         // Insertar datos en lotes de 100 registros
@@ -272,13 +275,16 @@ async function importData() {
             
             // Actualizar progreso
             btnImport.textContent = `Importando... ${imported}/${importedData.length}`;
+            updateImportProgress(imported, importedData.length);
         }
         
+        updateImportProgress(importedData.length, importedData.length, 'Importación completada exitosamente.');
         showMessage(`${imported} registros importados exitosamente`, 'success');
         closeImportModal();
         loadData();
     } catch (error) {
         showMessage('Error al importar: ' + error.message, 'error');
+        updateImportProgress(0, importedData.length, `Error durante la importación: ${error.message}`);
     } finally {
         btnImport.disabled = false;
         btnImport.textContent = 'Importar Datos';
