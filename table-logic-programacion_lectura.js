@@ -257,13 +257,38 @@ function closeImportModal() {
 function openUpdateModal() {
     document.getElementById('updateModal').classList.add('show');
     document.getElementById('csvFileUpdate').value = '';
-    document.getElementById('updatePreview').style.display = 'none';
+    resetUpdateProgress();
     document.getElementById('btnUpdate').disabled = true;
     updateDataArray = [];
 }
 
 function closeUpdateModal() {
     document.getElementById('updateModal').classList.remove('show');
+}
+
+function resetUpdateProgress() {
+    const section = document.getElementById('updateProgressSection');
+    const bar = document.getElementById('updateProgressBar');
+    const text = document.getElementById('updateProgressText');
+
+    if (section) section.style.display = 'none';
+    if (bar) bar.style.width = '0%';
+    if (text) text.textContent = 'Archivo listo para actualizar';
+}
+
+function setUpdateProgress(processed, total, updated = 0, notFound = 0) {
+    const section = document.getElementById('updateProgressSection');
+    const bar = document.getElementById('updateProgressBar');
+    const text = document.getElementById('updateProgressText');
+
+    if (!section || !bar || !text) return;
+
+    section.style.display = 'block';
+
+    const safeTotal = total > 0 ? total : 1;
+    const percent = Math.min(100, Math.round((processed / safeTotal) * 100));
+    bar.style.width = `${percent}%`;
+    text.textContent = `${processed}/${total} procesados · ${updated} actualizados · ${notFound} no encontrados`;
 }
 
 function showPreview(data, contentId, countId) {
@@ -359,6 +384,7 @@ async function updateData() {
     const btnUpdate = document.getElementById('btnUpdate');
     btnUpdate.disabled = true;
     btnUpdate.textContent = 'Actualizando...';
+    setUpdateProgress(0, updateDataArray.length, 0, 0);
     
     try {
         let updated = 0;
@@ -392,11 +418,10 @@ async function updateData() {
             } else {
                 notFound++;
             }
-            
-            // Actualizar progreso cada 10 registros
-            if ((i + 1) % 10 === 0 || i === updateDataArray.length - 1) {
-                btnUpdate.textContent = `Actualizando... ${i + 1}/${updateDataArray.length}`;
-            }
+
+            const processed = i + 1;
+            btnUpdate.textContent = `Actualizando... ${processed}/${updateDataArray.length}`;
+            setUpdateProgress(processed, updateDataArray.length, updated, notFound);
         }
         
         showMessage(`✓ Actualización completada: ${updated} actualizados, ${notFound} no encontrados`, 'success');
@@ -508,7 +533,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 updateDataArray = results.data;
-                showPreview(results.data, 'updatePreviewContent', 'updatePreviewCount');
+                const progressSection = document.getElementById('updateProgressSection');
+                const progressBar = document.getElementById('updateProgressBar');
+                const progressText = document.getElementById('updateProgressText');
+
+                if (progressSection) progressSection.style.display = 'block';
+                if (progressBar) progressBar.style.width = '0%';
+                if (progressText) progressText.textContent = `${updateDataArray.length} registros listos para actualizar`;
                 document.getElementById('btnUpdate').disabled = false;
             },
             error: function(error) {

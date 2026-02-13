@@ -224,7 +224,7 @@ let updateDataArray = [];
 function openImportModal() {
     document.getElementById('importModal').classList.add('show');
     document.getElementById('csvFile').value = '';
-    document.getElementById('importPreview').style.display = 'none';
+    resetImportProgress();
     document.getElementById('btnImport').disabled = true;
     importedData = [];
 }
@@ -233,16 +233,66 @@ function closeImportModal() {
     document.getElementById('importModal').classList.remove('show');
 }
 
+function resetImportProgress() {
+    const section = document.getElementById('importProgressSection');
+    const bar = document.getElementById('importProgressBar');
+    const text = document.getElementById('importProgressText');
+
+    if (section) section.style.display = 'none';
+    if (bar) bar.style.width = '0%';
+    if (text) text.textContent = 'Archivo listo para importar';
+}
+
+function setImportProgress(processed, total) {
+    const section = document.getElementById('importProgressSection');
+    const bar = document.getElementById('importProgressBar');
+    const text = document.getElementById('importProgressText');
+
+    if (!section || !bar || !text) return;
+
+    section.style.display = 'block';
+
+    const safeTotal = total > 0 ? total : 1;
+    const percent = Math.min(100, Math.round((processed / safeTotal) * 100));
+    bar.style.width = `${percent}%`;
+    text.textContent = `${processed}/${total} importados`;
+}
+
 function openUpdateModal() {
     document.getElementById('updateModal').classList.add('show');
     document.getElementById('csvFileUpdate').value = '';
-    document.getElementById('updatePreview').style.display = 'none';
+    resetUpdateProgress();
     document.getElementById('btnUpdate').disabled = true;
     updateDataArray = [];
 }
 
 function closeUpdateModal() {
     document.getElementById('updateModal').classList.remove('show');
+}
+
+function resetUpdateProgress() {
+    const section = document.getElementById('updateProgressSection');
+    const bar = document.getElementById('updateProgressBar');
+    const text = document.getElementById('updateProgressText');
+
+    if (section) section.style.display = 'none';
+    if (bar) bar.style.width = '0%';
+    if (text) text.textContent = 'Archivo listo para actualizar';
+}
+
+function setUpdateProgress(processed, total, updated = 0, errors = 0) {
+    const section = document.getElementById('updateProgressSection');
+    const bar = document.getElementById('updateProgressBar');
+    const text = document.getElementById('updateProgressText');
+
+    if (!section || !bar || !text) return;
+
+    section.style.display = 'block';
+
+    const safeTotal = total > 0 ? total : 1;
+    const percent = Math.min(100, Math.round((processed / safeTotal) * 100));
+    bar.style.width = `${percent}%`;
+    text.textContent = `${processed}/${total} procesados · ${updated} actualizados · ${errors} errores`;
 }
 
 // Manejar selección de archivo CSV para importar
@@ -261,7 +311,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 importedData = results.data;
-                showPreview(results.data, 'previewContent', 'previewCount');
+                const progressSection = document.getElementById('importProgressSection');
+                const progressBar = document.getElementById('importProgressBar');
+                const progressText = document.getElementById('importProgressText');
+
+                if (progressSection) progressSection.style.display = 'block';
+                if (progressBar) progressBar.style.width = '0%';
+                if (progressText) progressText.textContent = `${importedData.length} registros listos para importar`;
                 document.getElementById('btnImport').disabled = false;
             },
             error: function(error) {
@@ -291,7 +347,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 updateDataArray = results.data;
-                showPreview(results.data, 'updatePreviewContent', 'updatePreviewCount');
+                const progressSection = document.getElementById('updateProgressSection');
+                const progressBar = document.getElementById('updateProgressBar');
+                const progressText = document.getElementById('updateProgressText');
+
+                if (progressSection) progressSection.style.display = 'block';
+                if (progressBar) progressBar.style.width = '0%';
+                if (progressText) progressText.textContent = `${updateDataArray.length} registros listos para actualizar`;
                 document.getElementById('btnUpdate').disabled = false;
             },
             error: function(error) {
@@ -300,39 +362,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
-
-function showPreview(data, contentId, countId) {
-    const previewContent = document.getElementById(contentId);
-    const previewCount = document.getElementById(countId);
-    
-    previewCount.textContent = data.length;
-    
-    // Mostrar primeros 5 registros
-    const preview = data.slice(0, 5);
-    let html = '<table style="width: 100%; border-collapse: collapse; font-size: 12px;"><thead><tr>';
-    
-    const columns = Object.keys(preview[0]);
-    columns.forEach(col => {
-        html += `<th style="border: 1px solid #ddd; padding: 8px; background: #34495e; color: white;">${col}</th>`;
-    });
-    html += '</tr></thead><tbody>';
-    
-    preview.forEach(row => {
-        html += '<tr>';
-        columns.forEach(col => {
-            html += `<td style="border: 1px solid #ddd; padding: 8px;">${row[col] || '-'}</td>`;
-        });
-        html += '</tr>';
-    });
-    html += '</tbody></table>';
-    
-    if (data.length > 5) {
-        html += `<p style="margin-top: 10px; font-style: italic; color: #7f8c8d;">... y ${data.length - 5} registros más</p>`;
-    }
-    
-    previewContent.innerHTML = html;
-    previewContent.parentElement.style.display = 'block';
-}
 
 async function importData() {
     if (importedData.length === 0) {
@@ -347,6 +376,7 @@ async function importData() {
     const btnImport = document.getElementById('btnImport');
     btnImport.disabled = true;
     btnImport.textContent = 'Importando...';
+    setImportProgress(0, importedData.length);
     
     try {
         // Insertar datos en lotes de 100 registros
@@ -362,8 +392,8 @@ async function importData() {
             if (error) throw error;
             imported += batch.length;
             
-            // Actualizar progreso
             btnImport.textContent = `Importando... ${imported}/${importedData.length}`;
+            setImportProgress(imported, importedData.length);
         }
         
         showMessage(`${imported} registros importados exitosamente`, 'success');
@@ -390,6 +420,7 @@ async function updateData() {
     const btnUpdate = document.getElementById('btnUpdate');
     btnUpdate.disabled = true;
     btnUpdate.textContent = 'Actualizando...';
+    setUpdateProgress(0, updateDataArray.length, 0, 0);
     
     try {
         let updated = 0;
@@ -423,11 +454,10 @@ async function updateData() {
             } else {
                 updated++;
             }
-            
-            // Actualizar progreso cada 10 registros
-            if (i % 10 === 0) {
-                btnUpdate.textContent = `Actualizando... ${i + 1}/${updateDataArray.length}`;
-            }
+
+            const processed = i + 1;
+            btnUpdate.textContent = `Actualizando... ${processed}/${updateDataArray.length}`;
+            setUpdateProgress(processed, updateDataArray.length, updated, errors);
         }
         
         let message = `${updated} registros actualizados`;
