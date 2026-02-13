@@ -27,8 +27,8 @@
                 <button class="btn btn-success" onclick="generarPDF()">📄 Generar PDF</button>
                 <button class="btn btn-secondary" onclick="loadData()">🔄 Refrescar</button>
                 <button class="btn btn-info" onclick="descargarPlantillaExcel()">📥 Plantilla</button>
-                <button class="btn btn-warning" onclick="mostrarModalCargarPorTexto()">📋 Cargar por texto</button>
-                <button class="btn btn-success" onclick="exportarFiltradoExcel()">📊 Exportar filtrado a Excel</button>
+                <button class="btn btn-warning" onclick="mostrarModalCargarPorTexto()">📋 Cargar</button>
+                <button class="btn btn-success" onclick="exportarFiltradoExcel()">📊 Exportar</button>
             </div>
         </div>
         
@@ -36,11 +36,11 @@
         <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
             <div style="display: flex; gap: 15px; align-items: end; flex-wrap: wrap;">
                 <div class="form-group" style="margin: 0; flex: 1; min-width: 200px;">
-                    <label for="filterSearch">Buscar</label>
+                    <label for="filterSearch" style="color: #334155; font-weight: 700;">Buscar</label>
                     <input type="text" id="filterSearch" placeholder="Buscar en todos los campos..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
                 </div>
                 <div class="form-group" style="margin: 0; flex: 1; min-width: 200px;">
-                    <label for="filterColumn">Columna</label>
+                    <label for="filterColumn" style="color: #334155; font-weight: 700;">Columna</label>
                     <select id="filterColumn" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
                         <option value="">Todas las columnas</option>
                     </select>

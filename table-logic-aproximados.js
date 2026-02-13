@@ -163,6 +163,22 @@ function closeModal() {
     document.getElementById('dataModal').classList.remove('show');
 }
 
+function toggleGuideMenu(event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const guideDropdown = document.getElementById('guideDropdown');
+    if (!guideDropdown) return;
+
+    guideDropdown.style.display = guideDropdown.style.display === 'block' ? 'none' : 'block';
+}
+
+function closeGuideMenu() {
+    const guideDropdown = document.getElementById('guideDropdown');
+    if (!guideDropdown) return;
+    guideDropdown.style.display = 'none';
+}
+
 // ========== FUNCIONES PARA IMPORTAR/EXPORTAR EXCEL ==========
 
 let importedData = [];
@@ -366,6 +382,13 @@ async function limpiarTabla() {
 // ========== FIN FUNCIONES EXCEL ==========
 
 document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('click', function(event) {
+        const guideMenu = document.getElementById('guideMenu');
+        if (guideMenu && !guideMenu.contains(event.target)) {
+            closeGuideMenu();
+        }
+    });
+
     document.getElementById('dataForm')?.addEventListener('submit', async function(e) {
         e.preventDefault();
         

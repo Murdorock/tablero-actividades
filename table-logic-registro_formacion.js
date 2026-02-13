@@ -15,12 +15,12 @@ function mostrarModalCargarPorTexto() {
         modal.style.justifyContent = 'center';
         modal.style.zIndex = '9999';
         modal.innerHTML = `
-            <div style="background: #fff; padding: 30px; border-radius: 10px; min-width: 350px; max-width: 95vw; box-shadow: 0 8px 32px rgba(0,0,0,0.25); z-index:10000; position:relative;">
-                <h3>Cargar datos por texto</h3>
+            <div style="background: #f8fafc; color: #0f172a; padding: 30px; border-radius: 10px; min-width: 350px; max-width: 95vw; box-shadow: 0 8px 32px rgba(0,0,0,0.25); z-index:10000; position:relative; border: 1px solid #cbd5e1;">
+                <h3 style="color: #1e293b; margin: 0 0 14px 0; font-weight: 700;">Cargar datos por texto</h3>
                 <div style="margin-bottom:10px;">
-                    <textarea id="textoCarga" rows="8" style="width:100%; min-width:300px; max-width:500px;"></textarea>
+                    <textarea id="textoCarga" rows="8" style="width:100%; min-width:300px; max-width:500px; background: #ffffff; color: #0f172a; border: 1px solid #64748b; border-radius: 6px; padding: 10px;"></textarea>
                 </div>
-                <div id="cargarTextoMsg" style="color:#c0392b; margin-bottom:10px;"></div>
+                <div id="cargarTextoMsg" style="color:#b91c1c; margin-bottom:10px; font-weight: 600;"></div>
                 <div style="text-align:right;">
                     <button type="button" class="btn btn-primary" onclick="procesarCargaPorTexto()">Cargar</button>
                     <button type="button" class="btn btn-secondary" onclick="document.getElementById('modalCargarTexto').remove()">Cancelar</button>
@@ -534,6 +534,18 @@ function descargarPlantillaExcel() {
 }
 // Lógica para la tabla registro_formacion
 let tableColumns = [];
+const columnasOcultasVista = [
+    'firma',
+    'pdf',
+    'firma_sup',
+    'numero_formulario',
+    'codigo',
+    'origen',
+    'objetivo',
+    'aspectos',
+    'cedula',
+    'cargo'
+];
 
 // Exponer funciones al ámbito global para los botones
 window.descargarPlantillaExcel = descargarPlantillaExcel;
@@ -617,7 +629,7 @@ function populateFilterColumns() {
     filterColumn.innerHTML = '<option value="">Todas las columnas</option>';
     
     tableColumns.forEach(col => {
-        if (col !== 'id') {
+        if (col !== 'id' && !columnasOcultasVista.includes(col)) {
             filterColumn.innerHTML += `<option value="${col}">${formatColumnName(col)}</option>`;
         }
     });
@@ -634,11 +646,9 @@ function renderTable() {
     const tableBody = document.getElementById('tableBody');
     let bodyHTML = '';
     // Renderizar encabezados
-    // Columnas a ocultar en la tabla HTML
-    const columnasOcultas = ['firma', 'pdf', 'firma_sup'];
     let headHTML = '<tr>';
     tableColumns.forEach(col => {
-        if (col !== 'id' && !columnasOcultas.includes(col)) {
+        if (col !== 'id' && !columnasOcultasVista.includes(col)) {
             headHTML += `<th>${formatColumnName(col)}</th>`;
         }
     });
@@ -653,7 +663,7 @@ function renderTable() {
     paginatedData.forEach((row, index) => {
         bodyHTML += '<tr>';
         tableColumns.forEach(col => {
-            if (col !== 'id' && !columnasOcultas.includes(col)) {
+            if (col !== 'id' && !columnasOcultasVista.includes(col)) {
                 const cellValue = formatValue(row[col], col);
                 bodyHTML += `<td>${cellValue}</td>`;
             }
