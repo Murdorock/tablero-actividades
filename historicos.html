@@ -479,7 +479,7 @@
                     <div class="upload-icon">📤</div>
                     <h2>Cargar Archivo CSV</h2>
                     <p>Arrastra tu archivo CSV aquí o haz clic para seleccionar</p>
-                    <p><small>Formato requerido: 23 columnas, hasta 500,000 filas - Ultra rápido ⚡</small></p>
+                    <p><small>Formato requerido: 24 columnas, hasta 500,000 filas - Ultra rápido ⚡</small></p>
                     <input type="file" id="fileInput" accept=".csv" style="display: none;">
                     <br><br>
                     <button class="btn" onclick="document.getElementById('fileInput').click()">
@@ -514,7 +514,8 @@
                                 'causal_obs_mes6',
                                 'obs_adic',
                                 'categoria_servicio',
-                                'serie_medidor'
+                                'serie_medidor',
+                                'coordenada'
                             ];
                             // Usar punto y coma como separador para compatibilidad con Excel
                             const csv = columnas.join(';') + '\n';
@@ -660,7 +661,7 @@
             'cod_ciclo', 'tipo_consumo', 'actual', 'anterior', 'mes3_ant', 'mes4_ant', 
             'mes5_ant', 'mes6_ant', 'mes7_ant', 'causal_obs_act', 'causal_obs_ant', 
             'causal_obs_mes3', 'causal_obs_mes4', 'causal_obs_mes5', 'causal_obs_mes6', 
-            'obs_adic', 'categoria_servicio', 'serie_medidor'
+            'obs_adic', 'categoria_servicio', 'serie_medidor', 'coordenada'
         ];
         
         // Nota: id_historico se genera automáticamente, no se incluye en el insert
@@ -1121,7 +1122,7 @@
                     <div class="upload-icon">📤</div>
                     <h2>Cargar Archivo CSV</h2>
                     <p>Arrastra tu archivo CSV aquí o haz clic para seleccionar</p>
-                    <p><small>Formato requerido: 23 columnas, hasta 500,000 filas - Ultra rápido ⚡</small></p>
+                    <p><small>Formato requerido: 24 columnas, hasta 500,000 filas - Ultra rápido ⚡</small></p>
                     <input type="file" id="fileInput" accept=".csv" style="display: none;">
                     <br><br>
                     <button class="btn" onclick="document.getElementById('fileInput').click()">
@@ -1157,7 +1158,7 @@
                     <div class="stat-label">Tamaño del archivo</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-number">23</div>
+                    <div class="stat-number">24</div>
                     <div class="stat-label">Columnas</div>
                 </div>
                 <div class="stat-item">

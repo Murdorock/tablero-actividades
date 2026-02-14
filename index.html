@@ -136,18 +136,18 @@
     </div>
 
     <!-- Contenido principal oculto hasta autenticación -->
-    <div class="main-container min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-50" id="main-container" style="display: none;">
+    <div class="main-container min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900" id="main-container" style="display: none;">
         
         <!-- Header Top Bar -->
-        <header class="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-40">
+        <header class="bg-slate-900/95 border-b border-slate-700 shadow-sm sticky top-0 z-40 backdrop-blur">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="flex items-center justify-between h-20">
                     <!-- Logo y Título -->
                     <div class="flex items-center gap-4">
                         <div class="text-4xl">📊</div>
                         <div>
-                            <h1 class="text-2xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">LECTRA</h1>
-                            <p class="text-xs text-gray-500">Panel de Control v1.3</p>
+                            <h1 class="text-2xl font-bold bg-gradient-to-r from-blue-400 to-blue-600 bg-clip-text text-transparent">LECTRA</h1>
+                            <p class="text-xs text-slate-400">Panel de Control v1.3</p>
                         </div>
                     </div>
 
@@ -157,12 +157,12 @@
                             type="text" 
                             id="menu-filter" 
                             placeholder="Buscar módulo..." 
-                            class="w-full px-4 py-2 rounded-xl bg-gray-50 border-2 border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 placeholder-gray-400 text-gray-900 transition-all"
+                            class="w-full px-4 py-2 rounded-xl bg-slate-800 border-2 border-slate-600 focus:border-blue-500 focus:ring-4 focus:ring-blue-900/40 placeholder-slate-400 text-slate-100 transition-all"
                         />
                     </div>
 
                     <!-- Botón Cerrar Sesión -->
-                    <button id="logout-btn" class="px-6 py-2 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-xl transition-all hover:shadow-lg">
+                    <button id="logout-btn" class="px-6 py-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl transition-all hover:shadow-lg border border-rose-500/60">
                         🚪 Cerrar Sesión
                     </button>
                 </div>
@@ -172,8 +172,8 @@
         <!-- Dashboard Bento Grid -->
         <div id="dashboard-view" class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
             <div class="mb-8">
-                <h2 class="text-3xl font-bold text-gray-900 mb-2">Dashboard</h2>
-                <p class="text-gray-600">Selecciona un módulo para comenzar</p>
+                <h2 class="text-3xl font-bold text-slate-100 mb-2">Dashboard</h2>
+                <p class="text-slate-300">Selecciona un módulo para comenzar</p>
             </div>
 
             <!-- Grid de Módulos -->
@@ -345,16 +345,16 @@
         </div>
 
         <!-- Vista del Módulo (Iframe) - Oculta inicialmente -->
-        <div id="module-view" class="hidden fixed inset-0 bg-gray-100 z-50">
+        <div id="module-view" class="hidden fixed inset-0 bg-slate-900 z-50">
             <!-- Header del Módulo -->
-            <div class="bg-white border-b border-gray-200 shadow-sm">
+            <div class="bg-slate-900 border-b border-slate-700 shadow-sm">
                 <div class="px-4 sm:px-6 lg:px-8">
                     <div class="flex items-center justify-between h-16">
-                        <button id="back-to-dashboard" class="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all font-semibold text-gray-700">
+                        <button id="back-to-dashboard" class="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all font-semibold text-slate-200 border border-slate-600">
                             <span>←</span>
                             <span>Volver al Dashboard</span>
                         </button>
-                        <h2 id="module-title" class="text-xl font-bold text-gray-800"></h2>
+                        <h2 id="module-title" class="text-xl font-bold text-slate-100"></h2>
                         <div class="w-40"></div> <!-- Spacer para centrar el título -->
                     </div>
                 </div>
