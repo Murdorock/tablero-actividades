@@ -15,6 +15,37 @@ let currentEditId = null;
 let estadisticasData = {};
 let columnasRealesTabla = []; // Para almacenar las columnas reales de la tabla
 
+const HIDDEN_TABLE_COLUMNS = new Set([
+    'cod_tipo_consumo',
+    'codigo_tipo',
+    'lectura_anterior',
+    'lectura_tres_meses',
+    'lectura_3_meses',
+    'lectura_cuatro_meses',
+    'lectura_4_meses',
+    'serie',
+    'motivo_revision',
+    'orden',
+    'servicio_suscrito',
+    'periodo_facturacion',
+    'coordenada_instalacion',
+    'coordenadas_instalacion',
+    'causa_lectura_observacion',
+    'causa_observacion',
+    'observacion_adicional_real',
+    'alfanumerica_revisor',
+    'lectura_real',
+    'correcciones_en_sistema',
+    'geolocalizacion',
+    'firma_revisor',
+    'advertencia_revisor',
+    'ciclo'
+]);
+
+function shouldHideInInconsistenciasTable(columnName) {
+    return HIDDEN_TABLE_COLUMNS.has(columnName) || columnName.includes('fecha') || columnName.includes('foto');
+}
+
 // Filtro de búsqueda para la tabla
 window.filterTable = function() {
     const search = document.getElementById('searchInput').value.toLowerCase();
@@ -171,10 +202,72 @@ window.goToPage = function(page) {
 window.prevPage = function() { window.goToPage(currentPage - 1); }
 window.nextPage = function() { window.goToPage(currentPage + 1); }
 
+function getCiclosUnicos() {
+    return [...new Set(fullData
+        .map(row => row.ciclo ?? row.CICLO)
+        .filter(ciclo => ciclo !== null && ciclo !== undefined && String(ciclo).trim() !== '')
+        .map(ciclo => String(ciclo).trim())
+    )]
+        .sort((a, b) => a.localeCompare(b, 'es', { numeric: true, sensitivity: 'base' }));
+}
+
+function updateCiclosInfoField() {
+    const ciclosInfo = document.getElementById('ciclosInfo');
+    if (!ciclosInfo) return;
+    const ciclosUnicos = getCiclosUnicos();
+    ciclosInfo.textContent = `Ciclos: ${ciclosUnicos.length > 0 ? ciclosUnicos.join(', ') : '-'}`;
+}
+
+function updateInconsistenciasStickyOffsets() {
+    const wrapper = document.querySelector('.inconsistencias-table-wrapper');
+    if (!wrapper) return;
+
+    const searchRow = wrapper.querySelector('.sticky-search-row');
+    const tableInfo = wrapper.querySelector('.sticky-table-info');
+
+    const searchHeight = searchRow ? searchRow.offsetHeight : 0;
+    const infoHeight = tableInfo ? tableInfo.offsetHeight : 0;
+
+    wrapper.style.setProperty('--sticky-search-height', `${searchHeight}px`);
+    wrapper.style.setProperty('--sticky-info-height', `${infoHeight}px`);
+}
+
+function escapeHtml(text) {
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+window.toggleAlfanumericaLector = function(event, linkElement, fullEncoded, shortEncoded) {
+    event.preventDefault();
+    const previewElement = linkElement.previousElementSibling;
+    if (!previewElement) return;
+
+    const fullText = decodeURIComponent(fullEncoded);
+    const shortText = decodeURIComponent(shortEncoded);
+    const expanded = previewElement.dataset.expanded === 'true';
+
+    if (expanded) {
+        previewElement.textContent = shortText;
+        previewElement.dataset.expanded = 'false';
+        linkElement.textContent = 'Ver más..';
+    } else {
+        previewElement.textContent = fullText;
+        previewElement.dataset.expanded = 'true';
+        linkElement.textContent = 'Ver menos';
+    }
+}
+
 function renderTable() {
     const tableContainer = document.getElementById('tableContainer');
     // Permitir pasar datos filtrados
     let data = Array.isArray(arguments[0]) ? arguments[0] : tableData;
+    const visibleColumns = columns.filter(col => !shouldHideInInconsistenciasTable(col));
+    updateCiclosInfoField();
+
     if (data.length === 0) {
         tableContainer.innerHTML = `
             <div class="empty-state" style="text-align: center; padding: 3rem;">
@@ -191,33 +284,44 @@ function renderTable() {
     const prevDisabled = currentPage === 1 ? 'disabled' : '';
     const nextDisabled = currentPage === totalPages ? 'disabled' : '';
     let tableHTML = `
-        <div class="table-info" style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+        <div class="table-info sticky-table-info" style="margin-bottom: 0; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
             <span class="record-count">📊 Mostrando ${startIndex}-${endIndex} de ${currentDataSource.length} registros ${currentDataSource !== fullData ? `(filtrado de ${fullData.length})` : ''}</span>
             <div style="display: flex; align-items: center; gap: 0.5rem;">
                 <button onclick="prevPage()" class="btn btn-secondary" ${prevDisabled}>◀️ Anterior</button>
                 <span>Página ${currentPage} de ${totalPages}</span>
                 <button onclick="nextPage()" class="btn btn-secondary" ${nextDisabled}>Siguiente ▶️</button>
             </div>
-            <button onclick="openEstadisticasModal()" class="btn btn-info" style="background: #17a2b8; color: white; border: none; padding: 0.5rem 1rem; border-radius: 0.25rem; cursor: pointer;">📈 Ver Estadísticas</button>
+            <div style="display: flex; align-items: center; min-width: 180px; justify-content: flex-end;">
+                <button onclick="openEstadisticasModal()" class="btn btn-info" style="background: #17a2b8; color: white; border: none; padding: 0.5rem 1rem; border-radius: 0.25rem; cursor: pointer;">📈 Ver Estadísticas</button>
+            </div>
         </div>
-        <div style="overflow-x: auto;">
-            <table class="data-table" style="width: 100%; border-collapse: collapse;">
+        <table class="data-table" style="width: 100%; border-collapse: collapse;">
                 <thead>
                     <tr style="background-color: #f8f9fa;">
     `;
-    columns.forEach(col => {
+    visibleColumns.forEach(col => {
         tableHTML += `<th style="padding: 0.75rem; border: 1px solid #dee2e6; text-align: left; color: #212529; font-weight: bold;">${formatColumnName(col)}</th>`;
     });
     tableHTML += '<th style="padding: 0.75rem; border: 1px solid #dee2e6; color: #212529; font-weight: bold;">Acciones</th></tr></thead><tbody>';
     data.forEach(row => {
         tableHTML += '<tr>';
-        columns.forEach(col => {
+        visibleColumns.forEach(col => {
             let value = row[col];
             // Formateo específico para inconsistencias
             if (col === 'nombre_revisor' && value) {
                 const stats = estadisticasData[value];
                 if (stats) {
                     value = `${value} <span style="font-size: 0.8em; color: #6c757d;">(${stats.porcentajeAvance}%)</span>`;
+                }
+            } else if (col === 'alfanumerica_lector' && value) {
+                const fullText = String(value);
+                const shortText = fullText.slice(0, 4);
+                if (fullText.length > 4) {
+                    const fullEncoded = encodeURIComponent(fullText);
+                    const shortEncoded = encodeURIComponent(shortText);
+                    value = `<span data-expanded="false">${escapeHtml(shortText)}</span> <a href="#" onclick="toggleAlfanumericaLector(event, this, '${fullEncoded}', '${shortEncoded}')">Ver más..</a>`;
+                } else {
+                    value = escapeHtml(fullText);
                 }
             } else if (col === 'pdf') {
                 value = value && value.trim() !== '' ? 
@@ -236,15 +340,18 @@ function renderTable() {
         `;
         tableHTML += '</tr>';
     });
-    tableHTML += '</tbody></table></div>';
+    tableHTML += '</tbody></table>';
     tableContainer.innerHTML = tableHTML;
+    updateInconsistenciasStickyOffsets();
 }
+
+window.addEventListener('resize', updateInconsistenciasStickyOffsets);
 
 // Función para abrir modal de estadísticas
 function openEstadisticasModal() {
     let estadisticasHTML = `
         <div class="estadisticas-content">
-            <h3 style="color: #212529;">📈 Estadísticas de Revisores</h3>
+            <h3 style="color: #f1f5f9;">📈 Estadísticas de Revisores</h3>
             <div class="estadisticas-grid" style="display: grid; gap: 1rem; margin-top: 1rem;">
     `;
     
@@ -256,13 +363,13 @@ function openEstadisticasModal() {
     
     // Resumen general
     estadisticasHTML += `
-        <div class="estadistica-card" style="background: #e9ecef; padding: 1rem; border-radius: 0.5rem; border-left: 4px solid #6c757d;">
-            <h4 style="color: #212529;">📊 Resumen General</h4>
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; margin-top: 0.5rem; color: #212529;">
-                <div><strong style="color: #212529;">Total Registros:</strong> ${totalRegistros}</div>
-                <div><strong style="color: #212529;">Avance General:</strong> ${promedioAvance}%</div>
-                <div><strong style="color: #212529;">Con PDF:</strong> <span style="color: #28a745;">${totalConPdf}</span></div>
-                <div><strong style="color: #212529;">Sin PDF:</strong> <span style="color: #dc3545;">${totalSinPdf}</span></div>
+        <div class="estadistica-card" style="background: #1e293b; padding: 1rem; border-radius: 0.5rem; border-left: 4px solid #64748b; border: 1px solid #334155;">
+            <h4 style="color: #e2e8f0;">📊 Resumen General</h4>
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; margin-top: 0.5rem; color: #e2e8f0;">
+                <div><strong style="color: #cbd5e1;">Total Registros:</strong> ${totalRegistros}</div>
+                <div><strong style="color: #cbd5e1;">Avance General:</strong> ${promedioAvance}%</div>
+                <div><strong style="color: #28a745;">Con PDF:</strong> <span style="color: #28a745;">${totalConPdf}</span></div>
+                <div><strong style="color: #dc3545;">Sin PDF:</strong> <span style="color: #dc3545;">${totalSinPdf}</span></div>
             </div>
         </div>
     `;
@@ -275,21 +382,21 @@ function openEstadisticasModal() {
                              stats.porcentajeAvance >= 50 ? '#ffc107' : '#dc3545';
             
             estadisticasHTML += `
-                <div class="estadistica-card" style="background: white; padding: 1rem; border-radius: 0.5rem; border: 1px solid #dee2e6; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                    <h4 style="margin: 0 0 0.5rem 0; color: #495057;">👤 ${revisor}</h4>
+                <div class="estadistica-card" style="background: #1e293b; padding: 1rem; border-radius: 0.5rem; border: 1px solid #334155; box-shadow: 0 2px 4px rgba(0,0,0,0.25);">
+                    <h4 style="margin: 0 0 0.5rem 0; color: #cbd5e1;">👤 ${revisor}</h4>
                     
                     <div style="margin-bottom: 0.5rem;">
                         <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
-                            <span style="color: #212529; font-weight: 500;">Avance:</span>
+                            <span style="color: #e2e8f0; font-weight: 500;">Avance:</span>
                             <strong style="color: ${colorBarra};">${stats.porcentajeAvance}%</strong>
                         </div>
-                        <div style="background: #e9ecef; border-radius: 0.25rem; overflow: hidden;">
+                        <div style="background: #334155; border-radius: 0.25rem; overflow: hidden;">
                             <div style="background: ${colorBarra}; height: 0.5rem; width: ${stats.porcentajeAvance}%; transition: width 0.3s ease;"></div>
                         </div>
                     </div>
                     
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; font-size: 0.875rem; color: #212529;">
-                        <div><strong style="color: #212529;">Total:</strong> ${stats.totalAsignados}</div>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; font-size: 0.875rem; color: #e2e8f0;">
+                        <div><strong style="color: #cbd5e1;">Total:</strong> ${stats.totalAsignados}</div>
                         <div><strong style="color: #28a745;">Con PDF:</strong> ${stats.conPdf}</div>
                         <div><strong style="color: #dc3545;">Pendientes:</strong> ${stats.sinPdf}</div>
                     </div>
@@ -299,7 +406,7 @@ function openEstadisticasModal() {
     
     estadisticasHTML += `
             </div>
-            <div class="modal-footer" style="margin-top: 1.5rem; text-align: right;">
+            <div class="modal-footer" style="margin-top: 1.5rem; text-align: right; border-top: 1px solid #334155; padding-top: 0.75rem;">
                 <button onclick="closeEstadisticasModal()" class="btn btn-secondary" style="padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer;">Cerrar</button>
             </div>
         </div>
@@ -317,15 +424,16 @@ function openEstadisticasModal() {
         top: 0;
         width: 100%;
         height: 100%;
-        background-color: rgba(0,0,0,0.5);
+        background-color: rgba(2,6,23,0.75);
     `;
     
     estadisticasModal.innerHTML = `
         <div class="modal-content" style="
-            background-color: #fefefe;
+            background: linear-gradient(to bottom, #0f172a, #111827);
+            color: #e2e8f0;
             margin: 2% auto;
             padding: 1.5rem;
-            border: none;
+            border: 1px solid #334155;
             width: 90%;
             max-width: 800px;
             border-radius: 0.5rem;
@@ -333,7 +441,8 @@ function openEstadisticasModal() {
             overflow-y: auto;
         ">${estadisticasHTML}</div>
     `;
-    
+
+    document.body.style.overflow = 'hidden';
     document.body.appendChild(estadisticasModal);
 }
 
@@ -342,6 +451,7 @@ function closeEstadisticasModal() {
     if (estadisticasModal) {
         document.body.removeChild(estadisticasModal);
     }
+    document.body.style.overflow = '';
 }
 
 function formatColumnName(columnName) {

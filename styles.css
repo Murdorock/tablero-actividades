@@ -239,6 +239,81 @@ body {
     border: 1px solid #334155;
 }
 
+/* Barra fija para filtro y navegación de inconsistencias */
+.sticky-search-row {
+    position: sticky;
+    top: 0;
+    z-index: 35;
+    background: #1e293b;
+    padding: 0.5rem 0;
+    margin: 0;
+    border-bottom: 1px solid #334155;
+}
+
+.inconsistencias-filter-grid {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    width: 100%;
+}
+
+.ciclos-info-field {
+    color: #e2e8f0;
+    font-weight: 600;
+    font-size: 0.95rem;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 0.35rem;
+    padding: 0.5rem 0.75rem;
+    min-width: 110px;
+    margin-left: auto;
+    text-align: right;
+}
+
+.sticky-table-info {
+    position: sticky;
+    top: 3.25rem;
+    z-index: 30;
+    background: #1e293b;
+    padding: 0.35rem 0;
+    margin: 0;
+    border-bottom: 1px solid #334155;
+}
+
+.inconsistencias-table-wrapper {
+    --sticky-search-height: 56px;
+    --sticky-info-height: 64px;
+}
+
+.inconsistencias-table-wrapper .sticky-search-row {
+    top: 0;
+}
+
+.inconsistencias-table-wrapper .sticky-table-info {
+    top: var(--sticky-search-height);
+}
+
+.inconsistencias-table-wrapper .data-table thead {
+    position: sticky;
+    top: calc(var(--sticky-search-height) + var(--sticky-info-height));
+    z-index: 22;
+}
+
+.inconsistencias-table-wrapper .data-table th {
+    position: static;
+    background: #f8f9fa;
+    box-shadow: inset 0 -1px 0 #dee2e6;
+}
+
+.refutar-table-wrapper .sticky-search-row {
+    top: 0;
+}
+
+.refutar-table-wrapper .data-table thead {
+    top: var(--refutar-sticky-search-height, 56px);
+}
+
 .data-table {
     width: 100%;
     border-collapse: collapse;
@@ -290,6 +365,16 @@ body {
 
 .data-table td.actions {
     white-space: nowrap;
+}
+
+.argumento-toggle-link {
+    color: #38bdf8 !important;
+    font-weight: 600;
+    text-decoration: underline;
+}
+
+.argumento-toggle-link:hover {
+    color: #7dd3fc !important;
 }
 
 /* Loading spinner */

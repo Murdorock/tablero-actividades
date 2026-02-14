@@ -18,14 +18,17 @@
                 <button class="btn btn-primary" onclick="openCreateModal()">➕ Nuevo</button>
                 <button class="btn btn-secondary" onclick="loadData()">🔄 Actualizar</button>
                 <button class="btn btn-success" onclick="descargarPlantillaExcel()">📋 Plantilla Excel</button>
-                <button class="btn btn-info" onclick="abrirCargaCSV()" style="background: #17a2b8; color: white;">📁 Cargar CSV</button>
-                <button class="btn btn-warning" onclick="exportarExcel()" style="background: #28a745; color: white;">📊 Exportar Excel</button>
+                <button class="btn btn-info" onclick="abrirCargaCSV()" style="background: #17a2b8; color: white;">📁 Cargar</button>
+                <button class="btn btn-warning" onclick="exportarExcel()" style="background: #28a745; color: white;">📊 Exportar</button>
                 <button class="btn btn-danger" onclick="eliminarTodosLosDatos()" style="background: #dc3545; color: white;">🗑️ Eliminar Todo</button>
             </div>
         </div>
-        <div class="data-table-wrapper">
-            <div style="margin-bottom:1rem;">
-                <input type="text" id="searchInput" placeholder="🔍 Filtrar..." style="width: 300px; padding: 0.5rem; border-radius: 0.25rem; border: 1px solid #ccc;" oninput="window.filterTable && window.filterTable()">
+        <div class="data-table-wrapper inconsistencias-table-wrapper">
+            <div class="sticky-search-row" style="margin-bottom:0;">
+                <div class="inconsistencias-filter-grid">
+                    <input type="text" id="searchInput" placeholder="🔍 Filtrar..." style="width: 300px; padding: 0.5rem; border-radius: 0.25rem; border: 1px solid #ccc;" oninput="window.filterTable && window.filterTable()">
+                    <div id="ciclosInfo" class="ciclos-info-field">Ciclos: 0</div>
+                </div>
             </div>
             <div id="loadingIndicator" class="loading"><div class="spinner"></div><p>Cargando...</p></div>
             <div id="tableContainer"></div>

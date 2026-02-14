@@ -18,15 +18,15 @@
             <div class="table-actions">
                 <button class="btn btn-primary" onclick="openCreateModal()">➕ Nuevo</button>
                 <button class="btn btn-secondary" onclick="loadData()">🔄 Actualizar</button>
-                <button class="btn btn-success" onclick="exportToExcel()">📊 Exportar Excel</button>
-                <button class="btn btn-info" onclick="downloadTemplate()">📄 Descargar Plantilla</button>
-                <button class="btn btn-warning" onclick="openPasteModal()">📋 Pegar Datos CSV</button>
+                <button class="btn btn-success" onclick="exportToExcel()">📊 Exportar</button>
+                <button class="btn btn-info" onclick="downloadTemplate()">📄 Plantilla</button>
+                <button class="btn btn-warning" onclick="openPasteModal()">📋 Cargar</button>
                 <button class="btn btn-danger" onclick="deleteAllData()">🗑️ Eliminar Todo</button>
                 <button class="btn btn-dark" onclick="openStatsModal()">📈 Estadísticas</button>
             </div>
         </div>
-        <div class="data-table-wrapper">
-            <div style="margin-bottom:1rem;">
+        <div class="data-table-wrapper refutar-table-wrapper">
+            <div class="sticky-search-row" style="margin-bottom:0;">
                 <input type="text" id="searchInput" placeholder="🔍 Buscar..." style="width: 300px; padding: 0.5rem; border-radius: 0.25rem; border: 1px solid #ccc;" oninput="filterTable()">
             </div>
             <div id="loadingIndicator" class="loading"><div class="spinner"></div><p>Cargando...</p></div>
@@ -59,21 +59,81 @@
     <script>
                 // Variables para datos y filtro
                 let allData = [];
+                let quickViewData = [];
                 let filteredData = [];
+                let allDataLoaded = false;
+                let allDataPromise = null;
+
+                function hasRefutarSiNo(row) {
+                    const valorRaw = (row.refutar ?? row.REFUTAR ?? '').toString().trim();
+                    const valor = valorRaw
+                        .normalize('NFD')
+                        .replace(/[\u0300-\u036f]/g, '')
+                        .toUpperCase()
+                        .replace(/\s+/g, '');
+                    return valor === 'SI' || valor === 'NO';
+                }
+
+                async function ensureAllDataLoaded(showLoading = false) {
+                    if (allDataLoaded) return allData;
+                    if (allDataPromise) return allDataPromise;
+
+                    const loadingIndicator = document.getElementById('loadingIndicator');
+                    if (showLoading && loadingIndicator) loadingIndicator.style.display = 'block';
+
+                    allDataPromise = (async () => {
+                        const { data, error } = await supabase
+                            .from(TABLE_NAME)
+                            .select('*');
+
+                        if (error) throw error;
+
+                        allData = data || [];
+                        allDataLoaded = true;
+                        return allData;
+                    })();
+
+                    try {
+                        return await allDataPromise;
+                    } finally {
+                        if (showLoading && loadingIndicator) loadingIndicator.style.display = 'none';
+                        allDataPromise = null;
+                    }
+                }
+
+                function updateRefutarStickyOffset() {
+                    const wrapper = document.querySelector('.refutar-table-wrapper');
+                    if (!wrapper) return;
+                    const searchRow = wrapper.querySelector('.sticky-search-row');
+                    const searchHeight = searchRow ? searchRow.offsetHeight : 56;
+                    wrapper.style.setProperty('--refutar-sticky-search-height', `${searchHeight}px`);
+                }
 
                 // Filtro de búsqueda
-                function filterTable() {
+                async function filterTable() {
                     const search = document.getElementById('searchInput').value.toLowerCase();
-                    filteredData = allData.filter(row => {
-                        return Object.values(row).some(val => (val || '').toString().toLowerCase().includes(search));
-                    });
-                    renderTable(filteredData);
+
+                    if (!search) {
+                        filteredData = quickViewData;
+                        renderTable(filteredData);
+                        return;
+                    }
+
+                    try {
+                        const sourceData = await ensureAllDataLoaded(true);
+                        filteredData = sourceData.filter(row => {
+                            return Object.values(row).some(val => (val || '').toString().toLowerCase().includes(search));
+                        });
+                        renderTable(filteredData);
+                    } catch (error) {
+                        alert('Error al filtrar datos: ' + error.message);
+                    }
                 }
 
                 // Modal de estadísticas
                 function openStatsModal() {
-                    const total = allData.length;
-                    const refutados = allData.filter(row => row.evidencia1 && row.evidencia1.trim() !== '').length;
+                    const total = (allDataLoaded ? allData : quickViewData).length;
+                    const refutados = (allDataLoaded ? allData : quickViewData).filter(row => row.evidencia1 && row.evidencia1.trim() !== '').length;
                     document.getElementById('statsContent').innerHTML = `
                         <p><strong>Total errores cargados:</strong> ${total}</p>
                         <p><strong>Total errores refutados:</strong> ${refutados}</p>
@@ -101,29 +161,89 @@
                         container.innerHTML = '<p>No hay datos para mostrar.</p>';
                         return;
                     }
-                    // Definir columnas a mostrar y ordenarlas
-                    let cols = Object.keys(data[0]).filter(c => c !== 'id');
-                    // Mover 'lector' al inicio si existe
-                    if (cols.includes('lector')) {
-                        cols = ['lector', ...cols.filter(c => c !== 'lector')];
-                    }
-                    let html = '<table class="data-table"><thead><tr>' + cols.map(c => `<th>${c.toUpperCase()}</th>`).join('') + '</tr></thead><tbody>';
+
+                    const dataKeys = Object.keys(data[0] || {});
+                    const normalize = (txt) => (txt || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                    const keyByNormalized = new Map(dataKeys.map(k => [normalize(k), k]));
+
+                    const requestedColumns = [
+                        { header: 'LECTOR', aliases: ['lector'] },
+                        { header: 'DIRECCION', aliases: ['direccion'] },
+                        { header: 'INSTALACION', aliases: ['instalacion'] },
+                        { header: 'CONSUMO', aliases: ['consumo', 'tipo_consumo'] },
+                        { header: 'ERROR', aliases: ['error'] },
+                        { header: 'REFUTAR', aliases: ['refutar'] },
+                        { header: 'ARGUMENTO', aliases: ['argumento'] },
+                        { header: 'EVIDENCIA1', aliases: ['evidencia1'] },
+                        { header: 'EVIDENCIA2', aliases: ['evidencia2'] },
+                        { header: 'PDF', aliases: ['pdf'] },
+                        { header: 'VIDEO', aliases: ['video'] }
+                    ];
+
+                    const cols = requestedColumns
+                        .map(col => {
+                            const key = col.aliases
+                                .map(alias => keyByNormalized.get(normalize(alias)))
+                                .find(Boolean);
+                            return key ? { key, header: col.header } : null;
+                        })
+                        .filter(Boolean);
+
+                    const linkCols = new Set(['evidencia1', 'evidencia2', 'pdf', 'video']);
+
+                    const escapeHtml = (text) => String(text)
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#39;');
+
+                    let html = '<table class="data-table"><thead><tr>' + cols.map(c => `<th>${c.header}</th>`).join('') + '</tr></thead><tbody>';
                     data.forEach(row => {
-                        html += '<tr>' + cols.map(c => {
-                            if (c === 'evidencia1' || c === 'evidencia2') {
-                                const val = row[c] || '';
+                        html += '<tr>' + cols.map(col => {
+                            const key = col.key;
+                            const val = row[key] || '';
+                            if (normalize(key) === 'argumento') {
+                                const fullText = String(val || '');
+                                if (!fullText) return '<td>-</td>';
+                                const shortText = fullText.slice(0, 4);
+                                if (fullText.length <= 4) return `<td>${escapeHtml(fullText)}</td>`;
+                                const fullEncoded = encodeURIComponent(fullText);
+                                const shortEncoded = encodeURIComponent(shortText);
+                                return `<td><span data-expanded="false">${escapeHtml(shortText)}</span> <a href="#" class="argumento-toggle-link" onclick="toggleArgumento(event, this, '${fullEncoded}', '${shortEncoded}')">Ver más..</a></td>`;
+                            }
+                            if (linkCols.has(normalize(key))) {
                                 if (val) {
-                                    return `<td><a href="${val}" target="_blank" rel="noopener noreferrer">Ver</a></td>`;
+                                    return `<td><a href="${val}" class="argumento-toggle-link" target="_blank" rel="noopener noreferrer">Ver</a></td>`;
                                 } else {
                                     return '<td>-</td>';
                                 }
                             }
-                            return `<td>${row[c] || ''}</td>`;
+                            return `<td>${val || ''}</td>`;
                         }).join('') + '</tr>';
                     });
                     html += '</tbody></table>';
                     container.innerHTML = html;
+                    updateRefutarStickyOffset();
                 }
+
+                window.toggleArgumento = function(event, linkElement, fullEncoded, shortEncoded) {
+                    event.preventDefault();
+                    const previewElement = linkElement.previousElementSibling;
+                    if (!previewElement) return;
+                    const expanded = previewElement.dataset.expanded === 'true';
+                    if (expanded) {
+                        previewElement.textContent = decodeURIComponent(shortEncoded);
+                        previewElement.dataset.expanded = 'false';
+                        linkElement.textContent = 'Ver más..';
+                    } else {
+                        previewElement.textContent = decodeURIComponent(fullEncoded);
+                        previewElement.dataset.expanded = 'true';
+                        linkElement.textContent = 'Ver menos';
+                    }
+                }
+
+                window.addEventListener('resize', updateRefutarStickyOffset);
 
         // Modal para mostrar evidencia
         function showEvidenciaModal(col, val) {
@@ -148,17 +268,36 @@
                 async function loadData() {
                     const loadingIndicator = document.getElementById('loadingIndicator');
                     loadingIndicator.style.display = 'block';
-                    const { data, error } = await supabase
-                        .from(TABLE_NAME)
-                        .select('*');
-                    loadingIndicator.style.display = 'none';
-                    if (error) {
+                    try {
+                        const { data, error } = await supabase
+                            .from(TABLE_NAME)
+                            .select('*')
+                            .not('refutar', 'is', null)
+                            .neq('refutar', '');
+
+                        if (error) {
+                            throw error;
+                        }
+
+                        quickViewData = (data || []).filter(hasRefutarSiNo);
+
+                        if (quickViewData.length === 0) {
+                            const fullDataset = await ensureAllDataLoaded(false);
+                            quickViewData = (fullDataset || []).filter(hasRefutarSiNo);
+                        }
+
+                        filteredData = quickViewData;
+                        renderTable(filteredData);
+                    } catch (error) {
                         alert('Error al cargar los datos: ' + error.message);
                         return;
+                    } finally {
+                        loadingIndicator.style.display = 'none';
                     }
-                    allData = data || [];
-                    filteredData = allData;
-                    renderTable(filteredData);
+
+                    ensureAllDataLoaded(false).catch((error) => {
+                        console.error('Error cargando dataset completo en segundo plano:', error);
+                    });
                 }
         async function exportToExcel() {
             try {
