@@ -537,6 +537,35 @@ body {
     justify-content: flex-end;
 }
 
+/* Contraste reforzado para modales CSV (importar/actualizar) */
+#importModal .form-group label,
+#updateModal .form-group label {
+    color: #f1f5f9 !important;
+}
+
+#importModal .csv-modal-help,
+#updateModal .csv-modal-help {
+    color: #e2e8f0 !important;
+    font-weight: 500;
+}
+
+#importModal .csv-modal-help strong,
+#updateModal .csv-modal-help strong {
+    color: #f8fafc;
+}
+
+#importModal .csv-modal-progress-title,
+#updateModal .csv-modal-progress-title {
+    color: #f1f5f9 !important;
+    font-weight: 700;
+}
+
+#importModal .csv-modal-progress-text,
+#updateModal .csv-modal-progress-text {
+    color: #e2e8f0 !important;
+    font-weight: 500;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .sidebar {

@@ -93,18 +93,20 @@
                 <h3>📤 Cargar datos desde CSV</h3>
             </div>
             <div style="padding: 20px;">
-                <p style="margin-bottom: 15px; color: #555;">
+                <p class="csv-modal-help" style="margin-bottom: 15px; color: #cbd5e1;">
                     Selecciona un archivo CSV con los datos a importar (inserción de nuevos registros).
                 </p>
                 <div class="form-group">
-                    <label for="csvFile">Archivo CSV</label>
+                    <label for="csvFile" style="color: #e2e8f0; font-weight: 600;">Archivo CSV</label>
                     <input type="file" id="csvFile" accept=".csv" style="padding: 5px;">
                 </div>
-                <div id="importPreview" style="margin-top: 15px; display: none;">
-                    <h4 style="color: #2c3e50; margin-bottom: 10px;">Vista previa:</h4>
-                    <div id="previewContent" style="max-height: 300px; overflow: auto; background: #f8f9fa; padding: 10px; border-radius: 4px;"></div>
-                    <p style="margin-top: 10px; font-size: 14px; color: #7f8c8d;">
-                        <strong id="previewCount">0</strong> registros encontrados
+                <div id="importProgressSection" style="margin-top: 15px; display: none;">
+                    <h4 class="csv-modal-progress-title" style="color: #e2e8f0; margin-bottom: 10px;">Progreso de carga</h4>
+                    <div style="width: 100%; background: #e9ecef; border-radius: 999px; overflow: hidden; height: 14px;">
+                        <div id="importProgressBar" style="width: 0%; height: 100%; background: #28a745; transition: width 0.2s ease;"></div>
+                    </div>
+                    <p id="importProgressText" class="csv-modal-progress-text" style="margin-top: 10px; font-size: 14px; color: #cbd5e1;">
+                        Archivo listo para importar
                     </p>
                 </div>
             </div>
@@ -122,19 +124,19 @@
                 <h3>🔄 Actualizar datos desde CSV</h3>
             </div>
             <div style="padding: 20px;">
-                <p style="margin-bottom: 15px; color: #555;">
+                <p class="csv-modal-help" style="margin-bottom: 15px; color: #cbd5e1;">
                     Selecciona un archivo CSV con los datos a actualizar (usa <strong>correria</strong> como referencia).
                 </p>
                 <div class="form-group">
-                    <label for="csvFileUpdate">Archivo CSV</label>
+                    <label for="csvFileUpdate" style="color: #e2e8f0; font-weight: 600;">Archivo CSV</label>
                     <input type="file" id="csvFileUpdate" accept=".csv" style="padding: 5px;">
                 </div>
                 <div id="updateProgressSection" style="margin-top: 15px; display: none;">
-                    <h4 style="color: #2c3e50; margin-bottom: 10px;">Progreso de actualización</h4>
+                    <h4 class="csv-modal-progress-title" style="color: #e2e8f0; margin-bottom: 10px;">Progreso de actualización</h4>
                     <div style="width: 100%; background: #e9ecef; border-radius: 999px; overflow: hidden; height: 14px;">
                         <div id="updateProgressBar" style="width: 0%; height: 100%; background: #28a745; transition: width 0.2s ease;"></div>
                     </div>
-                    <p id="updateProgressText" style="margin-top: 10px; font-size: 14px; color: #7f8c8d;">
+                    <p id="updateProgressText" class="csv-modal-progress-text" style="margin-top: 10px; font-size: 14px; color: #cbd5e1;">
                         Archivo listo para actualizar
                     </p>
                 </div>

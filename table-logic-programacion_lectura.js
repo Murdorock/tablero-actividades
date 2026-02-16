@@ -245,13 +245,38 @@ let updateDataArray = [];
 function openImportModal() {
     document.getElementById('importModal').classList.add('show');
     document.getElementById('csvFile').value = '';
-    document.getElementById('importPreview').style.display = 'none';
+    resetImportProgress();
     document.getElementById('btnImport').disabled = true;
     importedData = [];
 }
 
 function closeImportModal() {
     document.getElementById('importModal').classList.remove('show');
+}
+
+function resetImportProgress() {
+    const section = document.getElementById('importProgressSection');
+    const bar = document.getElementById('importProgressBar');
+    const text = document.getElementById('importProgressText');
+
+    if (section) section.style.display = 'none';
+    if (bar) bar.style.width = '0%';
+    if (text) text.textContent = 'Archivo listo para importar';
+}
+
+function setImportProgress(processed, total) {
+    const section = document.getElementById('importProgressSection');
+    const bar = document.getElementById('importProgressBar');
+    const text = document.getElementById('importProgressText');
+
+    if (!section || !bar || !text) return;
+
+    section.style.display = 'block';
+
+    const safeTotal = total > 0 ? total : 1;
+    const percent = Math.min(100, Math.round((processed / safeTotal) * 100));
+    bar.style.width = `${percent}%`;
+    text.textContent = `${processed}/${total} registros procesados`;
 }
 
 function openUpdateModal() {
@@ -291,39 +316,6 @@ function setUpdateProgress(processed, total, updated = 0, notFound = 0) {
     text.textContent = `${processed}/${total} procesados · ${updated} actualizados · ${notFound} no encontrados`;
 }
 
-function showPreview(data, contentId, countId) {
-    const previewContent = document.getElementById(contentId);
-    const previewCount = document.getElementById(countId);
-    
-    previewCount.textContent = data.length;
-    
-    // Mostrar primeros 5 registros
-    const preview = data.slice(0, 5);
-    let html = '<table style="width: 100%; border-collapse: collapse; font-size: 12px;"><thead><tr>';
-    
-    const columns = Object.keys(preview[0]);
-    columns.forEach(col => {
-        html += `<th style="border: 1px solid #ddd; padding: 8px; background: #34495e; color: white;">${col}</th>`;
-    });
-    html += '</tr></thead><tbody>';
-    
-    preview.forEach(row => {
-        html += '<tr>';
-        columns.forEach(col => {
-            html += `<td style="border: 1px solid #ddd; padding: 8px;">${row[col] || '-'}</td>`;
-        });
-        html += '</tr>';
-    });
-    html += '</tbody></table>';
-    
-    if (data.length > 5) {
-        html += `<p style="margin-top: 10px; font-style: italic; color: #7f8c8d;">... y ${data.length - 5} registros más</p>`;
-    }
-    
-    previewContent.innerHTML = html;
-    previewContent.parentElement.style.display = 'block';
-}
-
 async function importData() {
     if (importedData.length === 0) {
         showMessage('No hay datos para importar', 'error');
@@ -337,6 +329,7 @@ async function importData() {
     const btnImport = document.getElementById('btnImport');
     btnImport.disabled = true;
     btnImport.textContent = 'Importando...';
+    setImportProgress(0, importedData.length);
     
     try {
         // Insertar datos en lotes de 100 registros
@@ -353,6 +346,7 @@ async function importData() {
             
             imported += batch.length;
             btnImport.textContent = `Importando... ${imported}/${importedData.length}`;
+            setImportProgress(imported, importedData.length);
         }
         
         showMessage(`✓ ${importedData.length} registros importados exitosamente`, 'success');
@@ -498,6 +492,8 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('csvFile')?.addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
+
+        resetImportProgress();
         
         Papa.parse(file, {
             header: true,
@@ -509,7 +505,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 importedData = results.data;
-                showPreview(results.data, 'previewContent', 'previewCount');
+                const importProgressSection = document.getElementById('importProgressSection');
+                const importProgressBar = document.getElementById('importProgressBar');
+                const importProgressText = document.getElementById('importProgressText');
+
+                if (importProgressSection) importProgressSection.style.display = 'block';
+                if (importProgressBar) importProgressBar.style.width = '0%';
+                if (importProgressText) importProgressText.textContent = `${importedData.length} registros listos para importar`;
                 document.getElementById('btnImport').disabled = false;
             },
             error: function(error) {
