@@ -46,12 +46,7 @@ async function loadData() {
 
         buildCalendarIndex();
 
-        if (availableMonths.length === 0) {
-            tableContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: #7f8c8d;">No hay fechas válidas para construir el calendario</div>';
-            return;
-        }
-
-        currentMonthKey = getInitialMonth(availableMonths);
+        currentMonthKey = getCurrentMonthKey();
         renderCalendar();
 
         if (shell) shell.style.display = 'block';
@@ -181,15 +176,7 @@ function getInitialMonth(months) {
 }
 
 function changeMonth(direction) {
-    if (!availableMonths.length) return;
-    const currentIndex = availableMonths.indexOf(currentMonthKey);
-    if (currentIndex === -1) return;
-
-    const nextIndex = currentIndex + direction;
-    if (nextIndex < 0 || nextIndex >= availableMonths.length) return;
-
-    currentMonthKey = availableMonths[nextIndex];
-    renderCalendar();
+    return;
 }
 
 function renderCalendar() {
@@ -266,11 +253,18 @@ function renderCalendar() {
 
     grid.innerHTML = html;
 
-    const monthIndex = availableMonths.indexOf(currentMonthKey);
     const prevBtn = document.getElementById('btnPrevMonth');
     const nextBtn = document.getElementById('btnNextMonth');
-    if (prevBtn) prevBtn.disabled = monthIndex <= 0;
-    if (nextBtn) nextBtn.disabled = monthIndex >= availableMonths.length - 1;
+    if (prevBtn) {
+        prevBtn.disabled = true;
+        prevBtn.style.opacity = '0.45';
+        prevBtn.style.cursor = 'not-allowed';
+    }
+    if (nextBtn) {
+        nextBtn.disabled = true;
+        nextBtn.style.opacity = '0.45';
+        nextBtn.style.cursor = 'not-allowed';
+    }
 
     if (meta) {
         meta.textContent = `Días con lectura: ${daysWithCycles} | Ciclos registrados: ${totalCyclesInMonth} | Fecha: ${dateColumn} | Ciclo: ${cycleColumn}`;
@@ -359,4 +353,9 @@ function calculateEasterSunday(year) {
     const month = Math.floor((h + l - 7 * m + 114) / 31);
     const day = ((h + l - 7 * m + 114) % 31) + 1;
     return new Date(year, month - 1, day);
+}
+
+function getCurrentMonthKey() {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
 }
