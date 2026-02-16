@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendario Lectura - Sistema</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script>
+        const TABLE_NAME = 'calendario_ciclos_unpivoted';
+        const TABLE_TITLE = '🗓️ Calendario Lectura';
+    </script>
+    <style>
+        .calendar-shell {
+            max-width: 980px;
+            margin: 0 auto;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 14px 34px rgba(0, 0, 0, 0.25);
+            border: 1px solid #d1d5db;
+            background: #f8fafc;
+        }
+
+        .calendar-top {
+            background: #dc2626;
+            color: #fff;
+            padding: 14px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .calendar-month {
+            font-size: 1.25rem;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .calendar-year {
+            font-size: 2rem;
+            font-weight: 900;
+            line-height: 1;
+        }
+
+        .calendar-nav {
+            border: 0;
+            color: #fff;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 700;
+        }
+
+        .calendar-nav:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .calendar-weekdays,
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+        }
+
+        .calendar-weekdays div {
+            text-align: center;
+            font-size: 0.75rem;
+            font-weight: 800;
+            color: #1e3a8a;
+            padding: 10px 6px;
+            border-bottom: 1px solid #e2e8f0;
+            background: #f1f5f9;
+            text-transform: uppercase;
+        }
+
+        .calendar-day {
+            min-height: 110px;
+            border-right: 1px solid #e2e8f0;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 8px;
+            background: #ffffff;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .calendar-day:nth-child(7n) {
+            border-right: 0;
+        }
+
+        .calendar-day.empty {
+            background: #f8fafc;
+        }
+
+        .day-number {
+            font-size: 0.9rem;
+            font-weight: 800;
+            color: #0f172a;
+        }
+
+        .day-number.today {
+            color: #dc2626;
+        }
+
+        .cycle-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        .cycle-chip {
+            background: #dbeafe;
+            color: #1e3a8a;
+            border: 1px solid #93c5fd;
+            border-radius: 999px;
+            padding: 2px 8px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .calendar-meta {
+            margin-top: 12px;
+            font-size: 0.9rem;
+            color: #475569;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+            .calendar-day {
+                min-height: 88px;
+                padding: 6px;
+            }
+
+            .cycle-chip {
+                font-size: 0.66rem;
+                padding: 2px 6px;
+            }
+
+            .calendar-year {
+                font-size: 1.6rem;
+            }
+        }
+    </style>
+    <script src="table-logic-calendario_lectura.js"></script>
+</head>
+<body>
+    <div class="table-container">
+        <div class="table-header">
+            <h2>🗓️ Calendario Lectura</h2>
+            <div class="table-actions">
+                <button class="btn btn-secondary" onclick="loadData()">🔄 Refrescar</button>
+            </div>
+        </div>
+
+        <div class="data-table-wrapper">
+            <div id="loadingIndicator" class="loading"><div class="spinner"></div><p>Cargando...</p></div>
+            <div id="tableContainer">
+                <div class="calendar-shell" style="display:none;" id="calendarShell">
+                    <div class="calendar-top">
+                        <button class="calendar-nav" id="btnPrevMonth">◀</button>
+                        <div style="text-align:center;">
+                            <div class="calendar-month" id="monthLabel">---</div>
+                            <div class="calendar-year" id="yearLabel">----</div>
+                        </div>
+                        <button class="calendar-nav" id="btnNextMonth">▶</button>
+                    </div>
+
+                    <div class="calendar-weekdays">
+                        <div>Dom</div>
+                        <div>Lun</div>
+                        <div>Mar</div>
+                        <div>Mié</div>
+                        <div>Jue</div>
+                        <div>Vie</div>
+                        <div>Sáb</div>
+                    </div>
+
+                    <div class="calendar-grid" id="calendarGrid"></div>
+                </div>
+                <div class="calendar-meta" id="calendarMeta"></div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
