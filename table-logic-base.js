@@ -2,6 +2,29 @@
 let tableColumns = [];
 let currentData = [];
 
+const HIDDEN_COLUMNS = new Set([
+    'inicio_jornada',
+    'llegada_tarde',
+    'novedades',
+    'carga_ciclo',
+    'obs_general',
+    'estado',
+    'dir_cierre',
+    'cumple_jornada',
+    'indicador',
+    'adicional',
+    'peso',
+    'dir_llegada',
+    'evidencia',
+    'gps_qth'
+]);
+
+function isHiddenColumn(columnName) {
+    if (!columnName) return false;
+    const normalized = String(columnName).trim().toLowerCase();
+    return HIDDEN_COLUMNS.has(normalized);
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     loadData();
 });
@@ -26,7 +49,7 @@ async function loadData() {
         currentData = data || [];
         
         if (currentData.length > 0) {
-            tableColumns = Object.keys(currentData[0]);
+            tableColumns = Object.keys(currentData[0]).filter(col => !isHiddenColumn(col));
             populateFilterColumns();
             renderTable(currentData);
         } else {
