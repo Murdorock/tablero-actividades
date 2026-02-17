@@ -242,9 +242,135 @@ function closeModal() {
 let importedData = [];
 let updateDataArray = [];
 
+const ALLOWED_IMPORT_COLUMNS = [
+    'correria',
+    'nombre_correria',
+    'zona',
+    'supervisor',
+    'transporte',
+    'grupo_vehicular',
+    'calificativo',
+    'terreno',
+    'historico2',
+    'historico1',
+    'codigo',
+    'dias',
+    'ok',
+    'novedad',
+    'repite',
+    'totales',
+    'nombre_lector',
+    'telefono',
+    'realiza_zona',
+    'diferencia',
+    'funcionario',
+    'va_grupo'
+];
+
+const COLUMN_HEADER_MAP = {
+    'correria': 'correria',
+    'nombre_correria': 'nombre_correria',
+    'zona': 'zona',
+    'sup': 'supervisor',
+    'supervisor': 'supervisor',
+    'transporte': 'transporte',
+    'gv': 'grupo_vehicular',
+    'grupo_vehicular': 'grupo_vehicular',
+    'cali': 'calificativo',
+    'calificativo': 'calificativo',
+    'terr': 'terreno',
+    'terreno': 'terreno',
+    'hist2': 'historico2',
+    'historico2': 'historico2',
+    'hist1': 'historico1',
+    'historico1': 'historico1',
+    'codigo': 'codigo',
+    'dias': 'dias',
+    'ok': 'ok',
+    'nov': 'novedad',
+    'novedad': 'novedad',
+    'rep': 'repite',
+    'repite': 'repite',
+    'totales': 'totales',
+    'nombre_lector': 'nombre_lector',
+    'telefono': 'telefono',
+    'que_realiza_zona': 'realiza_zona',
+    'realiza_zona': 'realiza_zona',
+    'diferencia': 'diferencia',
+    'funcionario': 'funcionario',
+    'vagrupo': 'va_grupo',
+    'va_grupo': 'va_grupo'
+};
+
+function normalizeHeaderName(header) {
+    if (header === null || header === undefined) return '';
+    return String(header)
+        .trim()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[\r\n]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .toLowerCase();
+}
+
+function mapIncomingHeader(header) {
+    const normalized = normalizeHeaderName(header);
+    const snakeCase = normalized.replace(/\s+/g, '_');
+
+    const mapped = COLUMN_HEADER_MAP[snakeCase] || COLUMN_HEADER_MAP[normalized] || snakeCase;
+    return ALLOWED_IMPORT_COLUMNS.includes(mapped) ? mapped : null;
+}
+
+function transformImportedRows(rows) {
+    return (rows || []).map(row => {
+        const transformed = {};
+
+        Object.keys(row || {}).forEach(originalKey => {
+            const mappedKey = mapIncomingHeader(originalKey);
+            if (!mappedKey) return;
+
+            let value = row[originalKey];
+            if (typeof value === 'string') {
+                value = value.trim();
+            }
+            if (value === '') {
+                value = null;
+            }
+
+            transformed[mappedKey] = value;
+        });
+
+        return transformed;
+    }).filter(row => Object.keys(row).length > 0);
+}
+
+function parseAndPrepareRows(rawInput, sourceLabel = 'entrada') {
+    const parseResult = Papa.parse(rawInput, {
+        header: true,
+        skipEmptyLines: true,
+        delimitersToGuess: [',', ';', '\t', '|']
+    });
+
+    if (parseResult.errors && parseResult.errors.length > 0) {
+        const realErrors = parseResult.errors.filter(err => err.code !== 'UndetectableDelimiter');
+        if (realErrors.length > 0) {
+            throw new Error(`Error al leer ${sourceLabel}: ${realErrors[0].message}`);
+        }
+    }
+
+    const transformedRows = transformImportedRows(parseResult.data);
+    if (transformedRows.length === 0) {
+        throw new Error(`No se encontraron registros válidos en ${sourceLabel}`);
+    }
+
+    return transformedRows;
+}
+
 function openImportModal() {
     document.getElementById('importModal').classList.add('show');
     document.getElementById('csvFile').value = '';
+    const pastedData = document.getElementById('pastedData');
+    if (pastedData) pastedData.value = '';
     resetImportProgress();
     document.getElementById('btnImport').disabled = true;
     importedData = [];
@@ -282,6 +408,8 @@ function setImportProgress(processed, total) {
 function openUpdateModal() {
     document.getElementById('updateModal').classList.add('show');
     document.getElementById('csvFileUpdate').value = '';
+    const pastedDataUpdate = document.getElementById('pastedDataUpdate');
+    if (pastedDataUpdate) pastedDataUpdate.value = '';
     resetUpdateProgress();
     document.getElementById('btnUpdate').disabled = true;
     updateDataArray = [];
@@ -314,6 +442,66 @@ function setUpdateProgress(processed, total, updated = 0, notFound = 0) {
     const percent = Math.min(100, Math.round((processed / safeTotal) * 100));
     bar.style.width = `${percent}%`;
     text.textContent = `${processed}/${total} procesados · ${updated} actualizados · ${notFound} no encontrados`;
+}
+
+function parsePastedImportData() {
+    const pastedData = document.getElementById('pastedData')?.value || '';
+    if (!pastedData.trim()) {
+        showMessage('Pega primero la información para procesarla', 'error');
+        return;
+    }
+
+    try {
+        importedData = parseAndPrepareRows(pastedData, 'el texto pegado');
+
+        const importProgressSection = document.getElementById('importProgressSection');
+        const importProgressBar = document.getElementById('importProgressBar');
+        const importProgressText = document.getElementById('importProgressText');
+
+        if (importProgressSection) importProgressSection.style.display = 'block';
+        if (importProgressBar) importProgressBar.style.width = '0%';
+        if (importProgressText) importProgressText.textContent = `${importedData.length} registros listos para importar`;
+        document.getElementById('btnImport').disabled = false;
+
+        showMessage('Texto procesado correctamente. Puedes importar ahora.', 'success');
+    } catch (error) {
+        showMessage(error.message || 'Error al procesar el texto pegado', 'error');
+        document.getElementById('btnImport').disabled = true;
+    }
+}
+
+function parsePastedUpdateData() {
+    const pastedData = document.getElementById('pastedDataUpdate')?.value || '';
+    if (!pastedData.trim()) {
+        showMessage('Pega primero la información para procesarla', 'error');
+        return;
+    }
+
+    try {
+        const transformedRows = parseAndPrepareRows(pastedData, 'el texto pegado');
+
+        if (!transformedRows[0]?.correria) {
+            showMessage('El texto debe contener la columna "correria" para actualizar registros', 'error');
+            document.getElementById('btnUpdate').disabled = true;
+            return;
+        }
+
+        updateDataArray = transformedRows;
+
+        const progressSection = document.getElementById('updateProgressSection');
+        const progressBar = document.getElementById('updateProgressBar');
+        const progressText = document.getElementById('updateProgressText');
+
+        if (progressSection) progressSection.style.display = 'block';
+        if (progressBar) progressBar.style.width = '0%';
+        if (progressText) progressText.textContent = `${updateDataArray.length} registros listos para actualizar`;
+        document.getElementById('btnUpdate').disabled = false;
+
+        showMessage('Texto procesado correctamente. Puedes actualizar ahora.', 'success');
+    } catch (error) {
+        showMessage(error.message || 'Error al procesar el texto pegado', 'error');
+        document.getElementById('btnUpdate').disabled = true;
+    }
 }
 
 async function importData() {
@@ -499,12 +687,17 @@ document.addEventListener('DOMContentLoaded', function() {
             header: true,
             skipEmptyLines: true,
             complete: function(results) {
-                if (results.data.length === 0) {
+                if (!results.data || results.data.length === 0) {
                     showMessage('El archivo está vacío', 'error');
                     return;
                 }
-                
-                importedData = results.data;
+
+                importedData = transformImportedRows(results.data);
+                if (importedData.length === 0) {
+                    showMessage('No se encontraron registros válidos para importar', 'error');
+                    return;
+                }
+
                 const importProgressSection = document.getElementById('importProgressSection');
                 const importProgressBar = document.getElementById('importProgressBar');
                 const importProgressText = document.getElementById('importProgressText');
@@ -529,12 +722,23 @@ document.addEventListener('DOMContentLoaded', function() {
             header: true,
             skipEmptyLines: true,
             complete: function(results) {
-                if (results.data.length === 0) {
+                if (!results.data || results.data.length === 0) {
                     showMessage('El archivo está vacío', 'error');
                     return;
                 }
-                
-                updateDataArray = results.data;
+
+                const transformedRows = transformImportedRows(results.data);
+                if (transformedRows.length === 0) {
+                    showMessage('No se encontraron registros válidos para actualizar', 'error');
+                    return;
+                }
+
+                if (!transformedRows[0]?.correria) {
+                    showMessage('El archivo debe contener la columna "correria" para actualizar registros', 'error');
+                    return;
+                }
+
+                updateDataArray = transformedRows;
                 const progressSection = document.getElementById('updateProgressSection');
                 const progressBar = document.getElementById('updateProgressBar');
                 const progressText = document.getElementById('updateProgressText');

@@ -98,11 +98,16 @@
             </div>
             <div style="padding: 20px;">
                 <p style="margin-bottom: 15px; color: #cbd5e1;">
-                    Selecciona un archivo CSV con los datos a importar (inserción de nuevos registros).
+                    Selecciona un archivo CSV o pega directamente datos copiados desde Excel (inserción de nuevos registros).
                 </p>
                 <div class="form-group">
                     <label for="csvFile">Archivo CSV</label>
                     <input type="file" id="csvFile" accept=".csv" style="padding: 5px;">
+                </div>
+                <div class="form-group" style="margin-top: 15px;">
+                    <label for="pastedData">Pegado directo (Excel/CSV)</label>
+                    <textarea id="pastedData" rows="8" placeholder="Pega aquí la tabla con encabezados como CODIGO, NOMBRE, CEDULA, NOVEDAD..." style="width: 100%; padding: 10px; border: 1px solid #374151; border-radius: 6px; background: #0f172a; color: #f1f5f9; resize: vertical;"></textarea>
+                    <button type="button" class="btn btn-info" onclick="parsePastedImportData()" style="margin-top: 10px;">📋 Procesar Pegado</button>
                 </div>
                 <div id="importProgressSection" style="margin-top: 15px; display: none;">
                     <h4 style="color: #f1f5f9; margin-bottom: 10px;">Progreso de importación</h4>
@@ -129,11 +134,16 @@
             </div>
             <div style="padding: 20px;">
                 <p style="margin-bottom: 15px; color: #cbd5e1;">
-                    Selecciona un archivo CSV con los datos a actualizar (usa <strong>id_lector</strong> como referencia).
+                    Selecciona un archivo CSV o pega directamente datos copiados desde Excel (usa <strong>id_lector</strong> como referencia).
                 </p>
                 <div class="form-group">
                     <label for="csvFileUpdate">Archivo CSV</label>
                     <input type="file" id="csvFileUpdate" accept=".csv" style="padding: 5px;">
+                </div>
+                <div class="form-group" style="margin-top: 15px;">
+                    <label for="pastedDataUpdate">Pegado directo (Excel/CSV)</label>
+                    <textarea id="pastedDataUpdate" rows="8" placeholder="Pega aquí la tabla con encabezados como CODIGO, NOMBRE, CEDULA, NOVEDAD..." style="width: 100%; padding: 10px; border: 1px solid #374151; border-radius: 6px; background: #0f172a; color: #f1f5f9; resize: vertical;"></textarea>
+                    <button type="button" class="btn btn-info" onclick="parsePastedUpdateData()" style="margin-top: 10px;">📋 Procesar Pegado</button>
                 </div>
                 <div id="updateProgressSection" style="margin-top: 15px; display: none;">
                     <h4 style="color: #f1f5f9; margin-bottom: 10px;">Progreso de actualización</h4>
