@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Usuarios - Sistema</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="table-logic-gestion_usuarios.js" defer></script>
+</head>
+<body>
+    <div class="table-container">
+        <div class="table-header">
+            <h2>👤 Gestión de Usuarios</h2>
+            <div class="table-actions">
+                <button id="btnAddUser" class="btn btn-primary">➕ Add user</button>
+                <button id="btnRefreshUsers" class="btn btn-secondary">🔄 Actualizar</button>
+            </div>
+        </div>
+
+        <div class="data-table-wrapper">
+            <div id="loadingIndicator" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>Cargando usuarios de Authentication...</p>
+            </div>
+            <div id="tableContainer"></div>
+        </div>
+    </div>
+
+    <div id="dataModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Create a new user</h3>
+            </div>
+            <form id="createUserForm">
+                <div class="form-group">
+                    <label for="newUserEmail">Email address</label>
+                    <input type="email" id="newUserEmail" required placeholder="user@ejemplo.com" autocomplete="off">
+                </div>
+
+                <div class="form-group">
+                    <label for="newUserPassword">User Password</label>
+                    <input type="password" id="newUserPassword" required minlength="6" placeholder="••••••••">
+                </div>
+
+                <div class="form-group">
+                    <label for="newUserNombreCompleto">Nombre completo</label>
+                    <input type="text" id="newUserNombreCompleto" required placeholder="Nombre y apellido" autocomplete="off">
+                </div>
+
+                <div class="form-group">
+                    <label for="newUserRol">Rol</label>
+                    <input type="text" id="newUserRol" required placeholder="ADMINISTRADOR / SUPERVISOR / ..." autocomplete="off">
+                </div>
+
+                <div class="form-group">
+                    <label for="newUserCodigoSupAux">Código sup/aux</label>
+                    <input type="text" id="newUserCodigoSupAux" required placeholder="Código interno" autocomplete="off">
+                </div>
+
+                <div class="form-group" style="display:flex; align-items:center; gap:8px;">
+                    <input type="checkbox" id="newUserAutoConfirm" checked style="width:auto;">
+                    <label for="newUserAutoConfirm" style="margin:0;">Auto Confirm User</label>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" id="btnCancelCreateUser" class="btn btn-secondary">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Create user</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

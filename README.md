@@ -197,6 +197,39 @@ SELECT * FROM pg_policies WHERE tablename = 'nombre_tabla';
 3. **Prueba las operaciones CRUD** en cada tabla
 4. **Personaliza según necesites** los estilos y funcionalidades
 
+## 🔐 Gestión de Usuarios (Authentication) segura
+
+El módulo `gestion_usuarios.html` usa la Edge Function `gestion-usuarios-admin` para **listar** y **crear** usuarios de Authentication sin exponer la `service_role` en frontend.
+
+### 1) Requisitos
+
+- Tener Supabase CLI instalado y autenticado.
+- Usuario logueado en el tablero con rol `ADMINISTRADOR` en la tabla `perfiles`.
+
+### 2) Variables de entorno
+
+En Supabase Cloud, las variables `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` ya vienen administradas por la plataforma para Edge Functions.
+
+No necesitas crearlas manualmente con `supabase secrets set`.
+
+### 3) Desplegar función
+
+```bash
+supabase functions deploy gestion-usuarios-admin
+```
+
+Archivo de función:
+
+- `supabase/functions/gestion-usuarios-admin/index.ts`
+
+### 4) Qué valida la función
+
+- JWT del usuario que invoca
+- Rol `ADMINISTRADOR` en `perfiles`
+- Acción solicitada (`list_users` / `create_user`)
+
+Si no pasa validación, responde `401/403`.
+
 ## 📚 Recursos
 
 - [Documentación de Supabase](https://supabase.com/docs)
