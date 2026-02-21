@@ -1,4 +1,8 @@
 // Configuración de Supabase
+// NOTA IMPORTANTE: La clave 'anonKey' es pública por diseño de Supabase.
+// Esta clave está diseñada para ser expuesta en aplicaciones frontend/cliente.
+// La seguridad real se maneja mediante Row Level Security (RLS) en la base de datos.
+// NUNCA exponer la clave 'service_role' que tiene privilegios de administrador.
 
 const SUPABASE_CONFIG = {
     url: 'https://txeuzsypnwesscganktp.supabase.co',
