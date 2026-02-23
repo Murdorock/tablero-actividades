@@ -17,7 +17,7 @@ const metricsLabels = {
     consulta: 'Consulta Retenidos Métricas'
 };
 
-const tableColumns = ['codigo_sup_aux', 'accion', 'criterio', 'valor', 'fecha_evento'];
+const tableColumns = ['codigo_sup_aux', 'accion', 'criterio', 'tipo_consumo', 'valor', 'fecha_evento'];
 
 document.addEventListener('DOMContentLoaded', function() {
     loadAllMetrics();

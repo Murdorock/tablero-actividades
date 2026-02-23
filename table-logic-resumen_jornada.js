@@ -403,10 +403,10 @@ async function exportarTablas() {
             console.log('⚠️ No hay datos de supervisores para exportar');
         }
         
-        // Generar nombre del archivo con fecha actual
+        // Generar nombre del archivo con fecha actual (YYYYMMDD)
         const fecha = new Date();
-        const fechaStr = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
-        const fileName = `Export_Tablas_${fechaStr}.xlsx`;
+        const fechaStr = `${fecha.getFullYear()}${String(fecha.getMonth() + 1).padStart(2, '0')}${String(fecha.getDate()).padStart(2, '0')}`;
+        const fileName = `Registro_Salida_INMEL_${fechaStr}.xlsx`;
         
         // Descargar el archivo
         loadingMsg.innerHTML = '💾 Descargando archivo...';
