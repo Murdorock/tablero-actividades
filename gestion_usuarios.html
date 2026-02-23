@@ -14,7 +14,7 @@
         <div class="table-header">
             <h2>👤 Gestión de Usuarios</h2>
             <div class="table-actions">
-                <button id="btnAddUser" class="btn btn-primary">➕ Add user</button>
+                <button id="btnAddUser" class="btn btn-primary">➕ Agregar usuario</button>
                 <button id="btnRefreshUsers" class="btn btn-secondary">🔄 Actualizar</button>
             </div>
         </div>
@@ -22,7 +22,7 @@
         <div class="data-table-wrapper">
             <div id="loadingIndicator" class="loading" style="display: none;">
                 <div class="spinner"></div>
-                <p>Cargando usuarios de Authentication...</p>
+                <p>Cargando usuarios...</p>
             </div>
             <div id="tableContainer"></div>
         </div>
@@ -31,16 +31,16 @@
     <div id="dataModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Create a new user</h3>
+                <h3>Crear un nuevo usuario</h3>
             </div>
             <form id="createUserForm">
                 <div class="form-group">
-                    <label for="newUserEmail">Email address</label>
+                    <label for="newUserEmail">Correo electrónico</label>
                     <input type="email" id="newUserEmail" required placeholder="user@ejemplo.com" autocomplete="off">
                 </div>
 
                 <div class="form-group">
-                    <label for="newUserPassword">User Password</label>
+                    <label for="newUserPassword">Contraseña</label>
                     <input type="password" id="newUserPassword" required minlength="6" placeholder="••••••••">
                 </div>
 
