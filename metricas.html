@@ -6,6 +6,7 @@
     <title>Métricas - Sistema</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <script src="config.js"></script>
     <style>
@@ -48,21 +49,136 @@
             gap: 15px;
             margin-bottom: 20px;
         }
-        .stat-card {
-            background: #ecf0f1;
-            padding: 15px;
-            border-radius: 4px;
-            border-left: 4px solid #3498db;
+
+        .metrics-filter-panel {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            padding: 16px;
+            border-radius: 12px;
+            background: #1e293b;
+            border: 1px solid #334155;
         }
+
+        .filter-item {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 120px;
+        }
+
+        .filter-item label {
+            font-size: 12px;
+            color: #cbd5e1;
+            font-weight: 600;
+        }
+
+        .filter-item select,
+        .filter-item input {
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: #e2e8f0;
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 13px;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .chart-card,
+        .ranking-card,
+        .stat-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 14px;
+        }
+
+        .chart-card h3,
+        .ranking-card h3 {
+            margin: 0 0 12px;
+            color: #e2e8f0;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .chart-dual {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .chart-box {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 10px;
+            min-height: 220px;
+        }
+
+        .stat-card {
+            border-left: 4px solid #475569;
+        }
+
         .stat-label {
             font-size: 12px;
-            color: #7f8c8d;
+            color: #94a3b8;
             margin-bottom: 5px;
         }
         .stat-value {
-            font-size: 24px;
+            font-size: 22px;
             font-weight: bold;
-            color: #2c3e50;
+            color: #f1f5f9;
+        }
+
+        .ranking-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .ranking-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-radius: 8px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: #e2e8f0;
+            font-size: 13px;
+        }
+
+        .ranking-badge {
+            font-size: 12px;
+            font-weight: 700;
+            color: #38bdf8;
+        }
+
+        .empty-note {
+            color: #94a3b8;
+            font-size: 13px;
+            padding: 14px;
+            background: #0f172a;
+            border-radius: 8px;
+            border: 1px dashed #334155;
+        }
+
+        @media (max-width: 1200px) {
+            .dashboard-grid,
+            .chart-dual {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -72,20 +188,60 @@
             <h2>📊 Métricas del Sistema</h2>
             <div class="table-actions">
                 <button class="btn btn-secondary" onclick="reloadAllTables()">🔄 Actualizar</button>
-                <button class="btn btn-primary" onclick="exportAllMetrics()">📥 Exportar</button>
+                <button class="btn btn-primary" onclick="exportFilteredMetrics('xlsx')">📥 Exportar Excel</button>
+                <button class="btn btn-secondary" onclick="exportFilteredMetrics('csv')">🧾 Exportar CSV</button>
             </div>
         </div>
 
         <!-- Tabs -->
         <div class="tabs-container">
-            <button class="tab-btn active" onclick="switchTab('historicos')">📜 Históricos Métricas</button>
-            <button class="tab-btn" onclick="switchTab('coordenadas')">🗺️ Coordenadas Métricas</button>
-            <button class="tab-btn" onclick="switchTab('consulta')">🔍 Consulta Retenidos Métricas</button>
+            <button class="tab-btn active" onclick="switchTab('historicos', this)">📜 Históricos Métricas</button>
+            <button class="tab-btn" onclick="switchTab('coordenadas', this)">🗺️ Coordenadas Métricas</button>
+            <button class="tab-btn" onclick="switchTab('consulta', this)">🔍 Consulta Retenidos Métricas</button>
+        </div>
+
+        <div class="metrics-filter-panel">
+            <div class="filter-item">
+                <label for="filter-year">Año</label>
+                <select id="filter-year" onchange="applyFilters()"></select>
+            </div>
+            <div class="filter-item">
+                <label for="filter-month">Mes</label>
+                <select id="filter-month" onchange="applyFilters()"></select>
+            </div>
+            <div class="filter-item">
+                <label for="filter-day">Día</label>
+                <select id="filter-day" onchange="applyFilters()"></select>
+            </div>
+            <div class="filter-item">
+                <label for="filter-hour">Hora</label>
+                <select id="filter-hour" onchange="applyFilters()"></select>
+            </div>
+            <div class="filter-item" style="min-width: 220px;">
+                <label for="filter-code">Código sup/aux</label>
+                <select id="filter-code" onchange="applyFilters()" title="Escribe para autocompletar y filtrar">
+                    <option value="all">Todos</option>
+                </select>
+            </div>
+            <button class="btn btn-secondary" onclick="resetFilters()">🧹 Limpiar filtros</button>
         </div>
 
         <!-- Históricos Métricas -->
         <div id="historicos" class="tab-content active">
             <div class="metrics-stats" id="stats-historicos"></div>
+            <div class="dashboard-grid">
+                <div class="chart-card">
+                    <h3>Tendencias de ingreso exitoso</h3>
+                    <div class="chart-dual">
+                        <div class="chart-box"><canvas id="chart-top-historicos"></canvas></div>
+                        <div class="chart-box"><canvas id="chart-hour-historicos"></canvas></div>
+                    </div>
+                </div>
+                <div class="ranking-card">
+                    <h3>Top códigos con ingreso exitoso</h3>
+                    <div id="ranking-historicos"></div>
+                </div>
+            </div>
             <div class="data-table-wrapper">
                 <div id="loadingIndicator-historicos" class="loading"><div class="spinner"></div><p>Cargando...</p></div>
                 <div id="tableContainer-historicos"></div>
@@ -95,6 +251,19 @@
         <!-- Coordenadas Métricas -->
         <div id="coordenadas" class="tab-content">
             <div class="metrics-stats" id="stats-coordenadas"></div>
+            <div class="dashboard-grid">
+                <div class="chart-card">
+                    <h3>Tendencias de ingreso exitoso</h3>
+                    <div class="chart-dual">
+                        <div class="chart-box"><canvas id="chart-top-coordenadas"></canvas></div>
+                        <div class="chart-box"><canvas id="chart-hour-coordenadas"></canvas></div>
+                    </div>
+                </div>
+                <div class="ranking-card">
+                    <h3>Top códigos con ingreso exitoso</h3>
+                    <div id="ranking-coordenadas"></div>
+                </div>
+            </div>
             <div class="data-table-wrapper">
                 <div id="loadingIndicator-coordenadas" class="loading"><div class="spinner"></div><p>Cargando...</p></div>
                 <div id="tableContainer-coordenadas"></div>
@@ -104,6 +273,19 @@
         <!-- Consulta Retenidos Métricas -->
         <div id="consulta" class="tab-content">
             <div class="metrics-stats" id="stats-consulta"></div>
+            <div class="dashboard-grid">
+                <div class="chart-card">
+                    <h3>Tendencias de ingreso exitoso</h3>
+                    <div class="chart-dual">
+                        <div class="chart-box"><canvas id="chart-top-consulta"></canvas></div>
+                        <div class="chart-box"><canvas id="chart-hour-consulta"></canvas></div>
+                    </div>
+                </div>
+                <div class="ranking-card">
+                    <h3>Top códigos con ingreso exitoso</h3>
+                    <div id="ranking-consulta"></div>
+                </div>
+            </div>
             <div class="data-table-wrapper">
                 <div id="loadingIndicator-consulta" class="loading"><div class="spinner"></div><p>Cargando...</p></div>
                 <div id="tableContainer-consulta"></div>

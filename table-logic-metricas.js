@@ -5,6 +5,25 @@ let metricsData = {
     consulta: []
 };
 
+let filteredMetricsData = {
+    historicos: [],
+    coordenadas: [],
+    consulta: []
+};
+
+let activeTabKey = 'historicos';
+const chartInstances = {};
+
+const filters = {
+    year: 'all',
+    month: 'all',
+    day: 'all',
+    hour: 'all',
+    code: 'all'
+};
+
+const SUCCESS_ACTION = 'ingreso_detalle_historico';
+
 const metricsTableNames = {
     historicos: 'historicos_metricas',
     coordenadas: 'coordenadas_metricas',
@@ -28,6 +47,7 @@ async function loadAllMetrics() {
         for (const key of Object.keys(metricsTableNames)) {
             await loadMetricsTable(key);
         }
+        refreshActiveTabView();
     } catch (error) {
         handleError(error, 'al cargar métricas');
     }
@@ -52,14 +72,11 @@ async function loadMetricsTable(tableKey) {
         if (error) throw error;
         
         metricsData[tableKey] = data || [];
-        
-        // Mostrar estadísticas
-        renderStats(tableKey, statsContainer);
-        
-        if (metricsData[tableKey].length > 0) {
-            renderMetricsTable(tableKey, tableContainer);
-        } else {
-            tableContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: #7f8c8d;">No hay registros en esta tabla</div>';
+
+        filteredMetricsData[tableKey] = [...metricsData[tableKey]];
+
+        if (tableKey === activeTabKey) {
+            refreshActiveTabView();
         }
         
         loadingIndicator.style.display = 'none';
@@ -70,53 +87,74 @@ async function loadMetricsTable(tableKey) {
     }
 }
 
+function refreshActiveTabView() {
+    populateFilterOptions();
+    filteredMetricsData[activeTabKey] = getFilteredData(activeTabKey);
+    renderTabDashboard(activeTabKey);
+}
+
+function renderTabDashboard(tableKey) {
+    const statsContainer = document.getElementById(`stats-${tableKey}`);
+    const tableContainer = document.getElementById(`tableContainer-${tableKey}`);
+    const filteredData = filteredMetricsData[tableKey] || [];
+
+    renderStats(tableKey, statsContainer, filteredData);
+    renderRanking(tableKey, filteredData);
+    renderCharts(tableKey, filteredData);
+
+    if (filteredData.length > 0) {
+        renderMetricsTable(filteredData, tableContainer);
+    } else {
+        tableContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: #94a3b8;">No hay registros para los filtros seleccionados</div>';
+    }
+}
+
 function renderStats(tableKey, statsContainer) {
-    const data = metricsData[tableKey];
-    
-    // Calcular estadísticas
+    const data = filteredMetricsData[tableKey] || [];
     const totalRegistros = data.length;
-    const usuariosUnicos = new Set(data.map(r => r.usuario_id)).size;
-    const accionesUnicos = new Set(data.map(r => r.accion)).size;
-    const codigosUnicos = new Set(data.map(r => r.codigo_sup_aux)).size;
+    const successRows = data.filter(row => row.accion === SUCCESS_ACTION);
+    const ingresosExitosos = successRows.length;
+    const codigosConIngreso = new Set(successRows.map(r => r.codigo_sup_aux).filter(Boolean)).size;
+    const usuariosUnicos = new Set(data.map(r => r.usuario_id).filter(Boolean)).size;
+    const porcentajeIngreso = totalRegistros > 0 ? ((ingresosExitosos / totalRegistros) * 100).toFixed(1) : '0.0';
     
-    // Fecha más reciente
     let fechaMasReciente = 'N/A';
     if (data.length > 0) {
-        const fecha = data[0].fecha_evento.replace('T', ' ').replace('Z', '').split('.')[0];
-        fechaMasReciente = fecha;
+        const fechaOrdenada = [...data].sort((a, b) => String(b.fecha_evento || '').localeCompare(String(a.fecha_evento || '')));
+        if (fechaOrdenada[0] && fechaOrdenada[0].fecha_evento) {
+            fechaMasReciente = formatMetricsDate(fechaOrdenada[0].fecha_evento);
+        }
     }
     
     statsContainer.innerHTML = `
         <div class="stat-card">
-            <div class="stat-label">📊 Total Registros</div>
+            <div class="stat-label">📊 Registros filtrados</div>
             <div class="stat-value">${totalRegistros}</div>
         </div>
         <div class="stat-card">
-            <div class="stat-label">👤 Usuarios Únicos</div>
+            <div class="stat-label">✅ Ingresos exitosos</div>
+            <div class="stat-value">${ingresosExitosos}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">📌 Códigos con ingreso</div>
+            <div class="stat-value">${codigosConIngreso}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">📈 Tasa de ingreso</div>
+            <div class="stat-value">${porcentajeIngreso}%</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">👤 Usuarios únicos</div>
             <div class="stat-value">${usuariosUnicos}</div>
         </div>
         <div class="stat-card">
-            <div class="stat-label">⚙️ Acciones Únicas</div>
-            <div class="stat-value">${accionesUnicos}</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">📌 Códigos Sup. Aux</div>
-            <div class="stat-value">${codigosUnicos}</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">📅 Más Reciente</div>
+            <div class="stat-label">🕒 Evento más reciente</div>
             <div class="stat-value" style="font-size: 14px;">${fechaMasReciente}</div>
         </div>
     `;
 }
 
-function renderMetricsTable(tableKey, tableContainer) {
-    const data = metricsData[tableKey];
-    
-    // Primero renderizar análisis agrupado
-    const analysisHtml = renderGroupedAnalysis(data);
-    
-    // Luego renderizar tabla
+function renderMetricsTable(data, tableContainer) {
     let tableHtml = '<table class="data-table"><thead><tr>';
     
     tableColumns.forEach(col => {
@@ -134,44 +172,286 @@ function renderMetricsTable(tableKey, tableContainer) {
     });
     
     tableHtml += '</tbody></table>';
-    tableContainer.innerHTML = analysisHtml + tableHtml;
+    tableContainer.innerHTML = tableHtml;
 }
 
-function renderGroupedAnalysis(data) {
-    if (data.length === 0) return '';
-    
-    const accionesMap = {};
-    
-    data.forEach(row => {
-        const accion = row.accion || 'SIN ACCIÓN';
-        
-        // Contar acciones
-        if (!accionesMap[accion]) {
-            accionesMap[accion] = 0;
-        }
-        accionesMap[accion]++;
-    });
-    
-    let html = '<div style="margin-bottom: 25px;">';
-    
-    // Sección: Resumen de acciones
-    html += '<div style="background: #ecf0f1; padding: 15px; border-radius: 4px;">';
-    html += '<h3 style="margin-top: 0; color: #2c3e50;">⚙️ Resumen de Acciones</h3>';
-    html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">';
-    
-    Object.entries(accionesMap)
+function renderRanking(tableKey, data) {
+    const rankingContainer = document.getElementById(`ranking-${tableKey}`);
+    const topEntries = Object.entries(countByCode(data.filter(row => row.accion === SUCCESS_ACTION)))
         .sort((a, b) => b[1] - a[1])
-        .forEach(([accion, count]) => {
-            html += `<div style="background: white; padding: 12px; border-radius: 3px; text-align: center; border-top: 3px solid #e74c3c;">
-                <div style="font-weight: bold; color: #2c3e50;">${accion}</div>
-                <div style="font-size: 20px; font-weight: bold; color: #e74c3c;">${count}</div>
-            </div>`;
+        .slice(0, 10);
+
+    if (!rankingContainer) {
+        return;
+    }
+
+    if (topEntries.length === 0) {
+        rankingContainer.innerHTML = '<div class="empty-note">No hay ingresos exitosos para los filtros seleccionados.</div>';
+        return;
+    }
+
+    rankingContainer.innerHTML = `
+        <ul class="ranking-list">
+            ${topEntries.map(([codigo, count], index) => `
+                <li class="ranking-item">
+                    <span>#${index + 1} · ${escapeHtml(codigo)}</span>
+                    <span class="ranking-badge">${count} ingresos</span>
+                </li>
+            `).join('')}
+        </ul>
+    `;
+}
+
+function renderCharts(tableKey, data) {
+    const successRows = data.filter(row => row.accion === SUCCESS_ACTION);
+    const topCodes = Object.entries(countByCode(successRows))
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8);
+
+    const hoursMap = {};
+    for (let hour = 0; hour < 24; hour++) {
+        const label = String(hour).padStart(2, '0');
+        hoursMap[label] = 0;
+    }
+
+    successRows.forEach(row => {
+        const parts = getDateParts(row.fecha_evento);
+        if (parts) {
+            const key = String(parts.hour).padStart(2, '0');
+            hoursMap[key] += 1;
+        }
+    });
+
+    const topChartId = `chart-top-${tableKey}`;
+    const hourChartId = `chart-hour-${tableKey}`;
+
+    destroyChart(topChartId);
+    destroyChart(hourChartId);
+
+    const topCanvas = document.getElementById(topChartId);
+    const hourCanvas = document.getElementById(hourChartId);
+
+    if (topCanvas) {
+        chartInstances[topChartId] = new Chart(topCanvas, {
+            type: 'bar',
+            data: {
+                labels: topCodes.map(([codigo]) => codigo),
+                datasets: [{
+                    label: 'Ingresos exitosos',
+                    data: topCodes.map(([, count]) => count),
+                    backgroundColor: 'rgba(56, 189, 248, 0.7)',
+                    borderColor: 'rgba(56, 189, 248, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: getChartOptions('Top códigos')
         });
-    
-    html += '</div></div>';
-    html += '</div>';
-    
-    return html;
+    }
+
+    if (hourCanvas) {
+        chartInstances[hourChartId] = new Chart(hourCanvas, {
+            type: 'line',
+            data: {
+                labels: Object.keys(hoursMap),
+                datasets: [{
+                    label: 'Ingresos por hora',
+                    data: Object.values(hoursMap),
+                    borderColor: 'rgba(16, 185, 129, 1)',
+                    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                    fill: true,
+                    tension: 0.25
+                }]
+            },
+            options: getChartOptions('Frecuencia por hora')
+        });
+    }
+}
+
+function getChartOptions(titleText) {
+    return {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                labels: { color: '#e2e8f0' }
+            },
+            title: {
+                display: true,
+                text: titleText,
+                color: '#e2e8f0'
+            }
+        },
+        scales: {
+            x: {
+                ticks: { color: '#cbd5e1' },
+                grid: { color: 'rgba(148, 163, 184, 0.12)' }
+            },
+            y: {
+                beginAtZero: true,
+                ticks: { color: '#cbd5e1' },
+                grid: { color: 'rgba(148, 163, 184, 0.12)' }
+            }
+        }
+    };
+}
+
+function destroyChart(chartId) {
+    if (chartInstances[chartId]) {
+        chartInstances[chartId].destroy();
+        delete chartInstances[chartId];
+    }
+}
+
+function countByCode(data) {
+    const map = {};
+    data.forEach(row => {
+        const code = row.codigo_sup_aux || 'SIN CÓDIGO';
+        map[code] = (map[code] || 0) + 1;
+    });
+    return map;
+}
+
+function populateFilterOptions() {
+    const data = metricsData[activeTabKey] || [];
+    const years = new Set();
+    const months = new Set();
+    const days = new Set();
+    const hours = new Set();
+    const codes = new Set();
+    const successCountByCode = {};
+
+    data.forEach(row => {
+        const code = row.codigo_sup_aux !== null && row.codigo_sup_aux !== undefined
+            ? String(row.codigo_sup_aux).trim()
+            : '';
+
+        if (code !== '') {
+            codes.add(code);
+            if (row.accion === SUCCESS_ACTION) {
+                successCountByCode[code] = (successCountByCode[code] || 0) + 1;
+            }
+        }
+
+        const parts = getDateParts(row.fecha_evento);
+        if (!parts) return;
+        years.add(parts.year);
+        months.add(parts.month);
+        days.add(parts.day);
+        hours.add(parts.hour);
+    });
+
+    fillSelect('filter-year', years, filters.year, 'Todos', { numeric: true, pad2: false });
+    fillSelect('filter-month', months, filters.month, 'Todos', { numeric: true, pad2: true });
+    fillSelect('filter-day', days, filters.day, 'Todos', { numeric: true, pad2: true });
+    fillSelect('filter-hour', hours, filters.hour, 'Todas', { numeric: true, pad2: true });
+    fillSelect('filter-code', codes, filters.code, 'Todos', {
+        numeric: false,
+        pad2: false,
+        customSort: (a, b) => {
+            const countA = successCountByCode[String(a)] || 0;
+            const countB = successCountByCode[String(b)] || 0;
+            if (countB !== countA) {
+                return countB - countA;
+            }
+            return String(a).localeCompare(String(b), 'es', { sensitivity: 'base' });
+        }
+    });
+}
+
+function fillSelect(selectId, valuesSet, selectedValue, allLabel, options = {}) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+
+    const { numeric = true, pad2 = false, customSort = null } = options;
+
+    const values = Array.from(valuesSet);
+    if (typeof customSort === 'function') {
+        values.sort(customSort);
+    } else if (numeric) {
+        values.sort((a, b) => Number(a) - Number(b));
+    } else {
+        values.sort((a, b) => String(a).localeCompare(String(b), 'es', { sensitivity: 'base' }));
+    }
+
+    select.innerHTML = `<option value="all">${allLabel}</option>`;
+    values.forEach(value => {
+        const option = document.createElement('option');
+        option.value = String(value);
+        option.textContent = pad2 ? String(value).padStart(2, '0') : String(value);
+        select.appendChild(option);
+    });
+
+    if (values.length === 0) {
+        select.value = 'all';
+        return;
+    }
+
+    const valueStrings = values.map(value => String(value));
+    const hasCurrent = selectedValue !== 'all' && valueStrings.includes(String(selectedValue));
+    select.value = hasCurrent ? String(selectedValue) : 'all';
+}
+
+function getFilteredData(tabKey) {
+    const data = metricsData[tabKey] || [];
+    const normalizedCodeFilter = filters.code === 'all' ? '' : String(filters.code || '').trim().toLowerCase();
+
+    return data.filter(row => {
+        const parts = getDateParts(row.fecha_evento);
+        if (!parts) return false;
+
+        const yearOk = filters.year === 'all' || parts.year === Number(filters.year);
+        const monthOk = filters.month === 'all' || parts.month === Number(filters.month);
+        const dayOk = filters.day === 'all' || parts.day === Number(filters.day);
+        const hourOk = filters.hour === 'all' || parts.hour === Number(filters.hour);
+        const codeValue = String(row.codigo_sup_aux || '').toLowerCase();
+        const codeOk = normalizedCodeFilter === '' || codeValue === normalizedCodeFilter;
+
+        return yearOk && monthOk && dayOk && hourOk && codeOk;
+    });
+}
+
+function getDateParts(value) {
+    if (!value) return null;
+    const text = String(value);
+    const match = text.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2})/);
+    if (match) {
+        return {
+            year: Number(match[1]),
+            month: Number(match[2]),
+            day: Number(match[3]),
+            hour: Number(match[4])
+        };
+    }
+
+    const date = new Date(text);
+    if (Number.isNaN(date.getTime())) return null;
+
+    return {
+        year: date.getFullYear(),
+        month: date.getMonth() + 1,
+        day: date.getDate(),
+        hour: date.getHours()
+    };
+}
+
+function applyFilters() {
+    filters.year = document.getElementById('filter-year')?.value || 'all';
+    filters.month = document.getElementById('filter-month')?.value || 'all';
+    filters.day = document.getElementById('filter-day')?.value || 'all';
+    filters.hour = document.getElementById('filter-hour')?.value || 'all';
+    filters.code = document.getElementById('filter-code')?.value || 'all';
+
+    filteredMetricsData[activeTabKey] = getFilteredData(activeTabKey);
+    renderTabDashboard(activeTabKey);
+}
+
+function resetFilters() {
+    filters.year = 'all';
+    filters.month = 'all';
+    filters.day = 'all';
+    filters.hour = 'all';
+    filters.code = 'all';
+    refreshActiveTabView();
 }
 
 function formatMetricsColumnName(col) {
@@ -179,6 +459,7 @@ function formatMetricsColumnName(col) {
         'codigo_sup_aux': '📌 Código Sup. Aux',
         'accion': '⚙️ Acción',
         'criterio': '✓ Criterio',
+        'tipo_consumo': '🧩 Tipo consumo',
         'valor': '💾 Valor',
         'fecha_evento': '📅 Fecha Evento'
     };
@@ -191,23 +472,34 @@ function formatMetricsValue(value, col) {
     }
     
     if (col === 'fecha_evento') {
-        try {
-            // Mantener la fecha tal como viene de Supabase, solo formatear visualmente
-            const dateStr = value.replace('T', ' ').replace('Z', '').split('.')[0];
-            return dateStr;
-        } catch (e) {
-            return value;
-        }
+        return formatMetricsDate(value);
     }
     
     if (typeof value === 'string' && value.length > 50) {
         return `<span title="${value}">${value.substring(0, 47)}...</span>`;
     }
     
-    return value;
+    return escapeHtml(String(value));
 }
 
-function switchTab(tabName) {
+function formatMetricsDate(value) {
+    try {
+        return String(value).replace('T', ' ').replace('Z', '').split('.')[0];
+    } catch (e) {
+        return value;
+    }
+}
+
+function escapeHtml(text) {
+    return text
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+}
+
+function switchTab(tabName, buttonEl) {
     // Ocultar todos los tabs
     document.querySelectorAll('.tab-content').forEach(tab => {
         tab.classList.remove('active');
@@ -225,28 +517,31 @@ function switchTab(tabName) {
     }
     
     // Activar el botón correspondiente
-    event.target.classList.add('active');
-    
-    // Recargar datos si es necesario
-    if (metricsData[tabName].length === 0) {
-        loadMetricsTable(tabName);
-    }
+    if (buttonEl) buttonEl.classList.add('active');
+
+    activeTabKey = tabName;
+    refreshActiveTabView();
 }
 
 function reloadAllTables() {
+    resetFilters();
     loadAllMetrics();
 }
 
-function exportAllMetrics() {
-    const activeTab = document.querySelector('.tab-content.active');
-    const tabKey = activeTab.id;
-    const data = metricsData[tabKey];
+function exportFilteredMetrics(format) {
+    const tabKey = activeTabKey;
+    const data = filteredMetricsData[tabKey] || [];
     
     if (data.length === 0) {
-        alert('No hay datos para exportar');
+        alert('No hay datos filtrados para exportar');
         return;
     }
-    
+
+    if (format === 'csv') {
+        exportToCsv(data, tabKey);
+        return;
+    }
+
     exportToExcel(data, metricsLabels[tabKey], tabKey);
 }
 
@@ -263,8 +558,7 @@ function exportToExcel(data, tableName, tabKey) {
                 if (value === null || value === undefined) {
                     formattedRow[header] = '';
                 } else if (col === 'fecha_evento') {
-                    // Mantener la fecha tal como viene de Supabase sin conversión de zona horaria
-                    formattedRow[header] = value;
+                    formattedRow[header] = formatMetricsDate(value);
                 } else if (typeof value === 'object') {
                     formattedRow[header] = JSON.stringify(value);
                 } else {
@@ -286,6 +580,34 @@ function exportToExcel(data, tableName, tabKey) {
     } catch (error) {
         alert('Error al exportar: ' + error.message);
         console.error('Error en exportación:', error);
+    }
+}
+
+function exportToCsv(data, tabKey) {
+    try {
+        const headers = tableColumns.map(col => formatMetricsColumnName(col).replace(/[^a-zA-Z0-9\s]/g, '').trim());
+        const rows = data.map(row => tableColumns.map(col => {
+            let value = row[col];
+            if (value === null || value === undefined) return '';
+            if (col === 'fecha_evento') value = formatMetricsDate(value);
+            if (typeof value === 'object') value = JSON.stringify(value);
+            const text = String(value).replaceAll('"', '""');
+            return `"${text}"`;
+        }).join(','));
+
+        const csv = `${headers.join(',')}\n${rows.join('\n')}`;
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `metricas_${tabKey}_filtrado_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    } catch (error) {
+        alert('Error al exportar CSV: ' + error.message);
+        console.error('Error en exportación CSV:', error);
     }
 }
 
