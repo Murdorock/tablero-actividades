@@ -6,8 +6,130 @@
     <title>Control Descargas - Sistema</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="config.js"></script>
     <script src="table-logic-control_descargas.js"></script>
+    <style>
+        .control-dashboard {
+            display: none;
+            margin: 1rem 0;
+        }
+
+        .control-dashboard-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .control-filter-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 8px 10px;
+            color: #e2e8f0;
+            font-size: 13px;
+        }
+
+        .control-filter-box select {
+            background: #0f172a;
+            color: #e2e8f0;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 6px 10px;
+            min-width: 220px;
+        }
+
+        .control-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .control-kpi-card,
+        .control-chart-card,
+        .control-summary-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 14px;
+        }
+
+        .control-kpi-card {
+            border-left: 4px solid #475569;
+        }
+
+        .control-kpi-label {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-bottom: 5px;
+        }
+
+        .control-kpi-value {
+            font-size: 22px;
+            color: #f1f5f9;
+            font-weight: 700;
+        }
+
+        .control-kpi-sub {
+            margin-top: 4px;
+            color: #cbd5e1;
+            font-size: 12px;
+        }
+
+        .control-dashboard-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 14px;
+        }
+
+        .control-chart-card h3,
+        .control-summary-card h3 {
+            margin: 0 0 10px;
+            color: #e2e8f0;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .control-chart-box {
+            min-height: 320px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 10px;
+        }
+
+        .control-summary-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .control-summary-table th,
+        .control-summary-table td {
+            border-bottom: 1px solid #334155;
+            padding: 8px 6px;
+            text-align: left;
+            color: #cbd5e1;
+        }
+
+        .control-summary-table th {
+            color: #e2e8f0;
+            font-weight: 700;
+        }
+
+        @media (max-width: 1200px) {
+            .control-dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
 </head>
 <body>
     <div class="table-container">
@@ -51,6 +173,29 @@
             </div>
             <div class="filter-group">
                 <button class="btn btn-secondary btn-sm" onclick="clearFilters()">🗑️ Limpiar Filtros</button>
+            </div>
+        </div>
+        <div id="controlDashboard" class="control-dashboard">
+            <div class="control-dashboard-top">
+                <div class="control-filter-box">
+                    <label for="dashboard-supervisor-filter">Supervisor (dashboard):</label>
+                    <select id="dashboard-supervisor-filter" onchange="applyDashboardSupervisorFilter()">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+            </div>
+            <div id="controlKpiGrid" class="control-kpi-grid"></div>
+            <div class="control-dashboard-grid">
+                <div class="control-chart-card">
+                    <h3>Comparativo por Supervisor</h3>
+                    <div class="control-chart-box">
+                        <canvas id="chart-supervisor-comparativo"></canvas>
+                    </div>
+                </div>
+                <div class="control-summary-card">
+                    <h3>Ceros por Supervisor</h3>
+                    <div id="controlSummaryBySupervisor"></div>
+                </div>
             </div>
         </div>
         <div class="data-table-wrapper">

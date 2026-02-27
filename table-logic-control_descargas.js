@@ -83,6 +83,259 @@ const PRIMARY_KEY = 'id_correria';
 let currentData = [];
 let tableColumns = [];
 let allData = []; // Guardar todos los datos para filtrado
+const dashboardCharts = {};
+
+function toNumber(value) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function destroyDashboardChart(chartId) {
+    if (dashboardCharts[chartId]) {
+        dashboardCharts[chartId].destroy();
+        delete dashboardCharts[chartId];
+    }
+}
+
+function clearDashboard() {
+    const dashboard = document.getElementById('controlDashboard');
+    const kpiGrid = document.getElementById('controlKpiGrid');
+    const summaryContainer = document.getElementById('controlSummaryBySupervisor');
+
+    destroyDashboardChart('chart-supervisor-comparativo');
+
+    if (kpiGrid) {
+        kpiGrid.innerHTML = '';
+    }
+
+    if (summaryContainer) {
+        summaryContainer.innerHTML = '';
+    }
+
+    if (dashboard) {
+        dashboard.style.display = 'none';
+    }
+}
+
+function getGroupedSupervisorData(data) {
+    const groupedMap = {};
+
+    (data || []).forEach(row => {
+        const supervisorRaw = row.supervisor;
+        const supervisor = supervisorRaw && String(supervisorRaw).trim() !== ''
+            ? String(supervisorRaw).trim()
+            : 'SIN SUPERVISOR';
+
+        if (!groupedMap[supervisor]) {
+            groupedMap[supervisor] = {
+                supervisor,
+                totales: 0,
+                pendientes: 0,
+                descargadas: 0,
+                ceros: 0,
+                registros: 0
+            };
+        }
+
+        const total = toNumber(row.totales);
+        const pendientes = Math.max(0, toNumber(row.pendientes));
+        const descargadas = Math.max(0, total - pendientes);
+
+        groupedMap[supervisor].totales += total;
+        groupedMap[supervisor].pendientes += pendientes;
+        groupedMap[supervisor].descargadas += descargadas;
+        groupedMap[supervisor].registros += 1;
+        if (pendientes === 0) {
+            groupedMap[supervisor].ceros += 1;
+        }
+    });
+
+    return Object.values(groupedMap)
+        .sort((a, b) => b.pendientes - a.pendientes || a.supervisor.localeCompare(b.supervisor, 'es', { sensitivity: 'base' }));
+}
+
+function renderDashboard(data) {
+    const dashboard = document.getElementById('controlDashboard');
+    const kpiGrid = document.getElementById('controlKpiGrid');
+    const summaryContainer = document.getElementById('controlSummaryBySupervisor');
+
+    if (!dashboard || !kpiGrid || !summaryContainer || !data || data.length === 0) {
+        clearDashboard();
+        return;
+    }
+
+    const grouped = getGroupedSupervisorData(data);
+    if (grouped.length === 0) {
+        clearDashboard();
+        return;
+    }
+
+    const totalSupervisores = grouped.length;
+    const totalTotales = grouped.reduce((sum, item) => sum + item.totales, 0);
+    const totalPendientes = grouped.reduce((sum, item) => sum + item.pendientes, 0);
+    const totalDescargadas = grouped.reduce((sum, item) => sum + item.descargadas, 0);
+    const totalCeros = grouped.reduce((sum, item) => sum + item.ceros, 0);
+    const porcentajeDescargado = totalTotales > 0 ? ((totalDescargadas / totalTotales) * 100).toFixed(1) : '0.0';
+    const porcentajePendiente = totalTotales > 0 ? ((totalPendientes / totalTotales) * 100).toFixed(1) : '0.0';
+
+    kpiGrid.innerHTML = `
+        <div class="control-kpi-card">
+            <div class="control-kpi-label">👥 Supervisores agrupados</div>
+            <div class="control-kpi-value">${totalSupervisores}</div>
+            <div class="control-kpi-sub">Con el filtro actual aplicado</div>
+        </div>
+        <div class="control-kpi-card">
+            <div class="control-kpi-label">📦 Suma TOTALES</div>
+            <div class="control-kpi-value">${totalTotales.toLocaleString()}</div>
+            <div class="control-kpi-sub">Base comparativa general</div>
+        </div>
+        <div class="control-kpi-card">
+            <div class="control-kpi-label">⬇️ Suma DESCARGADAS</div>
+            <div class="control-kpi-value">${totalDescargadas.toLocaleString()}</div>
+            <div class="control-kpi-sub">${porcentajeDescargado}% descargado</div>
+        </div>
+        <div class="control-kpi-card">
+            <div class="control-kpi-label">⏳ Suma PENDIENTES</div>
+            <div class="control-kpi-value">${totalPendientes.toLocaleString()}</div>
+            <div class="control-kpi-sub">${porcentajePendiente}% pendiente</div>
+        </div>
+        <div class="control-kpi-card">
+            <div class="control-kpi-label">0️⃣ Registros en cero</div>
+            <div class="control-kpi-value">${totalCeros.toLocaleString()}</div>
+            <div class="control-kpi-sub">Cantidad con pendientes = 0</div>
+        </div>
+    `;
+
+    summaryContainer.innerHTML = `
+        <div style="max-height: 300px; overflow: auto;">
+            <table class="control-summary-table">
+                <thead>
+                    <tr>
+                        <th>Supervisor</th>
+                        <th>Registros</th>
+                        <th>En cero</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${grouped.map(item => `
+                        <tr>
+                            <td>${item.supervisor}</td>
+                            <td>${item.registros}</td>
+                            <td>${item.ceros}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    renderSupervisorComparativeChart(grouped);
+    dashboard.style.display = 'block';
+}
+
+function renderSupervisorComparativeChart(groupedData) {
+    const chartId = 'chart-supervisor-comparativo';
+    const canvas = document.getElementById(chartId);
+    if (!canvas) return;
+
+    destroyDashboardChart(chartId);
+
+    const labels = groupedData.map(item => item.supervisor);
+    const totales = groupedData.map(item => item.totales);
+    const pendientes = groupedData.map(item => item.pendientes);
+    const descargadas = groupedData.map(item => item.descargadas);
+    const ceros = groupedData.map(item => item.ceros);
+
+    dashboardCharts[chartId] = new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Totales',
+                    data: totales,
+                    backgroundColor: 'rgba(100, 116, 139, 0.7)',
+                    borderColor: 'rgba(100, 116, 139, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Descargadas',
+                    data: descargadas,
+                    backgroundColor: 'rgba(59, 130, 246, 0.72)',
+                    borderColor: 'rgba(59, 130, 246, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Pendientes',
+                    data: pendientes,
+                    backgroundColor: 'rgba(239, 68, 68, 0.72)',
+                    borderColor: 'rgba(239, 68, 68, 1)',
+                    borderWidth: 1
+                },
+                {
+                    type: 'line',
+                    label: 'Registros en cero',
+                    data: ceros,
+                    borderColor: 'rgba(16, 185, 129, 1)',
+                    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                    yAxisID: 'y1',
+                    tension: 0.25,
+                    fill: false
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: { color: '#e2e8f0' }
+                },
+                title: {
+                    display: true,
+                    text: 'TOTALES vs DESCARGADAS vs PENDIENTES por SUPERVISOR',
+                    color: '#e2e8f0'
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#cbd5e1' },
+                    grid: { color: 'rgba(148, 163, 184, 0.12)' }
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: { color: '#cbd5e1' },
+                    grid: { color: 'rgba(148, 163, 184, 0.12)' },
+                    title: {
+                        display: true,
+                        text: 'Cantidad',
+                        color: '#cbd5e1'
+                    }
+                },
+                y1: {
+                    position: 'right',
+                    beginAtZero: true,
+                    ticks: { color: '#cbd5e1' },
+                    grid: { drawOnChartArea: false },
+                    title: {
+                        display: true,
+                        text: 'Conteo en cero',
+                        color: '#cbd5e1'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function applyDashboardSupervisorFilter() {
+    const select = document.getElementById('dashboard-supervisor-filter');
+    const supervisorInput = document.getElementById('filtro-supervisor');
+    if (!select || !supervisorInput) return;
+
+    supervisorInput.value = select.value || '';
+    applyFilters();
+}
 
 // Obtener hora del primer registro de cmlec
 async function obtenerHoraPrimerRegistro() {
@@ -180,6 +433,16 @@ function populateFilters() {
     supervisorValues.sort().forEach(value => {
         supervisorList.innerHTML += `<option value="${value}">`;
     });
+
+    const dashboardSupervisorFilter = document.getElementById('dashboard-supervisor-filter');
+    if (dashboardSupervisorFilter) {
+        const currentValue = dashboardSupervisorFilter.value;
+        dashboardSupervisorFilter.innerHTML = '<option value="">Todos</option>';
+        supervisorValues.sort().forEach(value => {
+            dashboardSupervisorFilter.innerHTML += `<option value="${value}">${value}</option>`;
+        });
+        dashboardSupervisorFilter.value = supervisorValues.includes(currentValue) ? currentValue : '';
+    }
 }
 
 // Aplicar filtros
@@ -219,6 +482,11 @@ function applyFilters() {
     
     currentData = sortData(filteredData);
     renderTable(currentData);
+
+    const dashboardSupervisorFilter = document.getElementById('dashboard-supervisor-filter');
+    if (dashboardSupervisorFilter) {
+        dashboardSupervisorFilter.value = document.getElementById('filtro-supervisor').value || '';
+    }
 }
 
 // Limpiar filtros
@@ -226,6 +494,10 @@ function clearFilters() {
     document.getElementById('filtro-id-correria').value = '';
     document.getElementById('filtro-codigo').value = '';
     document.getElementById('filtro-supervisor').value = '';
+    const dashboardSupervisorFilter = document.getElementById('dashboard-supervisor-filter');
+    if (dashboardSupervisorFilter) {
+        dashboardSupervisorFilter.value = '';
+    }
     currentData = sortData(allData);
     renderTable(currentData);
 }
@@ -278,9 +550,12 @@ function renderTable(data) {
     const tableContainer = document.getElementById('tableContainer');
     
     if (!data || data.length === 0) {
+        clearDashboard();
         tableContainer.innerHTML = '<div class="no-data">No hay registros para mostrar</div>';
         return;
     }
+
+    renderDashboard(data);
     
     let html = '<table class="data-table"><thead><tr>';
     
