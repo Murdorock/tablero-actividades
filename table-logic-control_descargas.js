@@ -213,9 +213,9 @@ function renderDashboard(data) {
             <div class="control-kpi-sub">${porcentajePendiente}% pendiente</div>
         </div>
         <div class="control-kpi-card">
-            <div class="control-kpi-label">0️⃣ Registros en cero</div>
+            <div class="control-kpi-label">0️⃣ Sin descargas parciales</div>
             <div class="control-kpi-value">${totalCeros.toLocaleString()}</div>
-            <div class="control-kpi-sub">Cantidad con descargadas = 0</div>
+            <div class="control-kpi-sub">Cantidad sin descargas</div>
         </div>
     `;
 
@@ -226,7 +226,7 @@ function renderDashboard(data) {
                     <tr>
                         <th>Supervisor</th>
                         <th>Registros</th>
-                        <th>En cero</th>
+                        <th>Sin descargas parciales</th>
                     </tr>
                 </thead>
                 <tbody>
