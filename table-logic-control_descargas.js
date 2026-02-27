@@ -175,8 +175,15 @@ function renderDashboard(data) {
     const totalPendientes = grouped.reduce((sum, item) => sum + item.pendientes, 0);
     const totalDescargadas = grouped.reduce((sum, item) => sum + item.descargadas, 0);
     const totalCeros = grouped.reduce((sum, item) => sum + item.ceros, 0);
-    const porcentajeDescargado = totalTotales > 0 ? ((totalDescargadas / totalTotales) * 100).toFixed(1) : '0.0';
-    const porcentajePendiente = totalTotales > 0 ? ((totalPendientes / totalTotales) * 100).toFixed(1) : '0.0';
+    const porcentajeDescargadoRaw = totalTotales > 0 ? (totalDescargadas / totalTotales) * 100 : 0;
+    const porcentajeDescargado = totalTotales > 0
+        ? (porcentajeDescargadoRaw > 0 && porcentajeDescargadoRaw < 0.01
+            ? '0.01'
+            : porcentajeDescargadoRaw.toFixed(2))
+        : '0.00';
+    const porcentajePendiente = totalTotales > 0
+        ? (100 - Number(porcentajeDescargado)).toFixed(2)
+        : '0.00';
 
     kpiGrid.innerHTML = `
         <div class="control-kpi-card">
