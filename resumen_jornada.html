@@ -6,10 +6,78 @@
     <title>Resumen Jornada - Sistema</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="config.js"></script>
     <script>const TABLE_NAME = 'base'; const TABLE_TITLE = '📊 Resumen Jornada';</script>
     <script src="table-logic-resumen_jornada.js"></script>
+    <style>
+        .resumen-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .resumen-kpi-card,
+        .resumen-chart-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 14px;
+        }
+
+        .resumen-kpi-card {
+            border-left: 4px solid #475569;
+        }
+
+        .resumen-kpi-label {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-bottom: 6px;
+        }
+
+        .resumen-kpi-value {
+            font-size: 22px;
+            font-weight: 700;
+            color: #f1f5f9;
+            line-height: 1.1;
+        }
+
+        .resumen-kpi-sub {
+            color: #cbd5e1;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        .resumen-charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .resumen-chart-card h3 {
+            margin: 0 0 12px;
+            color: #e2e8f0;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .resumen-chart-box {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 10px;
+            min-height: 280px;
+        }
+
+        @media (max-width: 1200px) {
+            .resumen-charts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
 </head>
 <body>
     <div class="table-container">
@@ -19,6 +87,23 @@
                 <button class="btn btn-primary" onclick="abrirModalCompacto()">📱 Ver Resumen Compacto</button>
                 <button class="btn btn-success" onclick="exportarTablas()">📥 Exportar</button>
                 <button class="btn btn-secondary" onclick="loadData()">🔄 Actualizar</button>
+            </div>
+        </div>
+        <div id="summaryDashboard" style="display: none;">
+            <div id="summaryKpis" class="resumen-kpi-grid"></div>
+            <div class="resumen-charts-grid">
+                <div class="resumen-chart-card">
+                    <h3>Registro por Supervisor</h3>
+                    <div class="resumen-chart-box">
+                        <canvas id="chart-registro-supervisores"></canvas>
+                    </div>
+                </div>
+                <div class="resumen-chart-card">
+                    <h3>Descargas por Supervisor</h3>
+                    <div class="resumen-chart-box">
+                        <canvas id="chart-descargas-supervisores"></canvas>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="data-table-wrapper">

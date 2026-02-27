@@ -3,6 +3,7 @@
 
 let resumenData = {};
 let tieneEvidenciasHoy = false;
+const resumenCharts = {};
 
 
 
@@ -13,6 +14,7 @@ async function loadData() {
     
     loadingIndicator.style.display = 'block';
     tableContainer.innerHTML = '';
+    clearSummaryDashboardDescargas();
     
 
     
@@ -46,10 +48,239 @@ async function loadData() {
         renderTable();
     } catch (error) {
         console.error('Error cargando resumen:', error);
+        clearSummaryDashboardDescargas();
         tableContainer.innerHTML = '<div class="error">Error cargando resumen: ' + error.message + '</div>';
     } finally {
         loadingIndicator.style.display = 'none';
     }
+}
+
+function destroyResumenChart(chartId) {
+    if (resumenCharts[chartId]) {
+        resumenCharts[chartId].destroy();
+        delete resumenCharts[chartId];
+    }
+}
+
+function clearSummaryDashboardDescargas() {
+    const dashboard = document.getElementById('summaryDashboardDescargas');
+    const kpiContainer = document.getElementById('summaryKpisDescargas');
+
+    destroyResumenChart('chart-correrias-resumen');
+    destroyResumenChart('chart-ordenes-resumen');
+
+    if (kpiContainer) {
+        kpiContainer.innerHTML = '';
+    }
+
+    if (dashboard) {
+        dashboard.style.display = 'none';
+    }
+}
+
+function parsePercentToNumber(percentValue) {
+    const number = Number(String(percentValue || '').replace('%', '').replace(',', '.'));
+    return Number.isFinite(number) ? number : 0;
+}
+
+function getResumenChartOptions(titleText) {
+    return {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                labels: { color: '#e2e8f0' }
+            },
+            title: {
+                display: true,
+                text: titleText,
+                color: '#e2e8f0'
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        const label = context.dataset.label || '';
+                        if (context.dataset.yAxisID === 'yPercent') {
+                            return `${label}: ${Number(context.parsed.y).toFixed(2)}%`;
+                        }
+                        return `${label}: ${context.parsed.y}`;
+                    }
+                }
+            }
+        },
+        scales: {
+            x: {
+                ticks: { color: '#cbd5e1' },
+                grid: { color: 'rgba(148, 163, 184, 0.12)' }
+            },
+            y: {
+                beginAtZero: true,
+                ticks: { color: '#cbd5e1' },
+                grid: { color: 'rgba(148, 163, 184, 0.12)' },
+                title: {
+                    display: true,
+                    text: 'Cantidad',
+                    color: '#cbd5e1'
+                }
+            },
+            yPercent: {
+                position: 'right',
+                beginAtZero: true,
+                min: 0,
+                max: 100,
+                grid: { drawOnChartArea: false },
+                ticks: {
+                    color: '#cbd5e1',
+                    callback: function(value) {
+                        return `${value}%`;
+                    }
+                },
+                title: {
+                    display: true,
+                    text: 'Porcentaje',
+                    color: '#cbd5e1'
+                }
+            }
+        }
+    };
+}
+
+function renderSummaryDashboardDescargas() {
+    const dashboard = document.getElementById('summaryDashboardDescargas');
+    const kpiContainer = document.getElementById('summaryKpisDescargas');
+
+    if (!dashboard || !kpiContainer || !resumenData) {
+        clearSummaryDashboardDescargas();
+        return;
+    }
+
+    const porcentajeEjecutadoNum = parsePercentToNumber(resumenData.porcentajeEjecutado);
+    const porcentajePendienteNum = parsePercentToNumber(resumenData.porcentajePendiente);
+
+    kpiContainer.innerHTML = `
+        <div class="descargas-kpi-card">
+            <h4 class="descargas-kpi-title">📦 KPI Correrías</h4>
+            <div class="descargas-kpi-line"><span>CORRERIAS EJECUTADAS</span><strong>${(resumenData.correriasEjecutadas || 0).toLocaleString()}</strong></div>
+            <div class="descargas-kpi-line"><span>CORRERIAS PENDIENTES POR DESCARGAR</span><strong>${(resumenData.correriasPendientesDescargar || 0).toLocaleString()}</strong></div>
+            <div class="descargas-kpi-line"><span>PORCENTAJE EJECUTADO</span><strong>${resumenData.porcentajeEjecutado || '0.00%'}</strong></div>
+            <div class="descargas-kpi-line"><span>PORCENTAJE PENDIENTE</span><strong>${resumenData.porcentajePendiente || '0.00%'}</strong></div>
+            <div class="descargas-kpi-meta">CICLO: ${resumenData.ciclo || '00'} · MES FACTURACION: ${resumenData.mesFacturacion || 'N/A'} · TOTAL CORRERIAS: ${(resumenData.totalCorrerias || 0).toLocaleString()}</div>
+        </div>
+        <div class="descargas-kpi-card">
+            <h4 class="descargas-kpi-title">📋 KPI Órdenes</h4>
+            <div class="descargas-kpi-line"><span>ORDENES TOTALES</span><strong>${(resumenData.ordenesTotales || 0).toLocaleString()}</strong></div>
+            <div class="descargas-kpi-line"><span>CANTIDAD ORDENES DESCARGADAS</span><strong>${(resumenData.cantidadOrdenesDescargadas || 0).toLocaleString()}</strong></div>
+            <div class="descargas-kpi-line"><span>ORDENES PENDIENTES POR DESCARGAR</span><strong>${(resumenData.ordenesPendientesDescargar || 0).toLocaleString()}</strong></div>
+            <div class="descargas-kpi-line"><span>ORDENES PENDIENTES POR LEGALIZAR</span><strong>${(resumenData.ordenesPendientesLegalizar || 0).toLocaleString()}</strong></div>
+            <div class="descargas-kpi-meta">Distribución de órdenes y avance operativo</div>
+        </div>
+    `;
+
+    renderChartCorrerias(porcentajeEjecutadoNum, porcentajePendienteNum);
+    renderChartOrdenes(porcentajeEjecutadoNum, porcentajePendienteNum);
+    dashboard.style.display = 'block';
+}
+
+function renderChartCorrerias(porcentajeEjecutadoNum, porcentajePendienteNum) {
+    const chartId = 'chart-correrias-resumen';
+    const canvas = document.getElementById(chartId);
+    if (!canvas) return;
+
+    destroyResumenChart(chartId);
+    resumenCharts[chartId] = new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels: ['Correrías'],
+            datasets: [
+                {
+                    label: 'Ejecutadas',
+                    data: [resumenData.correriasEjecutadas || 0],
+                    backgroundColor: 'rgba(34, 197, 94, 0.72)',
+                    borderColor: 'rgba(34, 197, 94, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Pendientes por descargar',
+                    data: [resumenData.correriasPendientesDescargar || 0],
+                    backgroundColor: 'rgba(239, 68, 68, 0.72)',
+                    borderColor: 'rgba(239, 68, 68, 1)',
+                    borderWidth: 1
+                },
+                {
+                    type: 'line',
+                    label: '% Ejecutado',
+                    data: [porcentajeEjecutadoNum],
+                    yAxisID: 'yPercent',
+                    borderColor: 'rgba(56, 189, 248, 1)',
+                    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                    tension: 0.2,
+                    fill: false
+                },
+                {
+                    type: 'line',
+                    label: '% Pendiente',
+                    data: [porcentajePendienteNum],
+                    yAxisID: 'yPercent',
+                    borderColor: 'rgba(250, 204, 21, 1)',
+                    backgroundColor: 'rgba(250, 204, 21, 0.15)',
+                    tension: 0.2,
+                    fill: false
+                }
+            ]
+        },
+        options: getResumenChartOptions('Avance de Correrías')
+    });
+}
+
+function renderChartOrdenes(porcentajeEjecutadoNum, porcentajePendienteNum) {
+    const chartId = 'chart-ordenes-resumen';
+    const canvas = document.getElementById(chartId);
+    if (!canvas) return;
+
+    destroyResumenChart(chartId);
+    resumenCharts[chartId] = new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels: ['Órdenes'],
+            datasets: [
+                {
+                    label: 'Descargadas',
+                    data: [resumenData.cantidadOrdenesDescargadas || 0],
+                    backgroundColor: 'rgba(59, 130, 246, 0.72)',
+                    borderColor: 'rgba(59, 130, 246, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Pendientes por descargar',
+                    data: [resumenData.ordenesPendientesDescargar || 0],
+                    backgroundColor: 'rgba(234, 179, 8, 0.72)',
+                    borderColor: 'rgba(234, 179, 8, 1)',
+                    borderWidth: 1
+                },
+                {
+                    type: 'line',
+                    label: '% Ejecutado',
+                    data: [porcentajeEjecutadoNum],
+                    yAxisID: 'yPercent',
+                    borderColor: 'rgba(16, 185, 129, 1)',
+                    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                    tension: 0.2,
+                    fill: false
+                },
+                {
+                    type: 'line',
+                    label: '% Pendiente',
+                    data: [porcentajePendienteNum],
+                    yAxisID: 'yPercent',
+                    borderColor: 'rgba(239, 68, 68, 1)',
+                    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                    tension: 0.2,
+                    fill: false
+                }
+            ]
+        },
+        options: getResumenChartOptions('Avance de Órdenes')
+    });
 }
 
 // Función para calcular el resumen
@@ -238,6 +469,7 @@ async function verificarEvidenciasHoy() {
 // Renderizar tabla de resumen
 function renderTable() {
     const tableContainer = document.getElementById('tableContainer');
+    renderSummaryDashboardDescargas();
     
     let html = '<div style="overflow-x: auto;">';
     html += '<table class="data-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem; border: 2px solid #333;">';

@@ -6,10 +6,91 @@
     <title>Resumen Descargas - Sistema</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="config.js"></script>
     <script src="table-logic-resumen_descargas.js"></script>
+    <style>
+        .descargas-dashboard {
+            display: none;
+            margin-bottom: 16px;
+        }
+
+        .descargas-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .descargas-kpi-card,
+        .descargas-chart-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 14px;
+        }
+
+        .descargas-kpi-card {
+            border-left: 4px solid #475569;
+        }
+
+        .descargas-kpi-title {
+            margin: 0 0 10px;
+            color: #e2e8f0;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .descargas-kpi-line {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            color: #cbd5e1;
+            font-size: 13px;
+            margin: 6px 0;
+        }
+
+        .descargas-kpi-line strong {
+            color: #f1f5f9;
+        }
+
+        .descargas-kpi-meta {
+            margin-top: 10px;
+            padding-top: 8px;
+            border-top: 1px solid #334155;
+            color: #94a3b8;
+            font-size: 12px;
+        }
+
+        .descargas-charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .descargas-chart-card h3 {
+            margin: 0 0 10px;
+            color: #e2e8f0;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .descargas-chart-box {
+            min-height: 260px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 10px;
+        }
+
+        @media (max-width: 1200px) {
+            .descargas-charts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
 </head>
 <body>
     <div class="table-container">
@@ -19,6 +100,23 @@
                 <button class="btn btn-success" onclick="abrirModalEstadisticas()">📊 Ver Estadísticas</button>
                 <button class="btn btn-primary" onclick="enviarEmail()">📧 Enviar Email</button>
                 <button class="btn btn-secondary" onclick="loadData()">🔄 Actualizar</button>
+            </div>
+        </div>
+        <div id="summaryDashboardDescargas" class="descargas-dashboard">
+            <div id="summaryKpisDescargas" class="descargas-kpi-grid"></div>
+            <div class="descargas-charts-grid">
+                <div class="descargas-chart-card">
+                    <h3>Correrías: ejecutadas vs pendientes</h3>
+                    <div class="descargas-chart-box">
+                        <canvas id="chart-correrias-resumen"></canvas>
+                    </div>
+                </div>
+                <div class="descargas-chart-card">
+                    <h3>Órdenes: descargadas vs pendientes</h3>
+                    <div class="descargas-chart-box">
+                        <canvas id="chart-ordenes-resumen"></canvas>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="data-table-wrapper">

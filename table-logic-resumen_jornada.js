@@ -5,6 +5,7 @@ const PRIMARY_KEY = 'supervisor';
 // Variables globales
 let supervisoresData = [];
 let isLoading = false;
+const summaryChartInstances = {};
 
 // Función para cargar datos
 async function loadData() {
@@ -26,6 +27,7 @@ async function loadData() {
         isLoading = true;
         loadingIndicator.style.display = 'block';
         tableContainer.innerHTML = '';
+        clearSummaryDashboard();
         
         console.log('📡 Consultando Supabase para obtener supervisores únicos...');
         
@@ -153,6 +155,8 @@ async function loadData() {
         if (error.message) {
             errorMessage = error.message;
         }
+
+        clearSummaryDashboard();
         
         tableContainer.innerHTML = `
             <div class="error-message" style="text-align: center; padding: 2rem; color: #dc3545;">
@@ -171,11 +175,282 @@ async function loadData() {
     }
 }
 
+function destroySummaryChart(chartId) {
+    if (summaryChartInstances[chartId]) {
+        summaryChartInstances[chartId].destroy();
+        delete summaryChartInstances[chartId];
+    }
+}
+
+function clearSummaryDashboard() {
+    const dashboard = document.getElementById('summaryDashboard');
+    const summaryKpis = document.getElementById('summaryKpis');
+
+    destroySummaryChart('chart-registro-supervisores');
+    destroySummaryChart('chart-descargas-supervisores');
+
+    if (summaryKpis) {
+        summaryKpis.innerHTML = '';
+    }
+
+    if (dashboard) {
+        dashboard.style.display = 'none';
+    }
+}
+
+function renderSummaryDashboard(data) {
+    const dashboard = document.getElementById('summaryDashboard');
+    const summaryKpis = document.getElementById('summaryKpis');
+
+    if (!dashboard || !summaryKpis || !data || data.length === 0) {
+        clearSummaryDashboard();
+        return;
+    }
+
+    const totalSupervisores = data.length;
+    const totalCantidad = data.reduce((sum, item) => sum + item.cantidad, 0);
+    const totalRegistrados = data.reduce((sum, item) => sum + item.registrados, 0);
+    const totalPendientes = data.reduce((sum, item) => sum + item.pendientes, 0);
+    const totalConfirmadas = data.reduce((sum, item) => sum + item.descargasConfirmadas, 0);
+    const totalPendientesDesc = data.reduce((sum, item) => sum + item.descargasPendientes, 0);
+
+    const porcentajeRegistrado = totalCantidad > 0 ? ((totalRegistrados / totalCantidad) * 100).toFixed(1) : '0.0';
+    const porcentajePendienteRegistro = totalCantidad > 0 ? ((totalPendientes / totalCantidad) * 100).toFixed(1) : '0.0';
+    const totalDescargas = totalConfirmadas + totalPendientesDesc;
+    const porcentajeConfirmadas = totalDescargas > 0 ? ((totalConfirmadas / totalDescargas) * 100).toFixed(1) : '0.0';
+    const porcentajePendientesDesc = totalDescargas > 0 ? ((totalPendientesDesc / totalDescargas) * 100).toFixed(1) : '0.0';
+
+    summaryKpis.innerHTML = `
+        <div class="resumen-kpi-card">
+            <div class="resumen-kpi-label">👥 Supervisores</div>
+            <div class="resumen-kpi-value">${totalSupervisores}</div>
+            <div class="resumen-kpi-sub">Resumen general actual</div>
+        </div>
+        <div class="resumen-kpi-card">
+            <div class="resumen-kpi-label">📊 CANTIDAD total</div>
+            <div class="resumen-kpi-value">${totalCantidad.toLocaleString()}</div>
+            <div class="resumen-kpi-sub">Registros asignados</div>
+        </div>
+        <div class="resumen-kpi-card">
+            <div class="resumen-kpi-label">✅ REGISTRADO</div>
+            <div class="resumen-kpi-value">${totalRegistrados.toLocaleString()}</div>
+            <div class="resumen-kpi-sub">${porcentajeRegistrado}% registrado</div>
+        </div>
+        <div class="resumen-kpi-card">
+            <div class="resumen-kpi-label">⏳ PENDIENTE POR REGISTRAR</div>
+            <div class="resumen-kpi-value">${totalPendientes.toLocaleString()}</div>
+            <div class="resumen-kpi-sub">${porcentajePendienteRegistro}% pendiente</div>
+        </div>
+        <div class="resumen-kpi-card">
+            <div class="resumen-kpi-label">⬇️ DESCARGAS CONFIRMADAS</div>
+            <div class="resumen-kpi-value">${totalConfirmadas.toLocaleString()}</div>
+            <div class="resumen-kpi-sub">${porcentajeConfirmadas}% confirmadas</div>
+        </div>
+        <div class="resumen-kpi-card">
+            <div class="resumen-kpi-label">⏰ DESCARGAS PENDIENTES</div>
+            <div class="resumen-kpi-value">${totalPendientesDesc.toLocaleString()}</div>
+            <div class="resumen-kpi-sub">${porcentajePendientesDesc}% pendientes</div>
+        </div>
+    `;
+
+    renderRegistroChart(data);
+    renderDescargasChart(data);
+    dashboard.style.display = 'block';
+}
+
+function getSummaryChartOptions(titleText) {
+    return {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+            mode: 'index',
+            intersect: false
+        },
+        plugins: {
+            legend: {
+                labels: { color: '#e2e8f0' }
+            },
+            title: {
+                display: true,
+                text: titleText,
+                color: '#e2e8f0'
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        const label = context.dataset.label || '';
+                        const value = context.parsed.y;
+                        if (context.dataset.yAxisID === 'yPercent') {
+                            return `${label}: ${Number(value).toFixed(1)}%`;
+                        }
+                        return `${label}: ${value}`;
+                    }
+                }
+            }
+        },
+        scales: {
+            x: {
+                ticks: { color: '#cbd5e1' },
+                grid: { color: 'rgba(148, 163, 184, 0.12)' }
+            },
+            y: {
+                beginAtZero: true,
+                ticks: { color: '#cbd5e1' },
+                grid: { color: 'rgba(148, 163, 184, 0.12)' },
+                title: {
+                    display: true,
+                    text: 'Cantidad',
+                    color: '#cbd5e1'
+                }
+            },
+            yPercent: {
+                position: 'right',
+                beginAtZero: true,
+                min: 0,
+                max: 100,
+                grid: {
+                    drawOnChartArea: false
+                },
+                ticks: {
+                    color: '#cbd5e1',
+                    callback: function(value) {
+                        return `${value}%`;
+                    }
+                },
+                title: {
+                    display: true,
+                    text: 'Porcentaje',
+                    color: '#cbd5e1'
+                }
+            }
+        }
+    };
+}
+
+function renderRegistroChart(data) {
+    const chartId = 'chart-registro-supervisores';
+    const canvas = document.getElementById(chartId);
+    if (!canvas) return;
+
+    const labels = data.map(item => item.supervisor);
+    const registrados = data.map(item => item.registrados);
+    const pendientes = data.map(item => item.pendientes);
+    const porcentajeRegistrado = data.map(item => item.porcentajeRegistrado);
+    const porcentajePendiente = data.map(item => Math.max(0, 100 - item.porcentajeRegistrado));
+
+    destroySummaryChart(chartId);
+    summaryChartInstances[chartId] = new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Registrado',
+                    data: registrados,
+                    backgroundColor: 'rgba(34, 197, 94, 0.72)',
+                    borderColor: 'rgba(34, 197, 94, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Pendiente por registrar',
+                    data: pendientes,
+                    backgroundColor: 'rgba(239, 68, 68, 0.68)',
+                    borderColor: 'rgba(239, 68, 68, 1)',
+                    borderWidth: 1
+                },
+                {
+                    type: 'line',
+                    label: '% Registrado',
+                    data: porcentajeRegistrado,
+                    yAxisID: 'yPercent',
+                    borderColor: 'rgba(56, 189, 248, 1)',
+                    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                    tension: 0.25,
+                    fill: false
+                },
+                {
+                    type: 'line',
+                    label: '% Pendiente',
+                    data: porcentajePendiente,
+                    yAxisID: 'yPercent',
+                    borderColor: 'rgba(250, 204, 21, 1)',
+                    backgroundColor: 'rgba(250, 204, 21, 0.15)',
+                    tension: 0.25,
+                    fill: false
+                }
+            ]
+        },
+        options: getSummaryChartOptions('CANTIDAD, REGISTRADO y PENDIENTE por SUPERVISOR')
+    });
+}
+
+function renderDescargasChart(data) {
+    const chartId = 'chart-descargas-supervisores';
+    const canvas = document.getElementById(chartId);
+    if (!canvas) return;
+
+    const labels = data.map(item => item.supervisor);
+    const confirmadas = data.map(item => item.descargasConfirmadas);
+    const pendientes = data.map(item => item.descargasPendientes);
+    const porcentajeConfirmadas = data.map(item => item.porcentajeDescargado);
+    const porcentajePendientes = data.map(item => {
+        const total = item.descargasConfirmadas + item.descargasPendientes;
+        if (total === 0) return 0;
+        return Math.max(0, 100 - item.porcentajeDescargado);
+    });
+
+    destroySummaryChart(chartId);
+    summaryChartInstances[chartId] = new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Descargas confirmadas',
+                    data: confirmadas,
+                    backgroundColor: 'rgba(59, 130, 246, 0.72)',
+                    borderColor: 'rgba(59, 130, 246, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Descargas pendientes',
+                    data: pendientes,
+                    backgroundColor: 'rgba(234, 179, 8, 0.72)',
+                    borderColor: 'rgba(234, 179, 8, 1)',
+                    borderWidth: 1
+                },
+                {
+                    type: 'line',
+                    label: '% Confirmadas',
+                    data: porcentajeConfirmadas,
+                    yAxisID: 'yPercent',
+                    borderColor: 'rgba(16, 185, 129, 1)',
+                    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                    tension: 0.25,
+                    fill: false
+                },
+                {
+                    type: 'line',
+                    label: '% Pendientes',
+                    data: porcentajePendientes,
+                    yAxisID: 'yPercent',
+                    borderColor: 'rgba(239, 68, 68, 1)',
+                    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                    tension: 0.25,
+                    fill: false
+                }
+            ]
+        },
+        options: getSummaryChartOptions('DESCARGAS confirmadas y pendientes por SUPERVISOR')
+    });
+}
+
 // Función para renderizar tabla
 function renderTable() {
     const tableContainer = document.getElementById('tableContainer');
     
     if (supervisoresData.length === 0) {
+        clearSummaryDashboard();
         tableContainer.innerHTML = `
             <div class="empty-state" style="text-align: center; padding: 3rem;">
                 <h3>📭 No hay datos</h3>
@@ -200,6 +475,8 @@ function renderTable() {
     const promedioDescargado = supervisoresData.length > 0 
         ? Math.round(supervisoresData.reduce((sum, item) => sum + item.porcentajeDescargado, 0) / supervisoresData.length) 
         : 0;
+
+    renderSummaryDashboard(supervisoresData);
     
     let tableHTML = `
         <div class="table-info" style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
