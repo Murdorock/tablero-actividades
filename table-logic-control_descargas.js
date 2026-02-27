@@ -139,13 +139,19 @@ function getGroupedSupervisorData(data) {
 
         const total = toNumber(row.totales);
         const pendientes = Math.max(0, toNumber(row.pendientes));
-        const descargadas = Math.max(0, total - pendientes);
+        const hasDescargadas = row.descargadas !== null
+            && row.descargadas !== undefined
+            && String(row.descargadas).trim() !== ''
+            && Number.isFinite(Number(row.descargadas));
+        const descargadas = hasDescargadas
+            ? Math.max(0, toNumber(row.descargadas))
+            : Math.max(0, total - pendientes);
 
         groupedMap[supervisor].totales += total;
         groupedMap[supervisor].pendientes += pendientes;
         groupedMap[supervisor].descargadas += descargadas;
         groupedMap[supervisor].registros += 1;
-        if (pendientes === 0) {
+        if (descargadas === 0) {
             groupedMap[supervisor].ceros += 1;
         }
     });
@@ -209,7 +215,7 @@ function renderDashboard(data) {
         <div class="control-kpi-card">
             <div class="control-kpi-label">0️⃣ Registros en cero</div>
             <div class="control-kpi-value">${totalCeros.toLocaleString()}</div>
-            <div class="control-kpi-sub">Cantidad con pendientes = 0</div>
+            <div class="control-kpi-sub">Cantidad con descargadas = 0</div>
         </div>
     `;
 
