@@ -177,8 +177,34 @@ function renderMetricsTable(data, tableContainer) {
 
 function renderRanking(tableKey, data) {
     const rankingContainer = document.getElementById(`ranking-${tableKey}`);
-    const topEntries = Object.entries(countByCode(data.filter(row => row.accion === SUCCESS_ACTION)))
-        .sort((a, b) => b[1] - a[1])
+    const successRows = data.filter(row => row.accion === SUCCESS_ACTION);
+    const resumenPorCodigo = new Map();
+
+    successRows.forEach(row => {
+        const codigo = row.codigo_sup_aux || 'SIN CÓDIGO';
+        if (!resumenPorCodigo.has(codigo)) {
+            resumenPorCodigo.set(codigo, {
+                consultas: 0,
+                valoresUnicos: new Set()
+            });
+        }
+
+        const resumen = resumenPorCodigo.get(codigo);
+        resumen.consultas += 1;
+
+        const valor = row.valor;
+        if (valor !== null && valor !== undefined && String(valor).trim() !== '') {
+            resumen.valoresUnicos.add(String(valor).trim());
+        }
+    });
+
+    const topEntries = Array.from(resumenPorCodigo.entries())
+        .map(([codigo, resumen]) => ({
+            codigo,
+            consultas: resumen.consultas,
+            ingresosUnicos: resumen.valoresUnicos.size
+        }))
+        .sort((a, b) => b.consultas - a.consultas)
         .slice(0, 10);
 
     if (!rankingContainer) {
@@ -192,10 +218,10 @@ function renderRanking(tableKey, data) {
 
     rankingContainer.innerHTML = `
         <ul class="ranking-list">
-            ${topEntries.map(([codigo, count], index) => `
+            ${topEntries.map((item, index) => `
                 <li class="ranking-item">
-                    <span>#${index + 1} · ${escapeHtml(codigo)}</span>
-                    <span class="ranking-badge">${count} ingresos</span>
+                    <span>#${index + 1} · ${escapeHtml(item.codigo)}</span>
+                    <span class="ranking-badge">${item.ingresosUnicos} ${item.ingresosUnicos === 1 ? 'ingreso' : 'ingresos'} con ${item.consultas} ${item.consultas === 1 ? 'consulta' : 'consultas'}</span>
                 </li>
             `).join('')}
         </ul>
