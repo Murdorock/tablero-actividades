@@ -176,7 +176,17 @@ function getInitialMonth(months) {
 }
 
 function changeMonth(direction) {
-    return;
+    if (!currentMonthKey) return;
+
+    const allowedMonths = getAllowedMonthKeys();
+    const currentIndex = allowedMonths.indexOf(currentMonthKey);
+    if (currentIndex === -1) return;
+
+    const targetIndex = currentIndex + direction;
+    if (targetIndex < 0 || targetIndex >= allowedMonths.length) return;
+
+    currentMonthKey = allowedMonths[targetIndex];
+    renderCalendar();
 }
 
 function renderCalendar() {
@@ -255,15 +265,20 @@ function renderCalendar() {
 
     const prevBtn = document.getElementById('btnPrevMonth');
     const nextBtn = document.getElementById('btnNextMonth');
+    const allowedMonths = getAllowedMonthKeys();
+    const currentIndex = allowedMonths.indexOf(currentMonthKey);
+
     if (prevBtn) {
-        prevBtn.disabled = true;
-        prevBtn.style.opacity = '0.45';
-        prevBtn.style.cursor = 'not-allowed';
+        const canGoPrev = currentIndex > 0;
+        prevBtn.disabled = !canGoPrev;
+        prevBtn.style.opacity = canGoPrev ? '1' : '0.45';
+        prevBtn.style.cursor = canGoPrev ? 'pointer' : 'not-allowed';
     }
     if (nextBtn) {
-        nextBtn.disabled = true;
-        nextBtn.style.opacity = '0.45';
-        nextBtn.style.cursor = 'not-allowed';
+        const canGoNext = currentIndex >= 0 && currentIndex < allowedMonths.length - 1;
+        nextBtn.disabled = !canGoNext;
+        nextBtn.style.opacity = canGoNext ? '1' : '0.45';
+        nextBtn.style.cursor = canGoNext ? 'pointer' : 'not-allowed';
     }
 
     if (meta) {
@@ -358,4 +373,14 @@ function calculateEasterSunday(year) {
 function getCurrentMonthKey() {
     const today = new Date();
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getAllowedMonthKeys() {
+    const today = new Date();
+    const current = new Date(today.getFullYear(), today.getMonth(), 1);
+    const previous = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const next = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+
+    const toMonthKey = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    return [toMonthKey(previous), toMonthKey(current), toMonthKey(next)];
 }
