@@ -14,20 +14,20 @@ document.addEventListener('DOMContentLoaded', function() {
     
     dropZone.addEventListener('dragover', (e) => {
         e.preventDefault();
-        dropZone.style.borderColor = '#3498db';
-        dropZone.style.background = '#e8f4f8';
+        dropZone.style.borderColor = '#3b82f6';
+        dropZone.style.background = '#172554';
     });
     
     dropZone.addEventListener('dragleave', (e) => {
         e.preventDefault();
-        dropZone.style.borderColor = '#bdc3c7';
-        dropZone.style.background = '#f8f9fa';
+        dropZone.style.borderColor = '#334155';
+        dropZone.style.background = '#0f172a';
     });
     
     dropZone.addEventListener('drop', (e) => {
         e.preventDefault();
-        dropZone.style.borderColor = '#bdc3c7';
-        dropZone.style.background = '#f8f9fa';
+        dropZone.style.borderColor = '#334155';
+        dropZone.style.background = '#0f172a';
         
         const files = e.dataTransfer.files;
         if (files.length > 0) {
@@ -192,6 +192,9 @@ function updateProgress(percentage, processed, total, startTime) {
 // Obtener estadísticas de la tabla
 async function obtenerEstadisticas() {
     try {
+        const totalRecordsElement = document.getElementById('totalRecords');
+        const lastUpdateElement = document.getElementById('lastUpdate');
+
         // Contar registros
         const { count, error } = await supabase
             .from(TABLE_NAME)
@@ -199,17 +202,32 @@ async function obtenerEstadisticas() {
         
         if (error) {
             console.error('Error al obtener estadísticas:', error);
-            document.getElementById('totalRecords').textContent = 'Error';
+            totalRecordsElement.textContent = 'Error';
         } else {
-            document.getElementById('totalRecords').textContent = count ? count.toLocaleString() : '0';
+            totalRecordsElement.textContent = count ? count.toLocaleString() : '0';
         }
-        
-        // Actualizar fecha
-        document.getElementById('lastUpdate').textContent = new Date().toLocaleString('es-ES');
+
+        // Obtener fecha de última carga real desde la tabla
+        const { data: latestRows, error: latestError } = await supabase
+            .from(TABLE_NAME)
+            .select('fecha_carga')
+            .not('fecha_carga', 'is', null)
+            .order('fecha_carga', { ascending: false })
+            .limit(1);
+
+        if (latestError) {
+            console.error('Error al obtener última carga:', latestError);
+            lastUpdateElement.textContent = 'No disponible';
+        } else if (latestRows && latestRows.length > 0 && latestRows[0].fecha_carga) {
+            lastUpdateElement.textContent = new Date(latestRows[0].fecha_carga).toLocaleString('es-ES');
+        } else {
+            lastUpdateElement.textContent = 'Sin cargas';
+        }
         
     } catch (error) {
         console.error('Error:', error);
         document.getElementById('totalRecords').textContent = 'Error';
+        document.getElementById('lastUpdate').textContent = 'No disponible';
     }
 }
 
@@ -252,10 +270,10 @@ function showStatus(message, type = 'info') {
     
     // Colores según tipo
     const colors = {
-        success: { bg: '#d4edda', border: '#c3e6cb', text: '#155724' },
-        error: { bg: '#f8d7da', border: '#f5c6cb', text: '#721c24' },
-        warning: { bg: '#fff3cd', border: '#ffeaa7', text: '#856404' },
-        info: { bg: '#d1ecf1', border: '#bee5eb', text: '#0c5460' }
+        success: { bg: '#064e3b', border: '#10b981', text: '#d1fae5' },
+        error: { bg: '#7f1d1d', border: '#ef4444', text: '#fee2e2' },
+        warning: { bg: '#78350f', border: '#f59e0b', text: '#fef3c7' },
+        info: { bg: '#1e3a8a', border: '#3b82f6', text: '#dbeafe' }
     };
     
     const color = colors[type] || colors.info;
