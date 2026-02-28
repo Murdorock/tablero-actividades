@@ -248,6 +248,7 @@ body {
     padding: 0.5rem 0;
     margin: 0;
     border-bottom: 1px solid #334155;
+    box-sizing: border-box;
 }
 
 .inconsistencias-filter-grid {
@@ -255,7 +256,8 @@ body {
     align-items: center;
     gap: 1rem;
     flex-wrap: wrap;
-    width: 100%;
+    width: fit-content;
+    margin: 0 auto;
 }
 
 .ciclos-info-field {
@@ -279,6 +281,7 @@ body {
     padding: 0.35rem 0;
     margin: 0;
     border-bottom: 1px solid #334155;
+    box-sizing: border-box;
 }
 
 .inconsistencias-table-wrapper {
@@ -288,10 +291,49 @@ body {
 
 .inconsistencias-table-wrapper .sticky-search-row {
     top: 0;
+    left: 0;
+    width: 100%;
+    min-width: 100%;
 }
 
 .inconsistencias-table-wrapper .sticky-table-info {
     top: var(--sticky-search-height);
+    left: 0;
+    width: 100%;
+    min-width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+.inconsistencias-table-wrapper .inconsistencias-filter-grid {
+    justify-content: center;
+}
+
+.inconsistencias-table-wrapper .ciclos-info-field {
+    margin-left: 0;
+}
+
+.inconsistencias-sticky-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    width: fit-content;
+    max-width: calc(100% - 1rem);
+    padding: 0.5rem 0.75rem;
+}
+
+.inconsistencias-record-count {
+    text-align: center;
+    color: #e2e8f0;
+}
+
+.inconsistencias-pagination-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 .inconsistencias-table-wrapper .data-table thead {

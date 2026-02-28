@@ -14,6 +14,7 @@ let isEditing = false;
 let currentEditId = null;
 let estadisticasData = {};
 let columnasRealesTabla = []; // Para almacenar las columnas reales de la tabla
+let estadisticasChartInstance = null;
 
 const HIDDEN_TABLE_COLUMNS = new Set([
     'cod_tipo_consumo',
@@ -263,12 +264,17 @@ window.toggleAlfanumericaLector = function(event, linkElement, fullEncoded, shor
 
 function renderTable() {
     const tableContainer = document.getElementById('tableContainer');
+    const tableInfoContainer = document.getElementById('tableInfoContainer');
     // Permitir pasar datos filtrados
     let data = Array.isArray(arguments[0]) ? arguments[0] : tableData;
     const visibleColumns = columns.filter(col => !shouldHideInInconsistenciasTable(col));
     updateCiclosInfoField();
 
     if (data.length === 0) {
+        if (tableInfoContainer) {
+            tableInfoContainer.style.display = 'none';
+            tableInfoContainer.innerHTML = '';
+        }
         tableContainer.innerHTML = `
             <div class="empty-state" style="text-align: center; padding: 3rem;">
                 <h3>📭 No hay registros</h3>
@@ -276,6 +282,7 @@ function renderTable() {
                 <button onclick="openCreateModal()" class="btn btn-primary">➕ Agregar Registro</button>
             </div>
         `;
+        updateInconsistenciasStickyOffsets();
         return;
     }
     const totalPages = getTotalPages();
@@ -283,18 +290,22 @@ function renderTable() {
     const endIndex = (currentPage - 1) * VIEW_LIMIT + data.length;
     const prevDisabled = currentPage === 1 ? 'disabled' : '';
     const nextDisabled = currentPage === totalPages ? 'disabled' : '';
+    if (tableInfoContainer) {
+        tableInfoContainer.style.display = 'flex';
+        tableInfoContainer.innerHTML = `
+            <div class="inconsistencias-sticky-center">
+                <span class="record-count inconsistencias-record-count">📊 Mostrando ${startIndex}-${endIndex} de ${currentDataSource.length} registros ${currentDataSource !== fullData ? `(filtrado de ${fullData.length})` : ''}</span>
+                <div class="inconsistencias-pagination-row">
+                    <button onclick="prevPage()" class="btn btn-secondary" ${prevDisabled}>◀️ Anterior</button>
+                    <span>Página ${currentPage} de ${totalPages}</span>
+                    <button onclick="nextPage()" class="btn btn-secondary" ${nextDisabled}>Siguiente ▶️</button>
+                    <button onclick="openEstadisticasModal()" class="btn btn-info" style="background: #17a2b8; color: white; border: none; padding: 0.5rem 1rem; border-radius: 0.25rem; cursor: pointer;">📈 Ver Estadísticas</button>
+                </div>
+            </div>
+        `;
+    }
+
     let tableHTML = `
-        <div class="table-info sticky-table-info" style="margin-bottom: 0; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-            <span class="record-count">📊 Mostrando ${startIndex}-${endIndex} de ${currentDataSource.length} registros ${currentDataSource !== fullData ? `(filtrado de ${fullData.length})` : ''}</span>
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <button onclick="prevPage()" class="btn btn-secondary" ${prevDisabled}>◀️ Anterior</button>
-                <span>Página ${currentPage} de ${totalPages}</span>
-                <button onclick="nextPage()" class="btn btn-secondary" ${nextDisabled}>Siguiente ▶️</button>
-            </div>
-            <div style="display: flex; align-items: center; min-width: 180px; justify-content: flex-end;">
-                <button onclick="openEstadisticasModal()" class="btn btn-info" style="background: #17a2b8; color: white; border: none; padding: 0.5rem 1rem; border-radius: 0.25rem; cursor: pointer;">📈 Ver Estadísticas</button>
-            </div>
-        </div>
         <table class="data-table" style="width: 100%; border-collapse: collapse;">
                 <thead>
                     <tr style="background-color: #f8f9fa;">
@@ -373,6 +384,18 @@ function openEstadisticasModal() {
             </div>
         </div>
     `;
+
+    estadisticasHTML += `
+        <div class="estadistica-card" style="background: #1e293b; padding: 1rem; border-radius: 0.5rem; border: 1px solid #334155; box-shadow: 0 2px 4px rgba(0,0,0,0.25);">
+            <h4 style="margin: 0 0 0.75rem 0; color: #cbd5e1;">📉 Comparativa por Revisor (Total vs Con PDF)</h4>
+            <div style="height: 320px; background: #0f172a; border: 1px solid #334155; border-radius: 0.5rem; padding: 0.75rem;">
+                <canvas id="estadisticasRevisorChart"></canvas>
+            </div>
+            <p style="margin-top: 0.5rem; color: #94a3b8; font-size: 0.85rem;">
+                Cada revisor muestra su total de registros asignados y cuántos tienen PDF cargado.
+            </p>
+        </div>
+    `;
     
     // Estadísticas por revisor (ordenadas por nombre de menor a mayor)
     Object.entries(estadisticasData)
@@ -444,14 +467,130 @@ function openEstadisticasModal() {
 
     document.body.style.overflow = 'hidden';
     document.body.appendChild(estadisticasModal);
+    renderEstadisticasRevisorChart();
 }
 
 function closeEstadisticasModal() {
+    if (estadisticasChartInstance) {
+        estadisticasChartInstance.destroy();
+        estadisticasChartInstance = null;
+    }
+
     const estadisticasModal = document.getElementById('estadisticasModal');
     if (estadisticasModal) {
         document.body.removeChild(estadisticasModal);
     }
     document.body.style.overflow = '';
+}
+
+function renderEstadisticasRevisorChart() {
+    const chartCanvas = document.getElementById('estadisticasRevisorChart');
+    if (!chartCanvas) return;
+
+    if (typeof Chart === 'undefined') {
+        const chartContainer = chartCanvas.parentElement;
+        if (chartContainer) {
+            chartContainer.innerHTML = '<div style="color:#cbd5e1; text-align:center; padding-top:2rem;">No se pudo cargar el gráfico (Chart.js no disponible).</div>';
+        }
+        return;
+    }
+
+    const sortedEntries = Object.entries(estadisticasData)
+        .sort((a, b) => {
+            const porcentajeA = a[1].totalAsignados > 0 ? (a[1].conPdf / a[1].totalAsignados) : 0;
+            const porcentajeB = b[1].totalAsignados > 0 ? (b[1].conPdf / b[1].totalAsignados) : 0;
+
+            if (porcentajeB !== porcentajeA) {
+                return porcentajeB - porcentajeA;
+            }
+
+            if (b[1].totalAsignados !== a[1].totalAsignados) {
+                return b[1].totalAsignados - a[1].totalAsignados;
+            }
+
+            return a[0].localeCompare(b[0], 'es', { sensitivity: 'base' });
+        });
+
+    if (sortedEntries.length === 0) {
+        const chartContainer = chartCanvas.parentElement;
+        if (chartContainer) {
+            chartContainer.innerHTML = '<div style="color:#cbd5e1; text-align:center; padding-top:2rem;">No hay datos de revisores para graficar.</div>';
+        }
+        return;
+    }
+
+    const labels = sortedEntries.map(([revisor]) => revisor);
+    const totalData = sortedEntries.map(([, stats]) => stats.totalAsignados);
+    const conPdfData = sortedEntries.map(([, stats]) => stats.conPdf);
+
+    estadisticasChartInstance = new Chart(chartCanvas, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Total asignados',
+                    data: totalData,
+                    backgroundColor: 'rgba(100, 116, 139, 0.75)',
+                    borderColor: '#64748b',
+                    borderWidth: 1,
+                    borderRadius: 4
+                },
+                {
+                    label: 'Con PDF',
+                    data: conPdfData,
+                    backgroundColor: 'rgba(16, 185, 129, 0.8)',
+                    borderColor: '#10b981',
+                    borderWidth: 1,
+                    borderRadius: 4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: {
+                        color: '#e2e8f0'
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        afterBody: function(context) {
+                            const rowIndex = context[0].dataIndex;
+                            const total = totalData[rowIndex] || 0;
+                            const conPdf = conPdfData[rowIndex] || 0;
+                            const porcentaje = total > 0 ? Math.round((conPdf / total) * 100) : 0;
+                            return `Avance PDF: ${porcentaje}%`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: {
+                        color: '#cbd5e1',
+                        maxRotation: 45,
+                        minRotation: 20
+                    },
+                    grid: {
+                        color: 'rgba(148, 163, 184, 0.15)'
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        color: '#cbd5e1',
+                        precision: 0
+                    },
+                    grid: {
+                        color: 'rgba(148, 163, 184, 0.15)'
+                    }
+                }
+            }
+        }
+    });
 }
 
 function formatColumnName(columnName) {

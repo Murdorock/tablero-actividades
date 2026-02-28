@@ -6,6 +6,7 @@
     <title>Inconsistencias - Sistema</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="config.js"></script>
     <script src="table-logic-inconsistencias.js"></script>
@@ -30,6 +31,7 @@
                     <div id="ciclosInfo" class="ciclos-info-field">Ciclos: 0</div>
                 </div>
             </div>
+            <div id="tableInfoContainer" class="table-info sticky-table-info" style="display: none; margin-bottom: 0;"></div>
             <div id="loadingIndicator" class="loading"><div class="spinner"></div><p>Cargando...</p></div>
             <div id="tableContainer"></div>
         </div>
