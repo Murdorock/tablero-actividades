@@ -6,6 +6,7 @@
     <title>Órdenes Generadas - Sistema</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="config.js"></script>
     <script>
@@ -21,6 +22,7 @@
             <h2>🧾 Órdenes Generadas</h2>
             <div class="table-actions">
                 <button class="btn btn-success" onclick="sincronizarFechaEjecucion()">🗓️ Llenar Fecha Ejecución</button>
+                <button id="exportGerencialBtn" class="btn btn-primary" onclick="exportarImagenesGerenciales()">🖼️ Exportar imágenes</button>
             </div>
         </div>
 
@@ -42,26 +44,26 @@
         </div>
 
         <div class="ordenes-dashboard-grid">
-            <section class="ordenes-dashboard-card">
-                <h3 class="ordenes-dashboard-title">📊 Totales por Mes</h3>
+            <section id="cardTotalesCorrerias" class="ordenes-dashboard-card">
+                <h3 class="ordenes-dashboard-title">📊 Totales Correrías</h3>
                 <div id="totalesMesInfo" class="ordenes-dashboard-info"></div>
                 <div id="totalesMesContainer" class="ordenes-dashboard-content"></div>
             </section>
 
-            <section class="ordenes-dashboard-card">
-                <h3 class="ordenes-dashboard-title">📌 Número de órdenes</h3>
+            <section id="cardNumeroOrdenes" class="ordenes-dashboard-card">
+                <h3 class="ordenes-dashboard-title">📌 Número de Órdenes</h3>
                 <div id="numeroOrdenesInfo" class="ordenes-dashboard-info"></div>
                 <div id="numeroOrdenesContainer" class="ordenes-dashboard-content"></div>
             </section>
 
-            <section class="ordenes-dashboard-card">
-                <h3 class="ordenes-dashboard-title">📈 Resumen mensual (ciclo 14 a 13)</h3>
+            <section id="cardResumenServicio" class="ordenes-dashboard-card">
+                <h3 class="ordenes-dashboard-title">📈 Totales por Servicio</h3>
                 <div id="resumenMensualInfo" class="ordenes-dashboard-info"></div>
                 <div id="resumenMensualContainer" class="ordenes-dashboard-content"></div>
             </section>
 
-            <section class="ordenes-dashboard-card">
-                <h3 class="ordenes-dashboard-title">📉 Total órdenes</h3>
+            <section id="cardGraficaTotal" class="ordenes-dashboard-card">
+                <h3 class="ordenes-dashboard-title">📉 Total Órdenes</h3>
                 <div id="totalOrdenesChartPanel" class="ordenes-dashboard-chart-panel">
                     <canvas id="totalOrdenesChart" height="210"></canvas>
                 </div>

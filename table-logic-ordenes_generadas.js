@@ -1411,6 +1411,167 @@ async function refreshTotalesPorMes() {
     }
 }
 
+function getSelectedMonthsLabelForExport() {
+    const selectedMonths = getSelectedMonthNumbers();
+    if (selectedMonths.length === 0) {
+        return 'Todos los meses';
+    }
+    return selectedMonths
+        .sort((a, b) => a - b)
+        .map(monthNumber => getMonthLabelUpper(monthNumber))
+        .join(' · ');
+}
+
+function setExportButtonState(isLoading, label = '🖼️ Exportar imágenes') {
+    const button = document.getElementById('exportGerencialBtn');
+    if (!button) return;
+    button.disabled = isLoading;
+    button.textContent = label;
+}
+
+function getExportPanels() {
+    const tableCorrerias = document.getElementById('cardTotalesCorrerias');
+    const tableOrdenes = document.getElementById('cardNumeroOrdenes');
+    const tableServicios = document.getElementById('cardResumenServicio');
+    const chartTotalOrdenes = document.getElementById('cardGraficaTotal');
+
+    return [
+        {
+            title: 'RUTAS DE LECTURA',
+            subtitle: 'Totales de correrías por ciclo',
+            element: tableCorrerias
+        },
+        {
+            title: 'CANTIDAD DE ÓRDENES',
+            subtitle: 'Suma de órdenes sin asignar por ciclo',
+            element: tableOrdenes
+        },
+        {
+            title: 'GESTIÓN ODS',
+            subtitle: 'Totales y variaciones por servicio',
+            element: tableServicios
+        },
+        {
+            title: 'GESTIÓN ODS',
+            subtitle: 'Tendencia del total de órdenes',
+            element: chartTotalOrdenes
+        }
+    ];
+}
+
+async function captureElementAsImageData(element) {
+    if (!element) return null;
+
+    const captureWidth = Math.max(element.scrollWidth || 0, element.clientWidth || 0, element.offsetWidth || 0);
+    const captureHeight = Math.max(element.scrollHeight || 0, element.clientHeight || 0, element.offsetHeight || 0);
+
+    const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: null,
+        logging: false,
+        width: captureWidth,
+        height: captureHeight,
+        windowWidth: captureWidth,
+        windowHeight: captureHeight
+    });
+
+    return {
+        dataUrl: canvas.toDataURL('image/png'),
+        width: canvas.width,
+        height: canvas.height
+    };
+}
+
+function forceCorporateExportTheme(enable) {
+    document.body.classList.toggle('corporate-export-theme', enable);
+}
+
+function downloadDataUrlAsFile(dataUrl, fileName) {
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function waitForNextFrame() {
+    return new Promise(resolve => requestAnimationFrame(() => resolve()));
+}
+
+async function exportarImagenesGerenciales() {
+    if (typeof html2canvas === 'undefined') {
+        if (typeof showMessage === 'function') {
+            showMessage('No se pudo cargar la librería de exportación', 'error');
+        } else {
+            alert('No se pudo cargar la librería de exportación');
+        }
+        return;
+    }
+
+    const panels = getExportPanels();
+    const missingPanel = panels.find(panel => !panel.element);
+
+    if (missingPanel) {
+        if (typeof showMessage === 'function') {
+            showMessage('Primero calcula las tablas/gráfica antes de exportar', 'warning');
+        } else {
+            alert('Primero calcula las tablas/gráfica antes de exportar');
+        }
+        return;
+    }
+
+    const monthLabel = getSelectedMonthsLabelForExport();
+    setExportButtonState(true, '⏳ Preparando imágenes...');
+
+    try {
+        forceCorporateExportTheme(true);
+        await waitForNextFrame();
+
+        for (let index = 0; index < panels.length; index += 1) {
+            const panel = panels[index];
+            setExportButtonState(true, `⏳ Exportando ${index + 1}/4...`);
+
+            const imageData = await captureElementAsImageData(panel.element);
+            if (!imageData) continue;
+
+            const normalizedTitle = panel.title
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/\s+/g, '_')
+                .toLowerCase();
+
+            const stamp = new Date();
+            const datePart = `${stamp.getFullYear()}${String(stamp.getMonth() + 1).padStart(2, '0')}${String(stamp.getDate()).padStart(2, '0')}`;
+            const monthPart = monthLabel
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-zA-Z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '')
+                .toLowerCase();
+
+            const fileName = `gerencial_${normalizedTitle}_${monthPart || 'todos'}_${datePart}.png`;
+            downloadDataUrlAsFile(imageData.dataUrl, fileName);
+
+            await new Promise(resolve => setTimeout(resolve, 180));
+        }
+
+        if (typeof showMessage === 'function') {
+            showMessage('Imágenes exportadas correctamente (4 archivos PNG)', 'success');
+        }
+    } catch (error) {
+        if (typeof showMessage === 'function') {
+            showMessage(`Error al exportar: ${error.message}`, 'error');
+        } else {
+            alert(`Error al exportar: ${error.message}`);
+        }
+    } finally {
+        forceCorporateExportTheme(false);
+        setExportButtonState(false, '🖼️ Exportar imágenes');
+    }
+}
+
 async function updateByCycleAndMes({ targetTable, cicloColumn, cicloValue, mesColumn, mesValue, fechaEjecucion }) {
     if (!cicloColumn || cicloValue === null || cicloValue === undefined) {
         return 0;
