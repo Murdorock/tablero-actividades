@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Órdenes Generadas - Sistema</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script>
+        const TABLE_NAME = 'ordenes_generadas';
+        const TABLE_TITLE = '🧾 Órdenes Generadas';
+        const PRIMARY_KEY = 'id';
+    </script>
+    <script src="table-logic-ordenes_generadas.js"></script>
+</head>
+<body>
+    <div class="table-container">
+        <div class="table-header">
+            <h2>🧾 Órdenes Generadas</h2>
+            <div class="table-actions">
+                <button class="btn btn-success" onclick="sincronizarFechaEjecucion()">🗓️ Llenar Fecha Ejecución</button>
+            </div>
+        </div>
+
+        <div style="margin-top: 20px; background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 16px;">
+            <h3 style="margin: 0 0 10px 0; color: #e2e8f0; font-size: 1.05rem; font-weight: 700;">🗓️ Progreso actualización Fecha Ejecución</h3>
+            <div style="height: 12px; border-radius: 999px; background: #334155; overflow: hidden; border: 1px solid #475569;">
+                <div id="syncProgressBar" style="width: 0%; height: 100%; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); transition: width 0.2s ease;"></div>
+            </div>
+            <p id="syncProgressText" style="margin-top: 10px; font-size: 14px; color: #e2e8f0;">0%</p>
+            <p id="syncProgressDetails" style="margin-top: 6px; font-size: 13px; color: #cbd5e1;">Presiona "Llenar Fecha Ejecución" para iniciar.</p>
+        </div>
+
+        <div class="ordenes-dashboard-controls">
+            <label for="totalesMesSelector">Mes</label>
+            <select id="totalesMesSelector" class="ordenes-dashboard-select" multiple size="4" title="Selecciona uno o varios meses">
+                <option value="">Todos</option>
+            </select>
+            <button class="btn btn-secondary" onclick="refreshTotalesPorMes()">🔄 Recalcular Totales</button>
+        </div>
+
+        <div class="ordenes-dashboard-grid">
+            <section class="ordenes-dashboard-card">
+                <h3 class="ordenes-dashboard-title">📊 Totales por Mes</h3>
+                <div id="totalesMesInfo" class="ordenes-dashboard-info"></div>
+                <div id="totalesMesContainer" class="ordenes-dashboard-content"></div>
+            </section>
+
+            <section class="ordenes-dashboard-card">
+                <h3 class="ordenes-dashboard-title">📌 Número de órdenes</h3>
+                <div id="numeroOrdenesInfo" class="ordenes-dashboard-info"></div>
+                <div id="numeroOrdenesContainer" class="ordenes-dashboard-content"></div>
+            </section>
+
+            <section class="ordenes-dashboard-card">
+                <h3 class="ordenes-dashboard-title">📈 Resumen mensual (ciclo 14 a 13)</h3>
+                <div id="resumenMensualInfo" class="ordenes-dashboard-info"></div>
+                <div id="resumenMensualContainer" class="ordenes-dashboard-content"></div>
+            </section>
+
+            <section class="ordenes-dashboard-card">
+                <h3 class="ordenes-dashboard-title">📉 Total órdenes</h3>
+                <div id="totalOrdenesChartPanel" class="ordenes-dashboard-chart-panel">
+                    <canvas id="totalOrdenesChart" height="210"></canvas>
+                </div>
+            </section>
+        </div>
+    </div>
+
+</body>
+</html>
