@@ -230,6 +230,30 @@ Archivo de función:
 
 Si no pasa validación, responde `401/403`.
 
+## ⚡ Sincronización rápida de fecha_ejecucion
+
+La vista `ordenes_generadas.html` ahora intenta usar la Edge Function `sync-fecha-ejecucion-ordenes` para recalcular `fecha_ejecucion` en servidor (mucho más rapido que fila por fila en navegador).
+
+### Desplegar función
+
+```bash
+supabase functions deploy sync-fecha-ejecucion-ordenes
+```
+
+Archivo de función:
+
+- `supabase/functions/sync-fecha-ejecucion-ordenes/index.ts`
+
+### Seguridad
+
+- Valida JWT del usuario que invoca.
+- Exige rol `ADMINISTRADOR` en `perfiles`.
+- Restringe tablas permitidas:
+    - Ordenes: `ordenes_generadas`, `ordenes_lectura`
+    - Calendario: `calendario_ciclo_unpivoted`, `calendario_ciclos_unpivoted`
+
+Si la función no está desplegada o falla por conectividad, el frontend cae automaticamente al flujo local anterior.
+
 ## 📚 Recursos
 
 - [Documentación de Supabase](https://supabase.com/docs)

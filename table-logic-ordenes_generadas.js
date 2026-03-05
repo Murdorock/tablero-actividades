@@ -4,6 +4,40 @@ let currentData = [];
 const APP_TIME_ZONE = 'America/Bogota';
 const BOGOTA_UTC_OFFSET = '-05:00';
 let totalOrdenesChartInstance = null;
+const ORDENES_EXCEL_HEADER_MAP = {
+    'periodo consumo': 'periodo_consumo',
+    ciclo: 'ciclo',
+    ano: 'anio',
+    'mes(es)': 'mes',
+    mes: 'mes',
+    correria: 'correria',
+    zona: 'zona',
+    'nombre zona': 'nombre_zona',
+    periodicidad: 'periodicidad',
+    'nombre correria': 'nombre_correria',
+    'valor pasaje': 'valor_pasaje',
+    'urbana/rural': 'urbana_rural',
+    'numero ordenes sin asignar': 'num_ordenes_sin_asignar',
+    'numero ordenes asignadas': 'num_ordenes_asignadas',
+    'numero ordenes legalizadas': 'num_ordenes_legalizadas',
+    'numero ordenes anuladas': 'num_ordenes_anuladas',
+    'numero de ordenes totales': 'num_ordenes_totales',
+    'numero ordenes de energia': 'num_ordenes_energia',
+    'numero ordenes de gas': 'num_ordenes_gas',
+    'numero ordenes de agua': 'num_ordenes_agua',
+    'numero ordenes de otros': 'num_ordenes_otros',
+    'fecha programada': 'fecha_programada',
+    lector: 'lector',
+    terminal: 'terminal'
+};
+const ORDENES_EXCEL_REQUIRED_COLUMNS = [
+    'periodo_consumo', 'ciclo', 'anio', 'mes', 'correria', 'zona', 'nombre_zona',
+    'periodicidad', 'nombre_correria', 'valor_pasaje', 'urbana_rural',
+    'num_ordenes_sin_asignar', 'num_ordenes_asignadas', 'num_ordenes_legalizadas',
+    'num_ordenes_anuladas', 'num_ordenes_totales', 'num_ordenes_energia',
+    'num_ordenes_gas', 'num_ordenes_agua', 'num_ordenes_otros', 'fecha_programada',
+    'lector', 'terminal'
+];
 const totalOrdenesPointLabelsPlugin = {
     id: 'totalOrdenesPointLabels',
     afterDatasetsDraw(chart) {
@@ -164,6 +198,7 @@ const totalOrdenesPointLabelsPlugin = {
 };
 
 document.addEventListener('DOMContentLoaded', function() {
+    inicializarImportadorExcelOrdenes();
     refreshTotalesPorMes();
 
     document.getElementById('totalesMesSelector')?.addEventListener('change', function() {
@@ -184,6 +219,211 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+function inicializarImportadorExcelOrdenes() {
+    const input = document.getElementById('ordenesExcelInput');
+    if (!input || input.dataset.bound === '1') return;
+
+    input.dataset.bound = '1';
+    input.addEventListener('change', async event => {
+        const file = event?.target?.files?.[0];
+        if (!file) return;
+
+        try {
+            await importarOrdenesDesdeExcel(file);
+        } catch (error) {
+            const message = error?.message || 'Error inesperado al importar Excel';
+            console.error('Error importando ordenes desde Excel:', error);
+            showMessage(message, 'error');
+        } finally {
+            input.value = '';
+        }
+    });
+}
+
+function abrirSelectorExcelOrdenes() {
+    if (typeof XLSX === 'undefined') {
+        showMessage('No se pudo cargar la libreria para Excel', 'error');
+        return;
+    }
+
+    const input = document.getElementById('ordenesExcelInput');
+    if (!input) {
+        showMessage('No se encontro el selector de archivo', 'error');
+        return;
+    }
+
+    input.click();
+}
+
+function sanitizeExcelHeader(value) {
+    return normalizeText(value).replace(/[^a-z0-9/()]+/g, ' ').trim();
+}
+
+function isEmptyExcelRow(row) {
+    if (!Array.isArray(row)) return true;
+    return row.every(value => value === null || value === undefined || String(value).trim() === '');
+}
+
+function parseExcelDate(value) {
+    if (value === null || value === undefined || value === '') return null;
+
+    if (typeof value === 'number') {
+        const parsed = XLSX.SSF.parse_date_code(value);
+        if (parsed && parsed.y && parsed.m && parsed.d) {
+            const month = String(parsed.m).padStart(2, '0');
+            const day = String(parsed.d).padStart(2, '0');
+            return `${parsed.y}-${month}-${day}T00:00:00${BOGOTA_UTC_OFFSET}`;
+        }
+    }
+
+    const parts = getDatePartsInTimeZone(value);
+    if (parts) {
+        return `${parts.isoDate}T00:00:00${BOGOTA_UTC_OFFSET}`;
+    }
+
+    return null;
+}
+
+function normalizeCellValue(targetColumn, rawValue) {
+    if (rawValue === null || rawValue === undefined || rawValue === '') {
+        return null;
+    }
+
+    if (targetColumn === 'fecha_programada') {
+        return parseExcelDate(rawValue);
+    }
+
+    const numericColumns = new Set([
+        'ciclo',
+        'anio',
+        'mes',
+        'correria',
+        'zona',
+        'valor_pasaje',
+        'num_ordenes_sin_asignar',
+        'num_ordenes_asignadas',
+        'num_ordenes_legalizadas',
+        'num_ordenes_anuladas',
+        'num_ordenes_totales',
+        'num_ordenes_energia',
+        'num_ordenes_gas',
+        'num_ordenes_agua',
+        'num_ordenes_otros'
+    ]);
+
+    if (numericColumns.has(targetColumn)) {
+        if (typeof rawValue === 'number') return rawValue;
+
+        const textNumber = String(rawValue).trim();
+        let numericValue = Number(textNumber);
+
+        if (Number.isNaN(numericValue)) {
+            if (textNumber.includes(',') && textNumber.includes('.')) {
+                numericValue = Number(textNumber.replace(/\./g, '').replace(',', '.'));
+            } else if (textNumber.includes(',')) {
+                numericValue = Number(textNumber.replace(',', '.'));
+            }
+        }
+
+        if (!Number.isNaN(numericValue)) return numericValue;
+    }
+
+    return String(rawValue).trim();
+}
+
+function parseOrdenesExcelRows(workbook) {
+    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(firstSheet, {
+        header: 1,
+        defval: null,
+        raw: true,
+        blankrows: true
+    });
+
+    if (!rows || rows.length < 9) {
+        throw new Error('El archivo no contiene la fila de encabezados (fila 9).');
+    }
+
+    const headerRow = rows[8] || [];
+    const columnIndexMap = new Map();
+
+    headerRow.forEach((headerValue, index) => {
+        const normalizedHeader = sanitizeExcelHeader(headerValue);
+        const targetColumn = ORDENES_EXCEL_HEADER_MAP[normalizedHeader];
+        if (targetColumn) {
+            columnIndexMap.set(targetColumn, index);
+        }
+    });
+
+    const missingColumns = ORDENES_EXCEL_REQUIRED_COLUMNS.filter(column => !columnIndexMap.has(column));
+    if (missingColumns.length > 0) {
+        throw new Error(`Faltan columnas en el Excel: ${missingColumns.join(', ')}`);
+    }
+
+    const dataRows = rows.slice(9).filter(row => !isEmptyExcelRow(row));
+
+    if (dataRows.length === 0) {
+        throw new Error('No hay registros para importar (datos desde fila 10).');
+    }
+
+    return dataRows.map((row, rowIndex) => {
+        const record = {};
+
+        ORDENES_EXCEL_REQUIRED_COLUMNS.forEach(targetColumn => {
+            const columnIndex = columnIndexMap.get(targetColumn);
+            const rawValue = row[columnIndex];
+            record[targetColumn] = normalizeCellValue(targetColumn, rawValue);
+        });
+
+        if (!record.fecha_programada) {
+            throw new Error(`No se pudo interpretar fecha_programada en la fila ${rowIndex + 10}.`);
+        }
+
+        return record;
+    });
+}
+
+async function importarOrdenesDesdeExcel(file) {
+    if (!file) return;
+
+    showMessage('Leyendo archivo Excel...', 'info');
+
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: 'array', cellDates: false });
+    const records = parseOrdenesExcelRows(workbook);
+
+    const proceed = confirm(`Se importaran ${records.length} registros en ${TABLE_NAME}. Deseas continuar?`);
+    if (!proceed) {
+        showMessage('Importacion cancelada por el usuario', 'info');
+        return;
+    }
+
+    const batchSize = 200;
+    let inserted = 0;
+
+    for (let index = 0; index < records.length; index += batchSize) {
+        const batch = records.slice(index, index + batchSize);
+        const { error } = await supabase
+            .from(TABLE_NAME)
+            .insert(batch);
+
+        if (error) {
+            throw new Error(`Error insertando lote ${Math.floor(index / batchSize) + 1}: ${error.message}`);
+        }
+
+        inserted += batch.length;
+
+        const isLastBatch = inserted === records.length;
+        const shouldReportProgress = isLastBatch || (index / batchSize) % 5 === 0;
+        if (shouldReportProgress) {
+            showMessage(`Importando... ${inserted}/${records.length}`, 'info');
+        }
+    }
+
+    showMessage(`Importacion completada: ${inserted} registros cargados.`, 'success');
+    await refreshTotalesPorMes();
+}
 
 function getPrimaryKeyFromData(rowSample = null) {
     if (PRIMARY_KEY && rowSample && Object.prototype.hasOwnProperty.call(rowSample, PRIMARY_KEY)) {
@@ -1591,14 +1831,46 @@ async function updateByCycleAndMes({ targetTable, cicloColumn, cicloValue, mesCo
     return Array.isArray(data) ? data.length : 0;
 }
 
+function shouldFallbackToLocalSync(error) {
+    const message = normalizeText(error?.message || '');
+    if (!message) return false;
+
+    return (
+        message.includes('failed to send a request') ||
+        message.includes('failed to fetch') ||
+        message.includes('non-2xx status code') ||
+        message.includes('function not found') ||
+        message.includes('edge function returned a non-2xx')
+    );
+}
+
+async function sincronizarFechaEjecucionViaEdge({ targetTable, calendarioTable }) {
+    const { data, error } = await supabase.functions.invoke('sync-fecha-ejecucion-ordenes', {
+        body: {
+            targetTable,
+            calendarioTable
+        }
+    });
+
+    if (error) {
+        throw new Error(error.message || 'Error invocando sync-fecha-ejecucion-ordenes');
+    }
+
+    if (data?.error) {
+        throw new Error(data.error);
+    }
+
+    return data || {};
+}
+
 async function sincronizarFechaEjecucion() {
     try {
-        updateSyncProgress(2, 'Validando tablas y preparando sincronización...');
+        updateSyncProgress(2, 'Validando tablas y preparando sincronizacion...');
 
         const targetTable = await resolveOrdenesTable();
         if (!targetTable) {
-            updateSyncProgress(0, 'No existe la tabla de órdenes para sincronizar.');
-            showMessage('No existe la tabla de órdenes para sincronizar', 'error');
+            updateSyncProgress(0, 'No existe la tabla de ordenes para sincronizar.');
+            showMessage('No existe la tabla de ordenes para sincronizar', 'error');
             return;
         }
 
@@ -1609,156 +1881,201 @@ async function sincronizarFechaEjecucion() {
             return;
         }
 
-        updateSyncProgress(8, `Leyendo calendario desde ${calendarioTable}...`);
+        updateSyncProgress(15, 'Ejecutando sincronizacion en servidor...');
 
-        const calendarioRows = await fetchAllRowsFromTable(calendarioTable, 1000);
+        try {
+            const result = await sincronizarFechaEjecucionViaEdge({ targetTable, calendarioTable });
+            const affectedRows = Number(result.updatedRows || 0);
+            const pendingRows = Number(result.pendingRows || 0);
 
-        updateSyncProgress(15, `Leyendo órdenes desde ${targetTable}...`);
-        const ordenesRows = await fetchAllRowsFromTable(targetTable, 1000);
-
-        if (!calendarioRows || calendarioRows.length === 0) {
-            updateSyncProgress(100, `No hay datos en ${calendarioTable}.`);
-            showMessage(`No hay datos en ${calendarioTable}`, 'info');
-            return;
-        }
-
-        if (!ordenesRows || ordenesRows.length === 0) {
-            updateSyncProgress(100, `No hay registros en ${targetTable}.`);
-            showMessage(`No hay registros en ${targetTable}`, 'info');
-            return;
-        }
-
-        updateSyncProgress(20, `Procesando cruce para ${ordenesRows.length} registros...`);
-
-        const primaryKey = detectPrimaryKeyFromRows(ordenesRows);
-        const hasUsablePrimaryKey = Object.prototype.hasOwnProperty.call(ordenesRows[0], primaryKey);
-
-        const calendarioCicloCol = detectColumnName(calendarioRows, [/^ciclo$/, /cod.*ciclo/, /ciclo/]);
-        const calendarioMesCol = detectColumnName(calendarioRows, [/^mes$/, /mes/]);
-        const calendarioFechaCol = detectColumnName(calendarioRows, [/^fecha$/, /fecha/, /date/]);
-
-        const ordenesCicloCol = detectColumnName(ordenesRows, [/^ciclo$/, /cod.*ciclo/, /ciclo/]);
-        const ordenesMesCol = detectColumnName(ordenesRows, [/^mes$/, /mes/]);
-        const ordenesFechaProgramadaCol = detectColumnName(ordenesRows, [/fecha.*programada/, /fecha_programada/, /fecha/, /date/]);
-
-        if (!calendarioCicloCol || !calendarioMesCol || !calendarioFechaCol) {
-            updateSyncProgress(100, 'No se detectaron columnas ciclo/mes/fecha en calendario.');
-            showMessage('No se detectaron columnas ciclo/mes/fecha en calendario', 'error');
-            return;
-        }
-
-        if (!ordenesCicloCol) {
-            updateSyncProgress(100, 'No se detectó la columna ciclo en órdenes.');
-            showMessage('No se detectó la columna ciclo en órdenes', 'error');
-            return;
-        }
-
-        if (!ordenesMesCol && !ordenesFechaProgramadaCol) {
-            updateSyncProgress(100, 'No se detectó mes ni fecha programada en órdenes.');
-            showMessage('No se detectó mes ni fecha programada en órdenes', 'error');
-            return;
-        }
-
-        const calendarioMap = new Map();
-        calendarioRows.forEach(row => {
-            const key = buildJoinKey(row[calendarioCicloCol], row[calendarioMesCol]);
-            const fechaValue = row[calendarioFechaCol];
-            if (!key || !fechaValue) return;
-            if (!calendarioMap.has(key)) {
-                calendarioMap.set(key, normalizeDateForStorage(fechaValue));
-            }
-        });
-
-        if (calendarioMap.size === 0) {
-            updateSyncProgress(100, 'No se pudo construir mapa ciclo/mes del calendario.');
-            showMessage('No se pudo construir el mapa ciclo/mes desde calendario', 'info');
-            return;
-        }
-
-        const updates = [];
-        ordenesRows.forEach(row => {
-            const rowId = row[primaryKey];
-
-            const mesOrden = getMesFromRow(row, ordenesMesCol, ordenesFechaProgramadaCol);
-            const key = buildJoinKey(row[ordenesCicloCol], mesOrden);
-            const fechaCalendario = key ? (calendarioMap.get(key) || null) : null;
-
-            const fechaActual = row.fecha_ejecucion;
-            if (sameDateValue(fechaActual, fechaCalendario)) return;
-
-            updates.push({
-                id: rowId,
-                cicloRaw: row[ordenesCicloCol],
-                mesRaw: ordenesMesCol ? row[ordenesMesCol] : null,
-                fecha_ejecucion: fechaCalendario
-            });
-        });
-
-        if (updates.length === 0) {
-            updateSyncProgress(100, 'No hubo cambios nuevos para aplicar en fecha_ejecucion.');
-            showMessage('No hubo cambios nuevos para aplicar en fecha_ejecucion', 'info');
-            return;
-        }
-
-        updateSyncProgress(25, `Aplicando ${updates.length} actualizaciones en Supabase...`);
-
-        let affectedRows = 0;
-        const fallbackDone = new Set();
-        let processedUpdates = 0;
-
-        for (const item of updates) {
-            let updated = 0;
-
-            if (hasUsablePrimaryKey && item.id !== null && item.id !== undefined && item.id !== '') {
-                const { data, error } = await supabase
-                    .from(targetTable)
-                    .update({ fecha_ejecucion: item.fecha_ejecucion })
-                    .eq(primaryKey, item.id)
-                    .select(primaryKey);
-
-                if (error) throw error;
-                updated = Array.isArray(data) ? data.length : 0;
+            if (affectedRows === 0) {
+                updateSyncProgress(100, `Sin cambios en ${targetTable}. Pendientes detectados: ${pendingRows}.`);
+                showMessage(`No hubo cambios nuevos para aplicar en ${targetTable}`, 'info');
+            } else {
+                updateSyncProgress(100, `Finalizado: ${affectedRows} filas actualizadas en ${targetTable}.`);
+                showMessage(`Fecha ejecucion recalculada: ${affectedRows} filas afectadas en ${targetTable}`, 'success');
             }
 
-            if (updated === 0) {
-                const fallbackKey = `${normalizeCiclo(item.cicloRaw)}|${convertMesToNumber(item.mesRaw)}|${item.fecha_ejecucion}`;
-                if (!fallbackDone.has(fallbackKey)) {
-                    updated = await updateByCycleAndMes({
-                        targetTable,
-                        cicloColumn: ordenesCicloCol,
-                        cicloValue: item.cicloRaw,
-                        mesColumn: ordenesMesCol,
-                        mesValue: item.mesRaw,
-                        fechaEjecucion: item.fecha_ejecucion
-                    });
-                    fallbackDone.add(fallbackKey);
-                }
+            await refreshTotalesPorMes();
+            return;
+        } catch (edgeError) {
+            if (!shouldFallbackToLocalSync(edgeError)) {
+                throw edgeError;
             }
 
-            affectedRows += updated;
-            processedUpdates += 1;
-
-            const percent = 25 + (processedUpdates / updates.length) * 75;
-            updateSyncProgress(
-                percent,
-                `Actualizando ${processedUpdates}/${updates.length} registros pendientes (filas afectadas: ${affectedRows}).`
-            );
+            updateSyncProgress(24, 'No se pudo usar la funcion Edge. Ejecutando sincronizacion local...');
+            showMessage('La funcion Edge no esta disponible. Se ejecutara sincronizacion local.', 'warning');
         }
 
-        if (affectedRows === 0) {
-            updateSyncProgress(100, 'No se afectaron filas. Revisa formato/tipos de ciclo y mes.');
-            showMessage('No se afectaron filas al actualizar. Revisa tipos/formato de ciclo y mes.', 'warning');
-            return;
-        }
-
-        updateSyncProgress(100, `Finalizado: ${affectedRows} filas actualizadas en ${targetTable}.`);
-        showMessage(`Fecha ejecución recalculada: ${affectedRows} filas afectadas en ${targetTable}`, 'success');
+        await sincronizarFechaEjecucionLocal({ targetTable, calendarioTable });
         await refreshTotalesPorMes();
-
     } catch (error) {
         updateSyncProgress(100, `Error: ${error.message}`);
         handleError(error, 'al sincronizar fecha_ejecucion');
     }
+}
+
+async function sincronizarFechaEjecucionLocal({ targetTable: providedTargetTable = null, calendarioTable: providedCalendarioTable = null } = {}) {
+    const targetTable = providedTargetTable || await resolveOrdenesTable();
+    const calendarioTable = providedCalendarioTable || await resolveCalendarioTable();
+
+    if (!targetTable) {
+        updateSyncProgress(0, 'No existe la tabla de ordenes para sincronizar.');
+        showMessage('No existe la tabla de ordenes para sincronizar', 'error');
+        return { updatedRows: 0, pendingRows: 0 };
+    }
+
+    if (!calendarioTable) {
+        updateSyncProgress(0, 'No existe la tabla de calendario para sincronizar.');
+        showMessage('No existe la tabla calendario_ciclos_unpivoted', 'error');
+        return { updatedRows: 0, pendingRows: 0 };
+    }
+
+    updateSyncProgress(8, `Leyendo calendario desde ${calendarioTable}...`);
+    const calendarioRows = await fetchAllRowsFromTable(calendarioTable, 1000);
+
+    updateSyncProgress(15, `Leyendo ordenes desde ${targetTable}...`);
+    const ordenesRows = await fetchAllRowsFromTable(targetTable, 1000);
+
+    if (!calendarioRows || calendarioRows.length === 0) {
+        updateSyncProgress(100, `No hay datos en ${calendarioTable}.`);
+        showMessage(`No hay datos en ${calendarioTable}`, 'info');
+        return { updatedRows: 0, pendingRows: 0 };
+    }
+
+    if (!ordenesRows || ordenesRows.length === 0) {
+        updateSyncProgress(100, `No hay registros en ${targetTable}.`);
+        showMessage(`No hay registros en ${targetTable}`, 'info');
+        return { updatedRows: 0, pendingRows: 0 };
+    }
+
+    updateSyncProgress(20, `Procesando cruce para ${ordenesRows.length} registros...`);
+
+    const primaryKey = detectPrimaryKeyFromRows(ordenesRows);
+    const hasUsablePrimaryKey = Object.prototype.hasOwnProperty.call(ordenesRows[0], primaryKey);
+
+    const calendarioCicloCol = detectColumnName(calendarioRows, [/^ciclo$/, /cod.*ciclo/, /ciclo/]);
+    const calendarioMesCol = detectColumnName(calendarioRows, [/^mes$/, /mes/]);
+    const calendarioFechaCol = detectColumnName(calendarioRows, [/^fecha$/, /fecha/, /date/]);
+
+    const ordenesCicloCol = detectColumnName(ordenesRows, [/^ciclo$/, /cod.*ciclo/, /ciclo/]);
+    const ordenesMesCol = detectColumnName(ordenesRows, [/^mes$/, /mes/]);
+    const ordenesFechaProgramadaCol = detectColumnName(ordenesRows, [/fecha.*programada/, /fecha_programada/, /fecha/, /date/]);
+
+    if (!calendarioCicloCol || !calendarioMesCol || !calendarioFechaCol) {
+        updateSyncProgress(100, 'No se detectaron columnas ciclo/mes/fecha en calendario.');
+        showMessage('No se detectaron columnas ciclo/mes/fecha en calendario', 'error');
+        return { updatedRows: 0, pendingRows: 0 };
+    }
+
+    if (!ordenesCicloCol) {
+        updateSyncProgress(100, 'No se detecto la columna ciclo en ordenes.');
+        showMessage('No se detecto la columna ciclo en ordenes', 'error');
+        return { updatedRows: 0, pendingRows: 0 };
+    }
+
+    if (!ordenesMesCol && !ordenesFechaProgramadaCol) {
+        updateSyncProgress(100, 'No se detecto mes ni fecha programada en ordenes.');
+        showMessage('No se detecto mes ni fecha programada en ordenes', 'error');
+        return { updatedRows: 0, pendingRows: 0 };
+    }
+
+    const calendarioMap = new Map();
+    calendarioRows.forEach(row => {
+        const key = buildJoinKey(row[calendarioCicloCol], row[calendarioMesCol]);
+        const fechaValue = row[calendarioFechaCol];
+        if (!key || !fechaValue) return;
+        if (!calendarioMap.has(key)) {
+            calendarioMap.set(key, normalizeDateForStorage(fechaValue));
+        }
+    });
+
+    if (calendarioMap.size === 0) {
+        updateSyncProgress(100, 'No se pudo construir mapa ciclo/mes del calendario.');
+        showMessage('No se pudo construir el mapa ciclo/mes desde calendario', 'info');
+        return { updatedRows: 0, pendingRows: 0 };
+    }
+
+    const updates = [];
+    ordenesRows.forEach(row => {
+        const rowId = row[primaryKey];
+
+        const mesOrden = getMesFromRow(row, ordenesMesCol, ordenesFechaProgramadaCol);
+        const key = buildJoinKey(row[ordenesCicloCol], mesOrden);
+        const fechaCalendario = key ? (calendarioMap.get(key) || null) : null;
+
+        const fechaActual = row.fecha_ejecucion;
+        if (sameDateValue(fechaActual, fechaCalendario)) return;
+
+        updates.push({
+            id: rowId,
+            cicloRaw: row[ordenesCicloCol],
+            mesRaw: ordenesMesCol ? row[ordenesMesCol] : null,
+            fecha_ejecucion: fechaCalendario
+        });
+    });
+
+    if (updates.length === 0) {
+        updateSyncProgress(100, 'No hubo cambios nuevos para aplicar en fecha_ejecucion.');
+        showMessage('No hubo cambios nuevos para aplicar en fecha_ejecucion', 'info');
+        return { updatedRows: 0, pendingRows: 0 };
+    }
+
+    updateSyncProgress(25, `Aplicando ${updates.length} actualizaciones en Supabase...`);
+
+    let affectedRows = 0;
+    const fallbackDone = new Set();
+    let processedUpdates = 0;
+
+    for (const item of updates) {
+        let updated = 0;
+
+        if (hasUsablePrimaryKey && item.id !== null && item.id !== undefined && item.id !== '') {
+            const { data, error } = await supabase
+                .from(targetTable)
+                .update({ fecha_ejecucion: item.fecha_ejecucion })
+                .eq(primaryKey, item.id)
+                .select(primaryKey);
+
+            if (error) throw error;
+            updated = Array.isArray(data) ? data.length : 0;
+        }
+
+        if (updated === 0) {
+            const fallbackKey = `${normalizeCiclo(item.cicloRaw)}|${convertMesToNumber(item.mesRaw)}|${item.fecha_ejecucion}`;
+            if (!fallbackDone.has(fallbackKey)) {
+                updated = await updateByCycleAndMes({
+                    targetTable,
+                    cicloColumn: ordenesCicloCol,
+                    cicloValue: item.cicloRaw,
+                    mesColumn: ordenesMesCol,
+                    mesValue: item.mesRaw,
+                    fechaEjecucion: item.fecha_ejecucion
+                });
+                fallbackDone.add(fallbackKey);
+            }
+        }
+
+        affectedRows += updated;
+        processedUpdates += 1;
+
+        const percent = 25 + (processedUpdates / updates.length) * 75;
+        updateSyncProgress(
+            percent,
+            `Actualizando ${processedUpdates}/${updates.length} registros pendientes (filas afectadas: ${affectedRows}).`
+        );
+    }
+
+    if (affectedRows === 0) {
+        updateSyncProgress(100, 'No se afectaron filas. Revisa formato/tipos de ciclo y mes.');
+        showMessage('No se afectaron filas al actualizar. Revisa tipos/formato de ciclo y mes.', 'warning');
+        return { updatedRows: 0, pendingRows: updates.length };
+    }
+
+    updateSyncProgress(100, `Finalizado: ${affectedRows} filas actualizadas en ${targetTable}.`);
+    showMessage(`Fecha ejecucion recalculada: ${affectedRows} filas afectadas en ${targetTable}`, 'success');
+
+    return { updatedRows: affectedRows, pendingRows: updates.length };
 }
 
 async function fetchAllRowsFromTable(tableName, batchSize = 1000) {
