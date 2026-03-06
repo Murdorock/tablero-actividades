@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Storage Bucket - Sistema</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <style>
+        .storage-panel {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 18px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+        }
+
+        .storage-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 12px;
+            align-items: end;
+        }
+
+        .storage-path {
+            font-family: Consolas, "Courier New", monospace;
+            background: #0f172a;
+            color: #cbd5e1;
+            border: 1px solid #475569;
+            border-radius: 8px;
+            padding: 8px 10px;
+            margin-top: 10px;
+            word-break: break-all;
+        }
+
+        .storage-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 880px;
+        }
+
+        .storage-table th,
+        .storage-table td {
+            border-bottom: 1px solid #334155;
+            padding: 10px 8px;
+            text-align: left;
+            color: #e2e8f0;
+            vertical-align: middle;
+        }
+
+        .storage-table th {
+            color: #f8fafc;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            background: #0f172a;
+            position: sticky;
+            top: 0;
+            z-index: 5;
+        }
+
+        .storage-table tbody tr:hover {
+            background: rgba(148, 163, 184, 0.08);
+        }
+
+        .path-btn {
+            background: transparent;
+            color: #93c5fd;
+            border: 1px solid #1d4ed8;
+            border-radius: 6px;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .path-btn:hover {
+            background: rgba(59, 130, 246, 0.2);
+        }
+
+        .file-name {
+            word-break: break-word;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 3px 8px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-file {
+            background: rgba(14, 165, 233, 0.16);
+            color: #7dd3fc;
+        }
+
+        .badge-folder {
+            background: rgba(250, 204, 21, 0.16);
+            color: #fde68a;
+        }
+
+        .status-line {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #cbd5e1;
+            min-height: 20px;
+        }
+
+        .status-line.error {
+            color: #fecaca;
+        }
+
+        .status-line.success {
+            color: #86efac;
+        }
+
+        .action-group {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        @media (max-width: 768px) {
+            .table-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+
+            .table-actions {
+                width: 100%;
+                flex-wrap: wrap;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="table-container">
+        <div class="table-header">
+            <h2>Storage Bucket</h2>
+            <div class="table-actions">
+                <button class="btn btn-secondary" id="btnRefresh">Refrescar</button>
+                <button class="btn btn-primary" id="btnGoRoot">Ir a raiz</button>
+            </div>
+        </div>
+
+        <div class="storage-panel">
+            <div class="storage-grid">
+                <div class="form-group" style="margin: 0;">
+                    <label for="bucketName">Bucket</label>
+                    <input id="bucketName" type="text" value="cold" placeholder="Ej: cold" style="width: 100%;">
+                </div>
+                <div class="form-group" style="margin: 0;">
+                    <label for="folderPath">Carpeta actual</label>
+                    <input id="folderPath" type="text" placeholder="Ej: evidencias/2026" style="width: 100%;">
+                </div>
+                <div class="form-group" style="margin: 0;">
+                    <label for="searchInput">Buscar en listado</label>
+                    <input id="searchInput" type="text" placeholder="Nombre de archivo o carpeta" style="width: 100%;">
+                </div>
+                <div class="form-group" style="margin: 0;">
+                    <button class="btn btn-primary" id="btnLoadFiles">Ver archivos</button>
+                </div>
+            </div>
+            <div class="storage-path" id="currentPath">Ruta: /</div>
+            <div class="status-line" id="statusLine"></div>
+        </div>
+
+        <div class="storage-panel">
+            <h3 style="margin-bottom: 12px; color: #f8fafc;">Subir archivo</h3>
+            <div class="storage-grid">
+                <div class="form-group" style="margin: 0;">
+                    <label for="uploadFile">Archivo</label>
+                    <input id="uploadFile" type="file" style="width: 100%;">
+                </div>
+                <div class="form-group" style="margin: 0;">
+                    <label for="uploadFolder">Subcarpeta destino (opcional)</label>
+                    <input id="uploadFolder" type="text" placeholder="Ej: backup" style="width: 100%;">
+                </div>
+                <div class="form-group" style="margin: 0;">
+                    <label for="upsertFile">Reemplazar si existe</label>
+                    <select id="upsertFile" style="width: 100%;">
+                        <option value="false" selected>No</option>
+                        <option value="true">Si</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin: 0;">
+                    <button class="btn btn-success" id="btnUploadFile">Subir</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="data-table-wrapper">
+            <table class="storage-table">
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Tipo</th>
+                        <th>Tamano</th>
+                        <th>Actualizado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="filesTableBody">
+                    <tr>
+                        <td colspan="5" style="text-align: center; color: #94a3b8; padding: 24px;">No hay datos cargados.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const bucketInput = document.getElementById('bucketName');
+        const folderInput = document.getElementById('folderPath');
+        const uploadFolderInput = document.getElementById('uploadFolder');
+        const uploadFileInput = document.getElementById('uploadFile');
+        const searchInput = document.getElementById('searchInput');
+        const upsertInput = document.getElementById('upsertFile');
+        const filesTableBody = document.getElementById('filesTableBody');
+        const statusLine = document.getElementById('statusLine');
+        const currentPathLabel = document.getElementById('currentPath');
+
+        let currentItems = [];
+        let filteredItems = [];
+
+        function normalizePath(path) {
+            if (!path) return '';
+            return path
+                .split('/')
+                .map((part) => part.trim())
+                .filter(Boolean)
+                .join('/');
+        }
+
+        function joinPath(base, extra) {
+            const normalizedBase = normalizePath(base);
+            const normalizedExtra = normalizePath(extra);
+            if (normalizedBase && normalizedExtra) return normalizedBase + '/' + normalizedExtra;
+            return normalizedBase || normalizedExtra;
+        }
+
+        function setStatus(message, type) {
+            statusLine.textContent = message;
+            statusLine.className = 'status-line';
+            if (type) {
+                statusLine.classList.add(type);
+            }
+        }
+
+        function updateCurrentPathLabel(bucket, path) {
+            const normalizedPath = normalizePath(path);
+            const fullPath = normalizedPath ? '/' + normalizedPath : '/';
+            currentPathLabel.textContent = 'Ruta: ' + fullPath + ' (bucket: ' + bucket + ')';
+        }
+
+        function formatDateValue(value) {
+            if (!value) return '-';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return '-';
+            return date.toLocaleString('es-CO');
+        }
+
+        function formatSize(bytes) {
+            if (!bytes && bytes !== 0) return '-';
+            if (bytes === 0) return '0 B';
+            const units = ['B', 'KB', 'MB', 'GB'];
+            let index = 0;
+            let size = bytes;
+            while (size >= 1024 && index < units.length - 1) {
+                size /= 1024;
+                index += 1;
+            }
+            const decimals = index === 0 ? 0 : 2;
+            return size.toFixed(decimals) + ' ' + units[index];
+        }
+
+        function isFolderItem(item) {
+            return item.id === null || item.metadata === null;
+        }
+
+        function escapeHtml(text) {
+            const value = String(text || '');
+            return value
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function renderItems(items) {
+            if (!items.length) {
+                filesTableBody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:24px;">No hay archivos o carpetas en esta ruta.</td></tr>';
+                return;
+            }
+
+            const rows = items.map((item, index) => {
+                const folder = isFolderItem(item);
+                const badge = folder
+                    ? '<span class="badge badge-folder">Carpeta</span>'
+                    : '<span class="badge badge-file">Archivo</span>';
+
+                const sizeText = folder ? '-' : formatSize(item.metadata && item.metadata.size);
+                const updatedText = formatDateValue(item.updated_at || item.created_at);
+                const safeName = escapeHtml(item.name);
+
+                const actions = folder
+                    ? '<button class="path-btn" data-action="open" data-index="' + index + '">Abrir</button>'
+                    : '<div class="action-group">'
+                        + '<button class="path-btn" data-action="view" data-index="' + index + '">Ver</button>'
+                        + '<button class="path-btn" data-action="download" data-index="' + index + '">Descargar</button>'
+                        + '</div>';
+
+                return '<tr>'
+                    + '<td class="file-name">' + safeName + '</td>'
+                    + '<td>' + badge + '</td>'
+                    + '<td>' + sizeText + '</td>'
+                    + '<td>' + updatedText + '</td>'
+                    + '<td>' + actions + '</td>'
+                    + '</tr>';
+            }).join('');
+
+            filesTableBody.innerHTML = rows;
+        }
+
+        function applySearchFilter() {
+            const query = (searchInput.value || '').trim().toLowerCase();
+
+            if (!query) {
+                filteredItems = [...currentItems];
+            } else {
+                filteredItems = currentItems.filter((item) => {
+                    const itemName = String(item.name || '').toLowerCase();
+                    const typeLabel = isFolderItem(item) ? 'carpeta' : 'archivo';
+                    return itemName.includes(query) || typeLabel.includes(query);
+                });
+            }
+
+            renderItems(filteredItems);
+            setStatus('Mostrando ' + filteredItems.length + ' de ' + currentItems.length + ' elementos.', 'success');
+        }
+
+        async function loadFiles() {
+            const bucket = bucketInput.value.trim();
+            const path = normalizePath(folderInput.value);
+
+            if (!bucket) {
+                setStatus('Debes indicar el nombre del bucket.', 'error');
+                return;
+            }
+
+            setStatus('Cargando archivos...', null);
+            updateCurrentPathLabel(bucket, path);
+
+            const { data, error } = await supabase
+                .storage
+                .from(bucket)
+                .list(path || undefined, {
+                    limit: 100,
+                    offset: 0,
+                    sortBy: { column: 'name', order: 'asc' }
+                });
+
+            if (error) {
+                setStatus('No se pudo listar: ' + error.message, 'error');
+                filesTableBody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#fecaca;padding:24px;">Error al listar archivos.</td></tr>';
+                return;
+            }
+
+            currentItems = data || [];
+            applySearchFilter();
+        }
+
+        async function getFileUrl(bucket, objectPath) {
+            const { data: signedData, error: signedError } = await supabase
+                .storage
+                .from(bucket)
+                .createSignedUrl(objectPath, 120);
+
+            if (!signedError && signedData && signedData.signedUrl) {
+                return signedData.signedUrl;
+            }
+
+            const { data: publicData } = supabase
+                .storage
+                .from(bucket)
+                .getPublicUrl(objectPath);
+
+            if (publicData && publicData.publicUrl) {
+                return publicData.publicUrl;
+            }
+
+            throw new Error('No se pudo generar URL para el archivo.');
+        }
+
+        async function openFile(item, downloadMode) {
+            const bucket = bucketInput.value.trim();
+            const path = normalizePath(folderInput.value);
+            const objectPath = joinPath(path, item.name);
+
+            try {
+                setStatus('Generando enlace para ' + item.name + '...', null);
+                const fileUrl = await getFileUrl(bucket, objectPath);
+
+                const link = document.createElement('a');
+                link.href = fileUrl;
+                link.target = '_blank';
+                if (downloadMode) {
+                    link.download = item.name;
+                }
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                setStatus(downloadMode ? 'Descarga iniciada.' : 'Archivo abierto en nueva pestana.', 'success');
+            } catch (error) {
+                setStatus('No se pudo abrir/descargar: ' + error.message, 'error');
+            }
+        }
+
+        function goToFolder(item) {
+            folderInput.value = joinPath(folderInput.value, item.name);
+            loadFiles();
+        }
+
+        function goToRoot() {
+            folderInput.value = '';
+            loadFiles();
+        }
+
+        async function uploadFile() {
+            const bucket = bucketInput.value.trim();
+            const selectedFile = uploadFileInput.files && uploadFileInput.files[0];
+
+            if (!bucket) {
+                setStatus('Debes indicar el bucket antes de subir.', 'error');
+                return;
+            }
+
+            if (!selectedFile) {
+                setStatus('Selecciona un archivo para subir.', 'error');
+                return;
+            }
+
+            const destinationBase = joinPath(folderInput.value, uploadFolderInput.value);
+            const targetPath = joinPath(destinationBase, selectedFile.name);
+            const upsert = upsertInput.value === 'true';
+
+            setStatus('Subiendo ' + selectedFile.name + '...', null);
+
+            const { error } = await supabase
+                .storage
+                .from(bucket)
+                .upload(targetPath, selectedFile, {
+                    upsert,
+                    contentType: selectedFile.type || undefined
+                });
+
+            if (error) {
+                setStatus('Error al subir: ' + error.message, 'error');
+                return;
+            }
+
+            uploadFileInput.value = '';
+            setStatus('Archivo subido correctamente a ' + targetPath, 'success');
+            await loadFiles();
+        }
+
+        filesTableBody.addEventListener('click', async (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLButtonElement)) return;
+
+            const action = target.getAttribute('data-action');
+            const index = Number(target.getAttribute('data-index'));
+            const item = filteredItems[index];
+
+            if (!item) return;
+
+            if (action === 'open') {
+                goToFolder(item);
+                return;
+            }
+
+            if (action === 'view') {
+                await openFile(item, false);
+                return;
+            }
+
+            if (action === 'download') {
+                await openFile(item, true);
+            }
+        });
+
+        document.getElementById('btnLoadFiles').addEventListener('click', loadFiles);
+        document.getElementById('btnRefresh').addEventListener('click', loadFiles);
+        document.getElementById('btnGoRoot').addEventListener('click', goToRoot);
+        document.getElementById('btnUploadFile').addEventListener('click', uploadFile);
+        searchInput.addEventListener('input', applySearchFilter);
+
+        updateCurrentPathLabel(bucketInput.value.trim() || '-', '');
+    </script>
+</body>
+</html>
