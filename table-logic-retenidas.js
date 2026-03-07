@@ -256,10 +256,13 @@ async function limpiarTabla() {
             return;
         }
         
-        // Borrado total: no depende de una columna específica.
+        // Algunos entornos exigen WHERE en DELETE.
+        // Este filtro es siempre verdadero para una columna existente,
+        // por lo que permite borrar todos los registros.
         const { error } = await supabase
             .from(TABLE_NAME)
-            .delete();
+            .delete()
+            .or('instalacion.is.null,instalacion.not.is.null');
         
         if (error) {
             console.error('Error al limpiar tabla:', error);
