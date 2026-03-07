@@ -241,24 +241,37 @@ async function limpiarTabla() {
     
     try {
         showStatus('🔄 Limpiando tabla...', 'info');
+
+        const { count: totalAntes, error: countError } = await supabase
+            .from(TABLE_NAME)
+            .select('*', { count: 'exact', head: true });
+
+        if (countError) {
+            throw countError;
+        }
+
+        if (!totalAntes) {
+            showStatus('ℹ️ La tabla ya está vacía', 'info');
+            obtenerEstadisticas();
+            return;
+        }
         
-        // Eliminar todos los registros
+        // Borrado total: no depende de una columna específica.
         const { error } = await supabase
             .from(TABLE_NAME)
-            .delete()
-            .neq('id_retenidos', '00000000-0000-0000-0000-000000000000'); // Esto eliminará todos
+            .delete();
         
         if (error) {
             console.error('Error al limpiar tabla:', error);
-            showStatus('❌ Error al limpiar la tabla', 'error');
+            showStatus(`❌ Error al limpiar la tabla: ${error.message}`, 'error');
         } else {
-            showStatus('✅ Tabla limpiada exitosamente', 'success');
+            showStatus(`✅ Tabla limpiada exitosamente (${totalAntes.toLocaleString()} registros eliminados)`, 'success');
             obtenerEstadisticas();
         }
         
     } catch (error) {
         console.error('Error:', error);
-        showStatus('❌ Error al limpiar la tabla', 'error');
+        showStatus(`❌ Error al limpiar la tabla: ${error.message || 'Error desconocido'}`, 'error');
     }
 }
 
