@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Storage Bucket - Sistema</title>
+    <title>Almacenamiento - Sistema</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="config.js"></script>
     <style>
         .storage-panel {
@@ -123,6 +124,31 @@
             flex-wrap: wrap;
         }
 
+        .storage-tools {
+            margin-top: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .selection-pill {
+            border: 1px solid #334155;
+            background: #0f172a;
+            color: #cbd5e1;
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .row-selector {
+            width: 16px;
+            height: 16px;
+            accent-color: #2563eb;
+            cursor: pointer;
+        }
+
         @media (max-width: 768px) {
             .table-header {
                 flex-direction: column;
@@ -140,7 +166,7 @@
 <body>
     <div class="table-container">
         <div class="table-header">
-            <h2>Storage Bucket</h2>
+            <h2>Almacenamiento</h2>
             <div class="table-actions">
                 <button class="btn btn-secondary" id="btnRefresh">Refrescar</button>
                 <button class="btn btn-primary" id="btnGoRoot">Ir a raiz</button>
@@ -162,10 +188,28 @@
                     <input id="searchInput" type="text" placeholder="Nombre de archivo o carpeta" style="width: 100%;">
                 </div>
                 <div class="form-group" style="margin: 0;">
+                    <label for="pageSizeInput">Lote de carga</label>
+                    <select id="pageSizeInput" style="width: 100%;">
+                        <option value="100">100</option>
+                        <option value="250">250</option>
+                        <option value="500" selected>500</option>
+                        <option value="1000">1000</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin: 0; display: flex; align-items: center; gap: 8px;">
+                    <input id="loadAllItems" type="checkbox" checked>
+                    <label for="loadAllItems" style="margin: 0;">Ver todo el contenido</label>
+                </div>
+                <div class="form-group" style="margin: 0;">
                     <button class="btn btn-primary" id="btnLoadFiles">Ver archivos</button>
                 </div>
             </div>
             <div class="storage-path" id="currentPath">Ruta: /</div>
+            <div class="storage-tools">
+                <button class="btn btn-secondary" id="btnDownloadSelected">Descargar seleccionados (.zip)</button>
+                <button class="btn btn-secondary" id="btnDownloadFolder">Descargar carpeta completa (.zip)</button>
+                <span class="selection-pill" id="selectedCount">0 seleccionados</span>
+            </div>
             <div class="status-line" id="statusLine"></div>
         </div>
 
@@ -197,6 +241,9 @@
             <table class="storage-table">
                 <thead>
                     <tr>
+                        <th style="width: 44px; text-align: center;">
+                            <input type="checkbox" id="selectAllRows" class="row-selector" title="Seleccionar visibles">
+                        </th>
                         <th>Nombre</th>
                         <th>Tipo</th>
                         <th>Tamano</th>
@@ -206,7 +253,7 @@
                 </thead>
                 <tbody id="filesTableBody">
                     <tr>
-                        <td colspan="5" style="text-align: center; color: #94a3b8; padding: 24px;">No hay datos cargados.</td>
+                        <td colspan="6" style="text-align: center; color: #94a3b8; padding: 24px;">No hay datos cargados.</td>
                     </tr>
                 </tbody>
             </table>
@@ -220,12 +267,19 @@
         const uploadFileInput = document.getElementById('uploadFile');
         const searchInput = document.getElementById('searchInput');
         const upsertInput = document.getElementById('upsertFile');
+        const pageSizeInput = document.getElementById('pageSizeInput');
+        const loadAllItemsInput = document.getElementById('loadAllItems');
         const filesTableBody = document.getElementById('filesTableBody');
         const statusLine = document.getElementById('statusLine');
         const currentPathLabel = document.getElementById('currentPath');
+        const btnDownloadSelected = document.getElementById('btnDownloadSelected');
+        const btnDownloadFolder = document.getElementById('btnDownloadFolder');
+        const selectedCount = document.getElementById('selectedCount');
+        const selectAllRows = document.getElementById('selectAllRows');
 
         let currentItems = [];
         let filteredItems = [];
+        const selectedEntries = new Map();
 
         function normalizePath(path) {
             if (!path) return '';
@@ -282,6 +336,34 @@
             return item.id === null || item.metadata === null;
         }
 
+        function getObjectPathFromItem(item) {
+            return joinPath(folderInput.value, item.name);
+        }
+
+        function getVisibleObjectPaths() {
+            return filteredItems.map((item) => getObjectPathFromItem(item));
+        }
+
+        function updateSelectionUI() {
+            const visiblePaths = getVisibleObjectPaths();
+            const selectedVisible = visiblePaths.filter((path) => selectedEntries.has(path)).length;
+
+            if (selectAllRows) {
+                if (!visiblePaths.length) {
+                    selectAllRows.checked = false;
+                    selectAllRows.indeterminate = false;
+                } else {
+                    selectAllRows.checked = selectedVisible === visiblePaths.length;
+                    selectAllRows.indeterminate = selectedVisible > 0 && selectedVisible < visiblePaths.length;
+                }
+            }
+
+            if (selectedCount) {
+                const total = selectedEntries.size;
+                selectedCount.textContent = total + (total === 1 ? ' seleccionado' : ' seleccionados');
+            }
+        }
+
         function escapeHtml(text) {
             const value = String(text || '');
             return value
@@ -294,7 +376,8 @@
 
         function renderItems(items) {
             if (!items.length) {
-                filesTableBody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:24px;">No hay archivos o carpetas en esta ruta.</td></tr>';
+                filesTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:24px;">No hay archivos o carpetas en esta ruta.</td></tr>';
+                updateSelectionUI();
                 return;
             }
 
@@ -307,6 +390,8 @@
                 const sizeText = folder ? '-' : formatSize(item.metadata && item.metadata.size);
                 const updatedText = formatDateValue(item.updated_at || item.created_at);
                 const safeName = escapeHtml(item.name);
+                const objectPath = getObjectPathFromItem(item);
+                const isChecked = selectedEntries.has(objectPath) ? 'checked' : '';
 
                 const actions = folder
                     ? '<button class="path-btn" data-action="open" data-index="' + index + '">Abrir</button>'
@@ -316,6 +401,9 @@
                         + '</div>';
 
                 return '<tr>'
+                    + '<td style="text-align:center;">'
+                    + '<input type="checkbox" class="row-selector" data-action="select" data-index="' + index + '" ' + isChecked + '>'
+                    + '</td>'
                     + '<td class="file-name">' + safeName + '</td>'
                     + '<td>' + badge + '</td>'
                     + '<td>' + sizeText + '</td>'
@@ -325,6 +413,7 @@
             }).join('');
 
             filesTableBody.innerHTML = rows;
+            updateSelectionUI();
         }
 
         function applySearchFilter() {
@@ -344,9 +433,28 @@
             setStatus('Mostrando ' + filteredItems.length + ' de ' + currentItems.length + ' elementos.', 'success');
         }
 
+        function setSelectAllVisible(checked) {
+            filteredItems.forEach((item) => {
+                const objectPath = getObjectPathFromItem(item);
+                if (checked) {
+                    selectedEntries.set(objectPath, {
+                        path: objectPath,
+                        name: item.name,
+                        isFolder: isFolderItem(item)
+                    });
+                } else {
+                    selectedEntries.delete(objectPath);
+                }
+            });
+
+            renderItems(filteredItems);
+        }
+
         async function loadFiles() {
             const bucket = bucketInput.value.trim();
             const path = normalizePath(folderInput.value);
+            const pageSize = Math.max(1, Number(pageSizeInput.value) || 500);
+            const loadAll = !!loadAllItemsInput.checked;
 
             if (!bucket) {
                 setStatus('Debes indicar el nombre del bucket.', 'error');
@@ -356,23 +464,50 @@
             setStatus('Cargando archivos...', null);
             updateCurrentPathLabel(bucket, path);
 
-            const { data, error } = await supabase
-                .storage
-                .from(bucket)
-                .list(path || undefined, {
-                    limit: 100,
-                    offset: 0,
-                    sortBy: { column: 'name', order: 'asc' }
-                });
+            try {
+                let offset = 0;
+                let allItems = [];
 
-            if (error) {
+                while (true) {
+                    const { data, error } = await supabase
+                        .storage
+                        .from(bucket)
+                        .list(path || undefined, {
+                            limit: pageSize,
+                            offset,
+                            sortBy: { column: 'name', order: 'asc' }
+                        });
+
+                    if (error) {
+                        throw error;
+                    }
+
+                    const batch = data || [];
+                    allItems = allItems.concat(batch);
+
+                    if (!loadAll || batch.length < pageSize) {
+                        break;
+                    }
+
+                    offset += pageSize;
+                    setStatus('Cargando archivos... ' + allItems.length + ' encontrados', null);
+                }
+
+                currentItems = allItems;
+                selectedEntries.clear();
+                applySearchFilter();
+
+                if (loadAll) {
+                    setStatus('Listado completo cargado: ' + currentItems.length + ' elementos.', 'success');
+                } else {
+                    setStatus('Listado parcial cargado: ' + currentItems.length + ' elementos.', 'success');
+                }
+            } catch (error) {
                 setStatus('No se pudo listar: ' + error.message, 'error');
-                filesTableBody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#fecaca;padding:24px;">Error al listar archivos.</td></tr>';
-                return;
+                filesTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#fecaca;padding:24px;">Error al listar archivos.</td></tr>';
+                selectedEntries.clear();
+                updateSelectionUI();
             }
-
-            currentItems = data || [];
-            applySearchFilter();
         }
 
         async function getFileUrl(bucket, objectPath) {
@@ -420,6 +555,268 @@
             } catch (error) {
                 setStatus('No se pudo abrir/descargar: ' + error.message, 'error');
             }
+        }
+
+        async function listFilesRecursive(bucket, basePath) {
+            const allFiles = [];
+            const normalizedBase = normalizePath(basePath);
+            const pageSize = 1000;
+            let offset = 0;
+
+            while (true) {
+                const { data, error } = await supabase
+                    .storage
+                    .from(bucket)
+                    .list(normalizedBase || undefined, {
+                        limit: pageSize,
+                        offset,
+                        sortBy: { column: 'name', order: 'asc' }
+                    });
+
+                if (error) {
+                    throw error;
+                }
+
+                const batch = data || [];
+
+                for (const entry of batch) {
+                    const entryPath = joinPath(normalizedBase, entry.name);
+                    if (isFolderItem(entry)) {
+                        const nestedFiles = await listFilesRecursive(bucket, entryPath);
+                        allFiles.push(...nestedFiles);
+                    } else {
+                        allFiles.push(entryPath);
+                    }
+                }
+
+                if (batch.length < pageSize) {
+                    break;
+                }
+
+                offset += pageSize;
+            }
+
+            return allFiles;
+        }
+
+        function getFileNameFromPath(path) {
+            const normalized = normalizePath(path);
+            if (!normalized) return 'archivo';
+            const parts = normalized.split('/');
+            return parts[parts.length - 1] || 'archivo';
+        }
+
+        function triggerBrowserDownload(url, fileName) {
+            const link = document.createElement('a');
+            link.href = url;
+            link.target = '_blank';
+            if (fileName) {
+                link.download = fileName;
+            }
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function triggerBlobDownload(blob, fileName) {
+            const objectUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(objectUrl);
+        }
+
+        function sanitizeZipPart(value) {
+            const normalized = String(value || '').trim().toLowerCase();
+            if (!normalized) return 'sin_nombre';
+            return normalized
+                .replace(/[^a-z0-9-_]+/g, '_')
+                .replace(/_+/g, '_')
+                .replace(/^_+|_+$/g, '') || 'sin_nombre';
+        }
+
+        function formatZipTimestamp() {
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const d = String(now.getDate()).padStart(2, '0');
+            const h = String(now.getHours()).padStart(2, '0');
+            const min = String(now.getMinutes()).padStart(2, '0');
+            const s = String(now.getSeconds()).padStart(2, '0');
+            return '' + y + m + d + '_' + h + min + s;
+        }
+
+        function buildZipFileName(bucket, basePath, prefix) {
+            const bucketPart = sanitizeZipPart(bucket || 'bucket');
+            const basePart = sanitizeZipPart(basePath ? basePath.split('/').pop() : 'raiz');
+            const prefixPart = sanitizeZipPart(prefix || 'archivos');
+            return prefixPart + '_' + bucketPart + '_' + basePart + '_' + formatZipTimestamp() + '.zip';
+        }
+
+        function getZipEntryName(objectPath, basePath) {
+            const normalizedObject = normalizePath(objectPath);
+            const normalizedBase = normalizePath(basePath);
+
+            if (!normalizedBase) {
+                return normalizedObject;
+            }
+
+            const prefix = normalizedBase + '/';
+            if (normalizedObject.startsWith(prefix)) {
+                return normalizedObject.slice(prefix.length);
+            }
+
+            return normalizedObject;
+        }
+
+        async function downloadFileBlob(bucket, objectPath) {
+            const { data, error } = await supabase
+                .storage
+                .from(bucket)
+                .download(objectPath);
+
+            if (error) {
+                throw error;
+            }
+
+            return data;
+        }
+
+        async function downloadFileByPath(bucket, objectPath) {
+            const fileUrl = await getFileUrl(bucket, objectPath);
+            triggerBrowserDownload(fileUrl, getFileNameFromPath(objectPath));
+        }
+
+        async function downloadManyFilesAsZip(bucket, filePaths, options = {}) {
+            if (!filePaths.length) {
+                setStatus('No hay archivos para descargar.', 'error');
+                return;
+            }
+
+            if (typeof JSZip === 'undefined') {
+                setStatus('No se pudo inicializar JSZip para comprimir archivos.', 'error');
+                return;
+            }
+
+            const uniquePaths = [...new Set(filePaths.map((value) => normalizePath(value)).filter(Boolean))];
+            let okCount = 0;
+            let errorCount = 0;
+            const zip = new JSZip();
+            const basePath = normalizePath(options.basePath || folderInput.value || '');
+            const zipFileName = options.zipFileName || buildZipFileName(bucket, basePath, options.prefix || 'descarga');
+
+            setStatus('Preparando ZIP con ' + uniquePaths.length + ' archivo(s)...', null);
+
+            for (let i = 0; i < uniquePaths.length; i += 1) {
+                const filePath = uniquePaths[i];
+                try {
+                    setStatus('Agregando al ZIP: ' + (i + 1) + '/' + uniquePaths.length, null);
+                    const blob = await downloadFileBlob(bucket, filePath);
+                    const entryName = getZipEntryName(filePath, basePath) || getFileNameFromPath(filePath);
+                    zip.file(entryName, blob);
+                    okCount += 1;
+                } catch (error) {
+                    console.error('Error al descargar', filePath, error);
+                    errorCount += 1;
+                }
+            }
+
+            if (okCount === 0) {
+                setStatus('No se pudo descargar ningun archivo para crear el ZIP.', 'error');
+                return;
+            }
+
+            setStatus('Generando archivo ZIP...', null);
+            const zipBlob = await zip.generateAsync({
+                type: 'blob',
+                compression: 'DEFLATE',
+                compressionOptions: { level: 6 }
+            });
+
+            triggerBlobDownload(zipBlob, zipFileName);
+
+            if (errorCount > 0) {
+                setStatus('ZIP generado con errores parciales. Incluidos: ' + okCount + ', fallidos: ' + errorCount + '.', 'error');
+            } else {
+                setStatus('ZIP generado correctamente con ' + okCount + ' archivo(s).', 'success');
+            }
+        }
+
+        async function downloadSelectedItems() {
+            const bucket = bucketInput.value.trim();
+            if (!bucket) {
+                setStatus('Debes indicar el bucket.', 'error');
+                return;
+            }
+
+            if (!selectedEntries.size) {
+                setStatus('Selecciona al menos un archivo o carpeta.', 'error');
+                return;
+            }
+
+            const filesToDownload = [];
+
+            for (const entry of selectedEntries.values()) {
+                if (entry.isFolder) {
+                    const nested = await listFilesRecursive(bucket, entry.path);
+                    filesToDownload.push(...nested);
+                } else {
+                    filesToDownload.push(entry.path);
+                }
+            }
+
+            if (filesToDownload.length > 30) {
+                const confirmMsg = 'Se incluirán ' + filesToDownload.length + ' archivo(s) en un ZIP. ¿Continuar?';
+                if (!window.confirm(confirmMsg)) {
+                    setStatus('Descarga cancelada por el usuario.', 'error');
+                    return;
+                }
+            }
+
+            await downloadManyFilesAsZip(bucket, filesToDownload, {
+                basePath: folderInput.value,
+                prefix: 'seleccionados'
+            });
+        }
+
+        async function downloadCurrentFolder() {
+            const bucket = bucketInput.value.trim();
+            const path = normalizePath(folderInput.value);
+
+            if (!bucket) {
+                setStatus('Debes indicar el bucket.', 'error');
+                return;
+            }
+
+            setStatus('Recorriendo carpeta para descarga completa...', null);
+
+            let filesToDownload = [];
+
+            try {
+                filesToDownload = await listFilesRecursive(bucket, path);
+            } catch (error) {
+                setStatus('No se pudo leer la carpeta: ' + error.message, 'error');
+                return;
+            }
+
+            if (!filesToDownload.length) {
+                setStatus('La carpeta no contiene archivos para descargar.', 'error');
+                return;
+            }
+
+            const confirmMsg = 'Se descargarán ' + filesToDownload.length + ' archivo(s) de la carpeta actual. ¿Continuar?';
+            if (!window.confirm(confirmMsg)) {
+                setStatus('Descarga de carpeta cancelada por el usuario.', 'error');
+                return;
+            }
+
+            await downloadManyFilesAsZip(bucket, filesToDownload, {
+                basePath: folderInput.value,
+                prefix: 'carpeta_completa'
+            });
         }
 
         function goToFolder(item) {
@@ -495,13 +892,45 @@
             }
         });
 
+        filesTableBody.addEventListener('change', (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLInputElement)) return;
+            if (target.getAttribute('data-action') !== 'select') return;
+
+            const index = Number(target.getAttribute('data-index'));
+            const item = filteredItems[index];
+            if (!item) return;
+
+            const objectPath = getObjectPathFromItem(item);
+            if (target.checked) {
+                selectedEntries.set(objectPath, {
+                    path: objectPath,
+                    name: item.name,
+                    isFolder: isFolderItem(item)
+                });
+            } else {
+                selectedEntries.delete(objectPath);
+            }
+
+            updateSelectionUI();
+        });
+
+        selectAllRows.addEventListener('change', (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLInputElement)) return;
+            setSelectAllVisible(target.checked);
+        });
+
         document.getElementById('btnLoadFiles').addEventListener('click', loadFiles);
         document.getElementById('btnRefresh').addEventListener('click', loadFiles);
         document.getElementById('btnGoRoot').addEventListener('click', goToRoot);
         document.getElementById('btnUploadFile').addEventListener('click', uploadFile);
+        btnDownloadSelected.addEventListener('click', downloadSelectedItems);
+        btnDownloadFolder.addEventListener('click', downloadCurrentFolder);
         searchInput.addEventListener('input', applySearchFilter);
 
         updateCurrentPathLabel(bucketInput.value.trim() || '-', '');
+        updateSelectionUI();
     </script>
 </body>
 </html>

@@ -161,10 +161,18 @@
                         />
                     </div>
 
-                    <!-- Botón Cerrar Sesión -->
-                    <button id="logout-btn" class="px-6 py-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl transition-all hover:shadow-lg border border-rose-500/60">
-                        🚪 Cerrar Sesión
-                    </button>
+                    <div class="flex items-center gap-4">
+                        <div class="hidden md:block text-right">
+                            <p class="text-xs text-slate-400">Sesión activa</p>
+                            <p id="dashboard-user-name" class="text-sm font-semibold text-slate-100">Consultando usuario...</p>
+                            <p id="dashboard-user-since" class="text-xs text-slate-300">Conectado desde: --</p>
+                        </div>
+
+                        <!-- Botón Cerrar Sesión -->
+                        <button id="logout-btn" class="px-6 py-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl transition-all hover:shadow-lg border border-rose-500/60">
+                            🚪 Cerrar Sesión
+                        </button>
+                    </div>
                 </div>
             </div>
         </header>
@@ -172,7 +180,7 @@
         <!-- Dashboard Bento Grid -->
         <div id="dashboard-view" class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
             <div class="mb-8">
-                <h2 class="text-3xl font-bold text-slate-100 mb-2">Dashboard</h2>
+                <h2 class="text-3xl font-bold text-slate-100 mb-2">Tablero</h2>
                 <p class="text-slate-300">Selecciona un módulo para comenzar</p>
             </div>
 
@@ -253,7 +261,7 @@
                     <div class="text-4xl">🏠</div>
                     <div>
                         <h3 class="text-white font-bold text-lg">Inicio</h3>
-                        <p class="text-slate-300 text-sm">Dashboard principal</p>
+                        <p class="text-slate-300 text-sm">Tablero principal</p>
                     </div>
                 </div>
 
@@ -376,7 +384,7 @@
                     <div class="flex items-center justify-between h-16">
                         <button id="back-to-dashboard" class="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all font-semibold text-slate-200 border border-slate-600">
                             <span>←</span>
-                            <span>Volver al Dashboard</span>
+                            <span>Volver al Tablero</span>
                         </button>
                         <h2 id="module-title" class="text-xl font-bold text-slate-100"></h2>
                         <div class="w-40"></div> <!-- Spacer para centrar el título -->
@@ -408,12 +416,98 @@
             const backToDashboard = document.getElementById('back-to-dashboard');
             const logoutBtn = document.getElementById('logout-btn');
             const filterInput = document.getElementById('menu-filter');
+            const dashboardUserName = document.getElementById('dashboard-user-name');
+            const dashboardUserSince = document.getElementById('dashboard-user-since');
+
+            function obtenerAliasDesdeEmail(email) {
+                if (!email || !email.includes('@')) return 'Usuario';
+                return email.split('@')[0];
+            }
+
+            function obtenerNombreDesdeMetadata(session) {
+                const metadata = session?.user?.user_metadata || {};
+                return metadata.nombre_completo || metadata.full_name || metadata.name || null;
+            }
+
+            async function obtenerNombreVisible(session) {
+                if (!session || !session.user) return null;
+
+                const savedName = sessionStorage.getItem('lectra_logged_name');
+                if (savedName) return savedName;
+
+                const metadataName = obtenerNombreDesdeMetadata(session);
+                if (metadataName) return metadataName;
+
+                const userEmail = session.user.email || '';
+                if (!userEmail) return null;
+
+                try {
+                    const { data, error } = await supabase
+                        .from('perfiles')
+                        .select('nombre_completo')
+                        .eq('email', userEmail)
+                        .maybeSingle();
+
+                    if (!error && data && data.nombre_completo) {
+                        return data.nombre_completo;
+                    }
+                } catch (e) {
+                    console.warn('No se pudo obtener nombre de perfiles:', e);
+                }
+
+                return null;
+            }
+
+            function actualizarResumenSesion(session, visibleName = null) {
+                if (!dashboardUserName || !dashboardUserSince) return;
+
+                if (!session || !session.user) {
+                    dashboardUserName.textContent = 'Sin sesión activa';
+                    dashboardUserSince.textContent = 'Conectado desde: --';
+                    return;
+                }
+
+                const userEmail = session.user.email || '';
+                const savedLoginAt = sessionStorage.getItem('lectra_login_at');
+                const loginAt = savedLoginAt || session.user.last_sign_in_at || null;
+                const savedName = sessionStorage.getItem('lectra_logged_name');
+                const fallbackName = obtenerAliasDesdeEmail(userEmail);
+
+                const finalName = visibleName || savedName || obtenerNombreDesdeMetadata(session) || fallbackName;
+
+                dashboardUserName.textContent = finalName;
+                dashboardUserSince.textContent = loginAt
+                    ? `Conectado desde: ${new Date(loginAt).toLocaleString('es-ES')}`
+                    : 'Conectado desde: No disponible';
+            }
+
+            function registrarSesionActiva(session, visibleName = null) {
+                const userEmail = session?.user?.email || '';
+                const savedEmail = sessionStorage.getItem('lectra_logged_email') || '';
+                const savedLoginAt = sessionStorage.getItem('lectra_login_at');
+                const loginAt = session?.user?.last_sign_in_at || new Date().toISOString();
+
+                if (!savedLoginAt || (userEmail && savedEmail && userEmail !== savedEmail)) {
+                    sessionStorage.setItem('lectra_login_at', loginAt);
+                }
+
+                sessionStorage.setItem('lectra_logged_email', userEmail);
+
+                const nameToSave = visibleName || obtenerNombreDesdeMetadata(session) || obtenerAliasDesdeEmail(userEmail);
+                if (nameToSave) {
+                    sessionStorage.setItem('lectra_logged_name', nameToSave);
+                }
+            }
 
             // --- Autenticación con Supabase ---
-            supabase.auth.getSession().then(({ data: { session } }) => {
+            supabase.auth.getSession().then(async ({ data: { session } }) => {
                 if (session) {
+                    const visibleName = await obtenerNombreVisible(session);
+                    registrarSesionActiva(session, visibleName);
+                    actualizarResumenSesion(session, visibleName);
                     mostrarContenido();
                 } else {
+                    actualizarResumenSesion(null);
                     mostrarLogin();
                 }
             });
@@ -436,7 +530,7 @@
                 // Verificar rol en la tabla perfiles
                 const { data: perfiles, error: errorPerfil } = await supabase
                     .from('perfiles')
-                    .select('rol')
+                    .select('rol,nombre_completo')
                     .eq('email', email)
                     .single();
                     
@@ -446,6 +540,9 @@
                     await supabase.auth.signOut();
                     return;
                 }
+
+                registrarSesionActiva(data.session, perfiles?.nombre_completo);
+                actualizarResumenSesion(data.session, perfiles?.nombre_completo);
                 
                 mostrarContenido();
             });
@@ -504,6 +601,10 @@
             if (logoutBtn) {
                 logoutBtn.addEventListener('click', async function() {
                     await supabase.auth.signOut();
+                    sessionStorage.removeItem('lectra_login_at');
+                    sessionStorage.removeItem('lectra_logged_email');
+                    sessionStorage.removeItem('lectra_logged_name');
+                    actualizarResumenSesion(null);
                     mostrarLogin();
                     // Resetear vistas
                     dashboardView.classList.remove('hidden');
