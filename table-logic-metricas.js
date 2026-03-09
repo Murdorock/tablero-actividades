@@ -22,7 +22,12 @@ const filters = {
     code: 'all'
 };
 
-const SUCCESS_ACTION = 'ingreso_detalle_historico';
+const SUCCESS_ACTION_DEFAULT = 'ingreso_detalle_historico';
+const successActionByTab = {
+    historicos: 'ingreso_detalle_historico',
+    coordenadas: 'abrir_google_maps',
+    consulta: 'ingreso_detalle_historico'
+};
 
 const metricsTableNames = {
     historicos: 'historicos_metricas',
@@ -112,7 +117,8 @@ function renderTabDashboard(tableKey) {
 function renderStats(tableKey, statsContainer) {
     const data = filteredMetricsData[tableKey] || [];
     const totalRegistros = data.length;
-    const successRows = data.filter(row => row.accion === SUCCESS_ACTION);
+    const successText = getSuccessText(tableKey);
+    const successRows = getSuccessRows(tableKey, data);
     const ingresosExitosos = successRows.length;
     const codigosConIngreso = new Set(successRows.map(r => r.codigo_sup_aux).filter(Boolean)).size;
     const usuariosUnicos = new Set(data.map(r => r.usuario_id).filter(Boolean)).size;
@@ -132,15 +138,15 @@ function renderStats(tableKey, statsContainer) {
             <div class="stat-value">${totalRegistros}</div>
         </div>
         <div class="stat-card">
-            <div class="stat-label">✅ Ingresos exitosos</div>
+            <div class="stat-label">✅ ${escapeHtml(successText.labelPlural)}</div>
             <div class="stat-value">${ingresosExitosos}</div>
         </div>
         <div class="stat-card">
-            <div class="stat-label">📌 Códigos con ingreso</div>
+            <div class="stat-label">📌 Códigos con ${escapeHtml(successText.labelSingular)}</div>
             <div class="stat-value">${codigosConIngreso}</div>
         </div>
         <div class="stat-card">
-            <div class="stat-label">📈 Tasa de ingreso</div>
+            <div class="stat-label">📈 Tasa de ${escapeHtml(successText.labelSingular)}</div>
             <div class="stat-value">${porcentajeIngreso}%</div>
         </div>
         <div class="stat-card">
@@ -177,7 +183,8 @@ function renderMetricsTable(data, tableContainer) {
 
 function renderRanking(tableKey, data) {
     const rankingContainer = document.getElementById(`ranking-${tableKey}`);
-    const successRows = data.filter(row => row.accion === SUCCESS_ACTION);
+    const successText = getSuccessText(tableKey);
+    const successRows = getTopCodesSourceRows(tableKey, data);
     const resumenPorCodigo = new Map();
 
     successRows.forEach(row => {
@@ -212,7 +219,7 @@ function renderRanking(tableKey, data) {
     }
 
     if (topEntries.length === 0) {
-        rankingContainer.innerHTML = '<div class="empty-note">No hay ingresos exitosos para los filtros seleccionados.</div>';
+        rankingContainer.innerHTML = `<div class="empty-note">No hay ${escapeHtml(successText.labelPluralLower)} para los filtros seleccionados.</div>`;
         return;
     }
 
@@ -221,7 +228,7 @@ function renderRanking(tableKey, data) {
             ${topEntries.map((item, index) => `
                 <li class="ranking-item">
                     <span>#${index + 1} · ${escapeHtml(item.codigo)}</span>
-                    <span class="ranking-badge">${item.ingresosUnicos} ${item.ingresosUnicos === 1 ? 'ingreso' : 'ingresos'} con ${item.consultas} ${item.consultas === 1 ? 'consulta' : 'consultas'}</span>
+                    <span class="ranking-badge">${item.ingresosUnicos} ${item.ingresosUnicos === 1 ? successText.badgeSingular : successText.badgePlural} con ${item.consultas} ${item.consultas === 1 ? 'consulta' : 'consultas'}</span>
                 </li>
             `).join('')}
         </ul>
@@ -229,8 +236,10 @@ function renderRanking(tableKey, data) {
 }
 
 function renderCharts(tableKey, data) {
-    const successRows = data.filter(row => row.accion === SUCCESS_ACTION);
-    const topCodes = Object.entries(countByCode(successRows))
+    const successText = getSuccessText(tableKey);
+    const successRows = getSuccessRows(tableKey, data);
+    const topCodesSourceRows = getTopCodesSourceRows(tableKey, data);
+    const topCodes = Object.entries(countByCode(topCodesSourceRows))
         .sort((a, b) => b[1] - a[1])
         .slice(0, 8);
 
@@ -263,7 +272,7 @@ function renderCharts(tableKey, data) {
             data: {
                 labels: topCodes.map(([codigo]) => codigo),
                 datasets: [{
-                    label: 'Ingresos exitosos',
+                    label: successText.chartTopLabel,
                     data: topCodes.map(([, count]) => count),
                     backgroundColor: 'rgba(56, 189, 248, 0.7)',
                     borderColor: 'rgba(56, 189, 248, 1)',
@@ -280,7 +289,7 @@ function renderCharts(tableKey, data) {
             data: {
                 labels: Object.keys(hoursMap),
                 datasets: [{
-                    label: 'Ingresos por hora',
+                    label: successText.chartHourLabel,
                     data: Object.values(hoursMap),
                     borderColor: 'rgba(16, 185, 129, 1)',
                     backgroundColor: 'rgba(16, 185, 129, 0.2)',
@@ -291,6 +300,64 @@ function renderCharts(tableKey, data) {
             options: getChartOptions('Frecuencia por hora')
         });
     }
+}
+
+function getTopCodesSourceRows(tableKey, data) {
+    // El top siempre se arma por codigo_sup_aux sobre los ingresos exitosos de la pestaña activa.
+    return getSuccessRows(tableKey, data).filter(row => {
+            const code = row.codigo_sup_aux;
+            return code !== null && code !== undefined && String(code).trim() !== '';
+        });
+}
+
+function getSuccessActionForTab(tableKey) {
+    return successActionByTab[tableKey] || SUCCESS_ACTION_DEFAULT;
+}
+
+function getSuccessText(tableKey) {
+    if (tableKey === 'consulta') {
+        return {
+            labelSingular: 'criterio válido',
+            labelPlural: 'Criterios válidos',
+            labelPluralLower: 'criterios válidos',
+            badgeSingular: 'criterio válido',
+            badgePlural: 'criterios válidos',
+            chartTopLabel: 'Criterios válidos',
+            chartHourLabel: 'Criterios válidos por hora'
+        };
+    }
+
+    return {
+        labelSingular: 'ingreso',
+        labelPlural: 'Ingresos exitosos',
+        labelPluralLower: 'ingresos exitosos',
+        badgeSingular: 'ingreso',
+        badgePlural: 'ingresos',
+        chartTopLabel: 'Ingresos exitosos',
+        chartHourLabel: 'Ingresos por hora'
+    };
+}
+
+function normalizeText(value) {
+    return String(value || '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+}
+
+function isSuccessRow(tableKey, row) {
+    if (tableKey === 'consulta') {
+        const criterio = normalizeText(row.criterio);
+        return criterio === 'instalacion' || criterio === 'contrato';
+    }
+
+    const successAction = getSuccessActionForTab(tableKey);
+    return row.accion === successAction;
+}
+
+function getSuccessRows(tableKey, data) {
+    return (data || []).filter(row => isSuccessRow(tableKey, row));
 }
 
 function getChartOptions(titleText) {
@@ -353,7 +420,7 @@ function populateFilterOptions() {
 
         if (code !== '') {
             codes.add(code);
-            if (row.accion === SUCCESS_ACTION) {
+            if (isSuccessRow(activeTabKey, row)) {
                 successCountByCode[code] = (successCountByCode[code] || 0) + 1;
             }
         }
