@@ -621,30 +621,93 @@
             logEvent('📊 Configurado para 75 columnas y hasta 300,000 registros', 'info');
                 fetchCiclosUnicos();
         });
-                // Obtener valores únicos de cod_ciclo y mostrarlos en la caja 'Archivo de Datos'
+                // Usa RPC SQL para obtener ciclos únicos de forma rápida. Si falla, cae a paginación completa.
                 async function fetchCiclosUnicos() {
+                    const ciclosInfoElement = document.getElementById('ciclosInfo');
+                    ciclosInfoElement.textContent = 'Cargando ciclos...';
+
                     try {
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+                        const { data, error } = await supabaseSecuencia
+                            .rpc('get_secuencia_lectura_cod_ciclo_unicos')
+                            .abortSignal(controller.signal);
+
+                        clearTimeout(timeoutId);
+
+                        if (!error && Array.isArray(data)) {
+                            const ciclos = data
+                                .map(row => (row && row.cod_ciclo !== undefined ? row.cod_ciclo : row))
+                                .filter(value => value !== null && value !== undefined)
+                                .map(value => String(value).trim())
+                                .filter(value => value !== '')
+                                .sort((a, b) => a.localeCompare(b, 'es', { numeric: true, sensitivity: 'base' }));
+
+                            ciclosInfoElement.innerHTML = `<b>Ciclos cargados:</b> ${ciclos.length > 0 ? ciclos.join(', ') : 'Ninguno'}`;
+                            return;
+                        }
+
+                        // Si la RPC no existe o falla, usar fallback para no romper la vista.
+                        logEvent('⚠️ RPC de ciclos no disponible, usando lectura paginada completa', 'warning');
+                        await fetchCiclosUnicosFallback(ciclosInfoElement);
+                    } catch (err) {
+                        logEvent('⚠️ Error en RPC de ciclos, usando lectura paginada completa', 'warning');
+                        await fetchCiclosUnicosFallback(ciclosInfoElement);
+                    }
+                }
+
+                async function fetchCiclosUnicosFallback(ciclosInfoElement) {
+                    const pageSize = 1000;
+                    const maxPages = 5000;
+                    const ciclosSet = new Set();
+                    let from = 0;
+                    let page = 0;
+
+                    while (page < maxPages) {
+                        const to = from + pageSize - 1;
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 15000);
+
                         const { data, error } = await supabaseSecuencia
                             .from('secuencia_lectura')
                             .select('cod_ciclo')
-                            .neq('cod_ciclo', null)
-                            .limit(10000); // Limite alto para evitar paginación
+                            .not('cod_ciclo', 'is', null)
+                            .range(from, to)
+                            .abortSignal(controller.signal);
+
+                        clearTimeout(timeoutId);
 
                         if (error) {
-                            document.getElementById('ciclosInfo').textContent = 'Error al obtener ciclos.';
+                            ciclosInfoElement.textContent = 'Error al obtener ciclos.';
                             return;
                         }
-                        if (data && data.length > 0) {
-                            // Extraer y filtrar únicos
-                            const ciclosSet = new Set(data.map(row => row.cod_ciclo).filter(x => x !== null && x !== undefined));
-                            const ciclos = Array.from(ciclosSet).sort();
-                            document.getElementById('ciclosInfo').innerHTML = `<b>Ciclos cargados:</b> ${ciclos.length > 0 ? ciclos.join(', ') : 'Ninguno'}`;
-                        } else {
-                            document.getElementById('ciclosInfo').textContent = 'No hay ciclos cargados.';
+
+                        if (!data || data.length === 0) {
+                            break;
                         }
-                    } catch (err) {
-                        document.getElementById('ciclosInfo').textContent = 'Error al consultar ciclos.';
+
+                        for (const row of data) {
+                            const ciclo = row && row.cod_ciclo !== undefined ? String(row.cod_ciclo).trim() : '';
+                            if (ciclo !== '') {
+                                ciclosSet.add(ciclo);
+                            }
+                        }
+
+                        page += 1;
+                        from += pageSize;
+                        ciclosInfoElement.innerHTML = `<b>Cargando ciclos...</b> Pagina ${page} | Unicos: ${ciclosSet.size}`;
+
+                        if (data.length < pageSize) {
+                            break;
+                        }
                     }
+
+                    const ciclos = Array.from(ciclosSet).sort((a, b) =>
+                        a.localeCompare(b, 'es', { numeric: true, sensitivity: 'base' })
+                    );
+
+                    ciclosInfoElement.innerHTML = `<b>Ciclos cargados:</b> ${ciclos.length > 0 ? ciclos.join(', ') : 'Ninguno'}`;
                 }
         
         function setupEventListeners() {
