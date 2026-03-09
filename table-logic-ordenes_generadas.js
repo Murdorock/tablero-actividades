@@ -199,10 +199,17 @@ const totalOrdenesPointLabelsPlugin = {
 
 document.addEventListener('DOMContentLoaded', function() {
     inicializarImportadorExcelOrdenes();
-    refreshTotalesPorMes();
+    setDashboardWaitingForMonthSelection();
+    loadAvailableMonthsForSelector();
 
     document.getElementById('totalesMesSelector')?.addEventListener('change', function() {
-        refreshTotalesPorMes();
+        const selectedMonths = getSelectedMonthNumbers();
+        const selectedLabel = selectedMonths.length > 0
+            ? selectedMonths.map(month => monthNumberToOptionLabel(month)).join(', ')
+            : 'Ninguno';
+        updateTotalesInfo(`Meses seleccionados: ${selectedLabel}. Presiona "Recalcular Totales" para ejecutar.`);
+        updateNumeroOrdenesInfo(`Meses seleccionados: ${selectedLabel}. Presiona "Recalcular Totales" para ejecutar.`);
+        updateResumenMensualInfo(`Meses seleccionados: ${selectedLabel}. Presiona "Recalcular Totales" para ejecutar.`);
     });
 
     enableMonthSelectorClickToggle();
@@ -422,7 +429,8 @@ async function importarOrdenesDesdeExcel(file) {
     }
 
     showMessage(`Importacion completada: ${inserted} registros cargados.`, 'success');
-    await refreshTotalesPorMes();
+    await loadAvailableMonthsForSelector();
+    setDashboardWaitingForMonthSelection();
 }
 
 function getPrimaryKeyFromData(rowSample = null) {
@@ -954,18 +962,20 @@ function enableMonthSelectorClickToggle() {
 
         event.preventDefault();
 
+        const hasAllOption = selector.options.length > 0 && selector.options[0].value === '';
+
         if (option.value === '') {
             Array.from(selector.options).forEach(currentOption => {
                 currentOption.selected = currentOption.value === '';
             });
         } else {
             option.selected = !option.selected;
-            if (selector.options.length > 0) {
+            if (hasAllOption) {
                 selector.options[0].selected = false;
             }
 
             const selectedMonths = getSelectedMonthNumbers();
-            if (selectedMonths.length === 0 && selector.options.length > 0) {
+            if (hasAllOption && selectedMonths.length === 0) {
                 selector.options[0].selected = true;
             }
         }
@@ -993,7 +1003,7 @@ function populateTotalesMesSelector(monthNumbers) {
     if (!selector) return;
 
     const previousValues = getSelectedMonthNumbers();
-    selector.innerHTML = '<option value="">Todos</option>';
+    selector.innerHTML = '';
 
     monthNumbers.forEach(monthNumber => {
         const option = document.createElement('option');
@@ -1004,11 +1014,59 @@ function populateTotalesMesSelector(monthNumbers) {
         }
         selector.appendChild(option);
     });
+}
 
-    if (previousValues.length === 0) {
-        selector.options[0].selected = true;
-    } else {
-        selector.options[0].selected = false;
+function setDashboardWaitingForMonthSelection() {
+    const totalesContainer = document.getElementById('totalesMesContainer');
+    const numeroOrdenesContainer = document.getElementById('numeroOrdenesContainer');
+    const resumenMensualContainer = document.getElementById('resumenMensualContainer');
+
+    if (totalesContainer) {
+        totalesContainer.innerHTML = '<div style="text-align:center; padding:16px; color:#94a3b8;">Selecciona uno o varios meses y presiona "Recalcular Totales".</div>';
+    }
+    if (numeroOrdenesContainer) {
+        numeroOrdenesContainer.innerHTML = '<div style="text-align:center; padding:16px; color:#94a3b8;">Selecciona meses para calcular el número de órdenes.</div>';
+    }
+    if (resumenMensualContainer) {
+        resumenMensualContainer.innerHTML = '<div style="text-align:center; padding:16px; color:#94a3b8;">Selecciona meses para calcular el resumen mensual.</div>';
+    }
+
+    destroyTotalOrdenesChart();
+
+    updateTotalesInfo('Esperando selección de meses para calcular.');
+    updateNumeroOrdenesInfo('Esperando selección de meses para calcular.');
+    updateResumenMensualInfo('Esperando selección de meses para calcular.');
+}
+
+async function loadAvailableMonthsForSelector() {
+    const selector = document.getElementById('totalesMesSelector');
+    if (!selector) return;
+
+    try {
+        const rows = await fetchAllRowsFromTable(TABLE_NAME, 1000);
+        const fechaEjecucionColumn = rows.length > 0
+            ? detectColumnName(rows, [/^fecha_ejecucion$/, /fecha.*ejecucion/, /ejecucion.*fecha/])
+            : '';
+
+        const availableMonthNumbers = new Set();
+        rows.forEach(row => {
+            const dateParts = fechaEjecucionColumn ? getDatePartsInTimeZone(row[fechaEjecucionColumn]) : null;
+            if (dateParts && dateParts.month) {
+                availableMonthNumbers.add(dateParts.month);
+            }
+        });
+
+        populateTotalesMesSelector(Array.from(availableMonthNumbers).sort((a, b) => a - b));
+
+        if (availableMonthNumbers.size === 0) {
+            updateTotalesInfo('No se encontraron meses disponibles en fecha_ejecucion.', 'info');
+            updateNumeroOrdenesInfo('No se encontraron meses disponibles en fecha_ejecucion.', 'info');
+            updateResumenMensualInfo('No se encontraron meses disponibles en fecha_ejecucion.', 'info');
+        }
+    } catch (error) {
+        updateTotalesInfo(`Error cargando meses: ${error.message}`, 'error');
+        updateNumeroOrdenesInfo(`Error cargando meses: ${error.message}`, 'error');
+        updateResumenMensualInfo(`Error cargando meses: ${error.message}`, 'error');
     }
 }
 
@@ -1614,6 +1672,13 @@ function renderResumenMensualPorServicio(rows) {
 }
 
 async function refreshTotalesPorMes() {
+    const selectedMonthNumbers = getSelectedMonthNumbers();
+    if (selectedMonthNumbers.length === 0) {
+        setDashboardWaitingForMonthSelection();
+        showMessage('Selecciona al menos un mes para calcular.', 'warning');
+        return;
+    }
+
     const container = document.getElementById('totalesMesContainer');
     if (container) {
         container.innerHTML = '<div style="text-align:center; padding:16px; color:#94a3b8;">Calculando totales por mes...</div>';
@@ -1896,7 +1961,8 @@ async function sincronizarFechaEjecucion() {
                 showMessage(`Fecha ejecucion recalculada: ${affectedRows} filas afectadas en ${targetTable}`, 'success');
             }
 
-            await refreshTotalesPorMes();
+            await loadAvailableMonthsForSelector();
+            setDashboardWaitingForMonthSelection();
             return;
         } catch (edgeError) {
             if (!shouldFallbackToLocalSync(edgeError)) {
@@ -1908,7 +1974,8 @@ async function sincronizarFechaEjecucion() {
         }
 
         await sincronizarFechaEjecucionLocal({ targetTable, calendarioTable });
-        await refreshTotalesPorMes();
+        await loadAvailableMonthsForSelector();
+        setDashboardWaitingForMonthSelection();
     } catch (error) {
         updateSyncProgress(100, `Error: ${error.message}`);
         handleError(error, 'al sincronizar fecha_ejecucion');
