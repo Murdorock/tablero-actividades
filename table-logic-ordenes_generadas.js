@@ -1909,6 +1909,19 @@ function shouldFallbackToLocalSync(error) {
     );
 }
 
+function getEdgeSyncErrorMessage(error) {
+    const raw = String(error?.message || '').trim();
+    if (!raw) return 'Error desconocido invocando la funcion Edge.';
+
+    // Supabase suele envolver el mensaje asi: "Edge Function returned a non-2xx status code: <status>"
+    const normalized = normalizeText(raw);
+    if (normalized.includes('edge function returned a non-2xx status code')) {
+        return `${raw}. Revisa los logs de la funcion sync-fecha-ejecucion-ordenes en Supabase.`;
+    }
+
+    return raw;
+}
+
 async function sincronizarFechaEjecucionViaEdge({ targetTable, calendarioTable }) {
     const { data, error } = await supabase.functions.invoke('sync-fecha-ejecucion-ordenes', {
         body: {
@@ -1970,7 +1983,7 @@ async function sincronizarFechaEjecucion() {
             }
 
             updateSyncProgress(24, 'No se pudo usar la funcion Edge. Ejecutando sincronizacion local...');
-            showMessage('La funcion Edge no esta disponible. Se ejecutara sincronizacion local.', 'warning');
+            showMessage(`La funcion Edge respondio con error: ${getEdgeSyncErrorMessage(edgeError)} Se ejecutara sincronizacion local.`, 'warning');
         }
 
         await sincronizarFechaEjecucionLocal({ targetTable, calendarioTable });

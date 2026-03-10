@@ -279,6 +279,14 @@ async function updateByCycleAndMes({
   return Array.isArray(data) ? data.length : 0;
 }
 
+function chunkArray<T>(items: T[], size: number) {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -444,40 +452,51 @@ Deno.serve(async (req: Request) => {
     }
 
     let affectedRows = 0;
-    const fallbackDone = new Set<string>();
 
-    for (const item of updates) {
-      let updated = 0;
+    const updatesWithPrimaryKey = hasUsablePrimaryKey
+      ? updates.filter((item) => item.id !== null && item.id !== undefined && item.id !== "")
+      : [];
 
-      if (hasUsablePrimaryKey && item.id !== null && item.id !== undefined && item.id !== "") {
+    if (updatesWithPrimaryKey.length) {
+      const upsertPayload = updatesWithPrimaryKey.map((item) => ({
+        [primaryKey]: item.id,
+        fecha_ejecucion: item.fecha_ejecucion,
+      }));
+
+      // Reduce round-trips and CPU by updating rows in batches instead of one-by-one.
+      const batches = chunkArray(upsertPayload, 500);
+      for (const batch of batches) {
         const { data, error } = await adminClient
           .from(targetTable)
-          .update({ fecha_ejecucion: item.fecha_ejecucion })
-          .eq(primaryKey, item.id)
+          .upsert(batch, { onConflict: primaryKey })
           .select(primaryKey);
 
         if (error) throw error;
-        updated = Array.isArray(data) ? data.length : 0;
+        affectedRows += Array.isArray(data) ? data.length : batch.length;
+      }
+    }
+
+    const fallbackDone = new Set<string>();
+    for (const item of updates) {
+      // Si hubo PK usable, estos updates ya se aplicaron por lote.
+      if (hasUsablePrimaryKey && item.id !== null && item.id !== undefined && item.id !== "") {
+        continue;
       }
 
-      if (updated === 0) {
-        const fallbackKey = `${normalizeCiclo(item.cicloRaw)}|${convertMesToNumber(item.mesRaw)}|${item.fecha_ejecucion}`;
+      const fallbackKey = `${normalizeCiclo(item.cicloRaw)}|${convertMesToNumber(item.mesRaw)}|${item.fecha_ejecucion}`;
+      if (fallbackDone.has(fallbackKey)) continue;
 
-        if (!fallbackDone.has(fallbackKey)) {
-          updated = await updateByCycleAndMes({
-            client: adminClient,
-            targetTable,
-            cicloColumn: ordenesCicloCol,
-            cicloValue: item.cicloRaw,
-            mesColumn: ordenesMesCol,
-            mesValue: item.mesRaw,
-            fechaEjecucion: item.fecha_ejecucion,
-          });
+      const updated = await updateByCycleAndMes({
+        client: adminClient,
+        targetTable,
+        cicloColumn: ordenesCicloCol,
+        cicloValue: item.cicloRaw,
+        mesColumn: ordenesMesCol,
+        mesValue: item.mesRaw,
+        fechaEjecucion: item.fecha_ejecucion,
+      });
 
-          fallbackDone.add(fallbackKey);
-        }
-      }
-
+      fallbackDone.add(fallbackKey);
       affectedRows += updated;
     }
 
