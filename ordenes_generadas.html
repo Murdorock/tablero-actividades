@@ -22,10 +22,10 @@
         <div class="table-header">
             <h2>🧾 Órdenes Generadas</h2>
             <div class="table-actions">
-                <button class="btn btn-primary" onclick="abrirSelectorExcelOrdenes()">📤 Cargar Excel</button>
+                <button class="btn btn-primary" onclick="abrirSelectorExcelOrdenes()">📤 Cargar</button>
                 <input type="file" id="ordenesExcelInput" accept=".xlsx,.xls" style="display: none;">
-                <button class="btn btn-success" onclick="sincronizarFechaEjecucion()">🗓️ Llenar Fecha Ejecución</button>
-                <button id="exportGerencialBtn" class="btn btn-primary" onclick="exportarImagenesGerenciales()">🖼️ Exportar imágenes</button>
+                <button class="btn btn-success" onclick="sincronizarFechaEjecucion()">🗓️ Fecha Ejecución</button>
+                <button id="exportGerencialBtn" class="btn btn-primary" onclick="exportarImagenesGerenciales()">🖼️ Exportar</button>
             </div>
         </div>
 
@@ -35,14 +35,17 @@
                 <div id="syncProgressBar" style="width: 0%; height: 100%; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); transition: width 0.2s ease;"></div>
             </div>
             <p id="syncProgressText" style="margin-top: 10px; font-size: 14px; color: #e2e8f0;">0%</p>
-            <p id="syncProgressDetails" style="margin-top: 6px; font-size: 13px; color: #cbd5e1;">Presiona "Llenar Fecha Ejecución" para iniciar.</p>
+            <p id="syncProgressDetails" style="margin-top: 6px; font-size: 13px; color: #cbd5e1;">Presiona "Fecha Ejecución" para iniciar.</p>
         </div>
 
         <div class="ordenes-dashboard-controls">
             <label for="totalesMesSelector">Mes</label>
-            <select id="totalesMesSelector" class="ordenes-dashboard-select" multiple size="4" title="Selecciona uno o varios meses">
-            </select>
-            <button class="btn btn-secondary" onclick="refreshTotalesPorMes()">🔄 Recalcular Totales</button>
+            <div class="ordenes-dashboard-months">
+                <select id="totalesMesSelector" class="ordenes-dashboard-select ordenes-dashboard-select-hidden" multiple title="Selecciona uno o varios meses">
+                </select>
+                <div id="totalesMesChips" class="ordenes-dashboard-month-chips" role="group" aria-label="Seleccion de meses"></div>
+            </div>
+            <button id="recalcularTotalesBtn" class="btn btn-secondary" onclick="refreshTotalesPorMes()">🔄 Calcular Totales</button>
         </div>
 
         <div class="ordenes-dashboard-grid">

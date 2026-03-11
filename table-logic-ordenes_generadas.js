@@ -38,6 +38,12 @@ const ORDENES_EXCEL_REQUIRED_COLUMNS = [
     'num_ordenes_gas', 'num_ordenes_agua', 'num_ordenes_otros', 'fecha_programada',
     'lector', 'terminal'
 ];
+const ORDENES_RPC = {
+    mesesDisponibles: 'rpc_ordenes_meses_disponibles',
+    totalesCorrerias: 'rpc_ordenes_totales_correrias',
+    numeroOrdenes: 'rpc_ordenes_numero_ordenes',
+    totalesServicio: 'rpc_ordenes_totales_servicio'
+};
 const totalOrdenesPointLabelsPlugin = {
     id: 'totalOrdenesPointLabels',
     afterDatasetsDraw(chart) {
@@ -211,8 +217,6 @@ document.addEventListener('DOMContentLoaded', function() {
         updateNumeroOrdenesInfo(`Meses seleccionados: ${selectedLabel}. Presiona "Recalcular Totales" para ejecutar.`);
         updateResumenMensualInfo(`Meses seleccionados: ${selectedLabel}. Presiona "Recalcular Totales" para ejecutar.`);
     });
-
-    enableMonthSelectorClickToggle();
 
     document.getElementById('dataForm')?.addEventListener('submit', async function(event) {
         event.preventDefault();
@@ -950,38 +954,93 @@ function monthNumberToOptionLabel(monthNumber) {
     return names[monthNumber - 1] || `Mes ${monthNumber}`;
 }
 
-function enableMonthSelectorClickToggle() {
+function getLoadingMarkup(message) {
+    return `<div class="loading"><div class="spinner"></div><div>${message}</div></div>`;
+}
+
+function setRecalcularTotalesButtonState(isLoading, label = '🔄 Calcular Totales') {
+    const button = document.getElementById('recalcularTotalesBtn');
+    if (!button) return;
+
+    button.disabled = isLoading;
+    button.textContent = label;
+}
+
+function setMonthSelectorLoadingState(isLoading, message = 'Cargando meses disponibles...') {
     const selector = document.getElementById('totalesMesSelector');
-    if (!selector || selector.dataset.toggleEnabled === '1') return;
+    const chipsContainer = document.getElementById('totalesMesChips');
 
-    selector.dataset.toggleEnabled = '1';
+    if (selector) {
+        selector.disabled = isLoading;
+    }
 
-    selector.addEventListener('mousedown', function(event) {
-        const option = event.target;
-        if (!option || option.tagName !== 'OPTION') return;
+    if (chipsContainer && isLoading) {
+        chipsContainer.innerHTML = getLoadingMarkup(message);
+    }
 
-        event.preventDefault();
+    setRecalcularTotalesButtonState(isLoading, isLoading ? '⏳ Cargando meses...' : '🔄 Calcular Totales');
+}
 
-        const hasAllOption = selector.options.length > 0 && selector.options[0].value === '';
+function setTotalOrdenesChartLoadingState(isLoading, message = 'Calculando gráfica total...') {
+    const panel = document.getElementById('totalOrdenesChartPanel');
+    if (!panel) return;
 
-        if (option.value === '') {
-            Array.from(selector.options).forEach(currentOption => {
-                currentOption.selected = currentOption.value === '';
-            });
+    let overlay = panel.querySelector('.ordenes-chart-loading-overlay');
+
+    if (isLoading) {
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.className = 'ordenes-chart-loading-overlay';
+            panel.appendChild(overlay);
+        }
+        overlay.innerHTML = getLoadingMarkup(message);
+    } else if (overlay) {
+        overlay.remove();
+    }
+}
+
+function renderTotalesMesChips(monthNumbers, selectedMonths = []) {
+    const chipsContainer = document.getElementById('totalesMesChips');
+    const selector = document.getElementById('totalesMesSelector');
+    if (!chipsContainer || !selector) return;
+
+    chipsContainer.innerHTML = '';
+
+    if (!Array.isArray(monthNumbers) || monthNumbers.length === 0) {
+        const emptyLabel = document.createElement('span');
+        emptyLabel.style.color = '#94a3b8';
+        emptyLabel.style.fontSize = '13px';
+        emptyLabel.textContent = 'Sin meses disponibles';
+        chipsContainer.appendChild(emptyLabel);
+        return;
+    }
+
+    const selectedSet = new Set(selectedMonths);
+
+    monthNumbers.forEach(monthNumber => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'ordenes-dashboard-month-chip';
+        chip.textContent = monthNumberToOptionLabel(monthNumber);
+        chip.dataset.month = String(monthNumber);
+
+        if (selectedSet.has(monthNumber)) {
+            chip.classList.add('active');
+            chip.setAttribute('aria-pressed', 'true');
         } else {
-            option.selected = !option.selected;
-            if (hasAllOption) {
-                selector.options[0].selected = false;
-            }
-
-            const selectedMonths = getSelectedMonthNumbers();
-            if (hasAllOption && selectedMonths.length === 0) {
-                selector.options[0].selected = true;
-            }
+            chip.setAttribute('aria-pressed', 'false');
         }
 
-        selector.focus();
-        selector.dispatchEvent(new Event('change'));
+        chip.addEventListener('click', function() {
+            const targetOption = Array.from(selector.options).find(option => Number(option.value) === monthNumber);
+            if (!targetOption) return;
+
+            targetOption.selected = !targetOption.selected;
+            selector.dispatchEvent(new Event('change'));
+            renderTotalesMesChips(monthNumbers, getSelectedMonthNumbers());
+        });
+
+        chipsContainer.appendChild(chip);
     });
 }
 
@@ -1014,6 +1073,8 @@ function populateTotalesMesSelector(monthNumbers) {
         }
         selector.appendChild(option);
     });
+
+    renderTotalesMesChips(monthNumbers, getSelectedMonthNumbers());
 }
 
 function setDashboardWaitingForMonthSelection() {
@@ -1031,6 +1092,7 @@ function setDashboardWaitingForMonthSelection() {
         resumenMensualContainer.innerHTML = '<div style="text-align:center; padding:16px; color:#94a3b8;">Selecciona meses para calcular el resumen mensual.</div>';
     }
 
+    setTotalOrdenesChartLoadingState(false);
     destroyTotalOrdenesChart();
 
     updateTotalesInfo('Esperando selección de meses para calcular.');
@@ -1042,32 +1104,40 @@ async function loadAvailableMonthsForSelector() {
     const selector = document.getElementById('totalesMesSelector');
     if (!selector) return;
 
+    setMonthSelectorLoadingState(true, 'Cargando meses disponibles...');
+
     try {
-        const rows = await fetchAllRowsFromTable(TABLE_NAME, 1000);
-        const fechaEjecucionColumn = rows.length > 0
-            ? detectColumnName(rows, [/^fecha_ejecucion$/, /fecha.*ejecucion/, /ejecucion.*fecha/])
-            : '';
+        const data = await callOrdenesRpc(ORDENES_RPC.mesesDisponibles);
+        const monthNumbers = data
+            .map(row => Number(row?.mes_num))
+            .filter(monthNumber => Number.isInteger(monthNumber) && monthNumber >= 1 && monthNumber <= 12);
 
-        const availableMonthNumbers = new Set();
-        rows.forEach(row => {
-            const dateParts = fechaEjecucionColumn ? getDatePartsInTimeZone(row[fechaEjecucionColumn]) : null;
-            if (dateParts && dateParts.month) {
-                availableMonthNumbers.add(dateParts.month);
-            }
-        });
+        populateTotalesMesSelector(Array.from(new Set(monthNumbers)).sort((a, b) => a - b));
 
-        populateTotalesMesSelector(Array.from(availableMonthNumbers).sort((a, b) => a - b));
-
-        if (availableMonthNumbers.size === 0) {
+        if (monthNumbers.length === 0) {
             updateTotalesInfo('No se encontraron meses disponibles en fecha_ejecucion.', 'info');
             updateNumeroOrdenesInfo('No se encontraron meses disponibles en fecha_ejecucion.', 'info');
             updateResumenMensualInfo('No se encontraron meses disponibles en fecha_ejecucion.', 'info');
         }
     } catch (error) {
+        const chipsContainer = document.getElementById('totalesMesChips');
+        if (chipsContainer) {
+            chipsContainer.innerHTML = '<div style="color:#fca5a5; font-size:13px;">Error cargando meses.</div>';
+        }
         updateTotalesInfo(`Error cargando meses: ${error.message}`, 'error');
         updateNumeroOrdenesInfo(`Error cargando meses: ${error.message}`, 'error');
         updateResumenMensualInfo(`Error cargando meses: ${error.message}`, 'error');
+    } finally {
+        setMonthSelectorLoadingState(false);
     }
+}
+
+async function callOrdenesRpc(rpcName, params = {}) {
+    const { data, error } = await supabase.rpc(rpcName, params);
+    if (error) {
+        throw new Error(`Error en ${rpcName}: ${error.message}`);
+    }
+    return Array.isArray(data) ? data : [];
 }
 
 function sortCycleValuesForPivot(cycles) {
@@ -1125,61 +1195,28 @@ function renderTotalesPivot(rows) {
         return;
     }
 
-    const cicloColumn = detectColumnName(rows, [/^ciclo$/, /cod.*ciclo/, /ciclo/]);
-    const fechaEjecucionColumn = detectColumnName(rows, [/^fecha_ejecucion$/, /fecha.*ejecucion/, /ejecucion.*fecha/]);
-
-    if (!cicloColumn || !fechaEjecucionColumn) {
-        container.innerHTML = '<div style="text-align:center; padding:16px; color:#fca5a5;">No se detectaron columnas ciclo y fecha_ejecucion.</div>';
-        updateTotalesInfo('No fue posible detectar columnas para el pivote.', 'error');
-        return;
-    }
-
+    const monthSet = new Set();
     const monthMap = new Map();
     const cycleSet = new Set();
     const tableMap = new Map();
-    const availableMonthNumbers = new Set();
-
-    const selectedMonthNumbers = getSelectedMonthNumbers();
-
-    let blankMonthTotal = 0;
-    let blankCycleTotal = 0;
 
     rows.forEach(row => {
-        const rawCiclo = row[cicloColumn];
-        const ciclo = normalizeCiclo(rawCiclo) || '(en blanco)';
+        const ciclo = normalizeCiclo(row?.ciclo) || '(en blanco)';
+        const monthNumber = Number(row?.mes_num);
+        const value = Number(row?.total || 0);
 
-        const dateParts = getDatePartsInTimeZone(row[fechaEjecucionColumn]);
-        const monthNumber = dateParts ? dateParts.month : null;
-        if (monthNumber) {
-            availableMonthNumbers.add(monthNumber);
-        }
-
-        if (selectedMonthNumbers.length > 0 && !selectedMonthNumbers.includes(monthNumber)) {
+        if (!Number.isInteger(monthNumber) || monthNumber < 1 || monthNumber > 12) {
             return;
         }
 
-        const monthKey = monthNumber ? `${String(monthNumber).padStart(2, '0')}` : '(en blanco)';
-
-        if (monthKey !== '(en blanco)') {
-            monthMap.set(monthKey, getMonthLabelUpper(monthNumber));
-        } else {
-            blankMonthTotal += 1;
-            return;
-        }
-
-        if (ciclo === '(en blanco)') {
-            blankCycleTotal += 1;
-        }
-
+        const monthKey = String(monthNumber).padStart(2, '0');
+        monthSet.add(monthKey);
+        monthMap.set(monthKey, getMonthLabelUpper(monthNumber));
         cycleSet.add(ciclo);
-
-        const key = `${ciclo}|${monthKey}`;
-        tableMap.set(key, (tableMap.get(key) || 0) + 1);
+        tableMap.set(`${ciclo}|${monthKey}`, value);
     });
 
-    populateTotalesMesSelector(Array.from(availableMonthNumbers).sort((a, b) => a - b));
-
-    const monthKeys = Array.from(monthMap.keys()).sort((a, b) => Number(a) - Number(b));
+    const monthKeys = Array.from(monthSet).sort((a, b) => Number(a) - Number(b));
     const allMonthKeys = [...monthKeys];
 
     if (allMonthKeys.length === 0) {
@@ -1229,10 +1266,7 @@ function renderTotalesPivot(rows) {
     html += '</tbody></table>';
 
     container.innerHTML = html;
-    updateTotalesInfo(
-        `Registros analizados: ${rows.length}. Ciclos: ${cycles.length}. Meses con datos: ${monthKeys.length}. Sin mes: ${blankMonthTotal}. Sin ciclo: ${blankCycleTotal}.`,
-        'success'
-    );
+    updateTotalesInfo('');
 }
 
 function parseNumericValue(value) {
@@ -1386,52 +1420,23 @@ function renderNumeroOrdenesPivot(rows) {
         return;
     }
 
-    const cicloColumn = detectColumnName(rows, [/^ciclo$/, /cod.*ciclo/, /ciclo/]);
-    const fechaEjecucionColumn = detectColumnName(rows, [/^fecha_ejecucion$/, /fecha.*ejecucion/, /ejecucion.*fecha/]);
-    const numeroOrdenesColumn = detectColumnName(rows, [/^num_ordenes_sin_asignar$/, /num.*ordenes.*sin.*asignar/, /ordenes.*sin.*asignar/]);
-
-    if (!cicloColumn || !fechaEjecucionColumn || !numeroOrdenesColumn) {
-        container.innerHTML = '<div style="text-align:center; padding:16px; color:#fca5a5;">No se detectaron columnas ciclo, fecha_ejecucion y num_ordenes_sin_asignar.</div>';
-        updateNumeroOrdenesInfo('No fue posible detectar columnas para el pivote de número de órdenes.', 'error');
-        return;
-    }
-
     const monthMap = new Map();
     const cycleSet = new Set();
     const tableMap = new Map();
 
-    const selectedMonthNumbers = getSelectedMonthNumbers();
-
-    let blankMonthTotal = 0;
-    let blankCycleTotal = 0;
-
     rows.forEach(row => {
-        const rawCiclo = row[cicloColumn];
-        const ciclo = normalizeCiclo(rawCiclo) || '(en blanco)';
+        const ciclo = normalizeCiclo(row?.ciclo) || '(en blanco)';
+        const monthNumber = Number(row?.mes_num);
+        const valueToAdd = parseNumericValue(row?.total);
 
-        const dateParts = getDatePartsInTimeZone(row[fechaEjecucionColumn]);
-        const monthNumber = dateParts ? dateParts.month : null;
-
-        if (selectedMonthNumbers.length > 0 && !selectedMonthNumbers.includes(monthNumber)) {
+        if (!Number.isInteger(monthNumber) || monthNumber < 1 || monthNumber > 12) {
             return;
         }
 
-        const monthKey = monthNumber ? `${String(monthNumber).padStart(2, '0')}` : '(en blanco)';
-
-        if (monthKey !== '(en blanco)') {
-            monthMap.set(monthKey, getMonthLabelUpper(monthNumber));
-        } else {
-            blankMonthTotal += 1;
-            return;
-        }
-
-        if (ciclo === '(en blanco)') {
-            blankCycleTotal += 1;
-        }
-
+        const monthKey = String(monthNumber).padStart(2, '0');
+        monthMap.set(monthKey, getMonthLabelUpper(monthNumber));
         cycleSet.add(ciclo);
 
-        const valueToAdd = parseNumericValue(row[numeroOrdenesColumn]);
         const key = `${ciclo}|${monthKey}`;
         tableMap.set(key, (tableMap.get(key) || 0) + valueToAdd);
     });
@@ -1486,10 +1491,7 @@ function renderNumeroOrdenesPivot(rows) {
     html += '</tbody></table>';
 
     container.innerHTML = html;
-    updateNumeroOrdenesInfo(
-        `Registros analizados: ${rows.length}. Ciclos: ${cycles.length}. Meses con datos: ${monthKeys.length}. Sin mes: ${blankMonthTotal}. Sin ciclo: ${blankCycleTotal}.`,
-        'success'
-    );
+    updateNumeroOrdenesInfo('');
 }
 
 function renderResumenMensualPorServicio(rows) {
@@ -1503,51 +1505,21 @@ function renderResumenMensualPorServicio(rows) {
         return;
     }
 
-    const fechaEjecucionColumn = detectColumnName(rows, [/^fecha_ejecucion$/, /fecha.*ejecucion/, /ejecucion.*fecha/]);
-    const energiaColumn = detectColumnName(rows, [/^num_ordenes_energia$/, /num.*ordenes.*energia/, /ordenes.*energia/]);
-    const gasColumn = detectColumnName(rows, [/^num_ordenes_gas$/, /num.*ordenes.*gas/, /ordenes.*gas/]);
-    const aguaColumn = detectColumnName(rows, [/^num_ordenes_agua$/, /num.*ordenes.*agua/, /ordenes.*agua/]);
-
-    if (!fechaEjecucionColumn || !energiaColumn || !gasColumn || !aguaColumn) {
-        container.innerHTML = '<div style="text-align:center; padding:16px; color:#fca5a5;">No se detectaron las columnas fecha_ejecucion, num_ordenes_energia, num_ordenes_gas y num_ordenes_agua.</div>';
-        updateResumenMensualInfo('No fue posible detectar columnas para el resumen mensual.', 'error');
-        renderTotalOrdenesChart([]);
-        return;
-    }
-
-    const grouped = new Map();
-    let invalidDateRows = 0;
-    const selectedMonthNumbers = getSelectedMonthNumbers();
-
-    rows.forEach(row => {
-        const dateParts = getDatePartsInTimeZone(row[fechaEjecucionColumn]);
-        if (!dateParts) {
-            invalidDateRows += 1;
-            return;
-        }
-
-        if (selectedMonthNumbers.length > 0 && !selectedMonthNumbers.includes(dateParts.month)) {
-            return;
-        }
-
-        const periodKey = `${dateParts.year}-${String(dateParts.month).padStart(2, '0')}`;
-        if (!grouped.has(periodKey)) {
-            grouped.set(periodKey, {
-                year: dateParts.year,
-                month: dateParts.month,
-                energia: 0,
-                gas: 0,
-                agua: 0
-            });
-        }
-
-        const current = grouped.get(periodKey);
-        current.energia += parseNumericValue(row[energiaColumn]);
-        current.gas += parseNumericValue(row[gasColumn]);
-        current.agua += parseNumericValue(row[aguaColumn]);
-    });
-
-    const periods = Array.from(grouped.values()).sort((a, b) => {
+    const periods = rows
+        .map(row => ({
+            year: Number(row?.anio),
+            month: Number(row?.mes_num),
+            energia: parseNumericValue(row?.energia),
+            gas: parseNumericValue(row?.gas),
+            agua: parseNumericValue(row?.agua)
+        }))
+        .filter(period =>
+            Number.isInteger(period.year)
+            && Number.isInteger(period.month)
+            && period.month >= 1
+            && period.month <= 12
+        )
+        .sort((a, b) => {
         if (a.year !== b.year) return a.year - b.year;
         return a.month - b.month;
     });
@@ -1665,10 +1637,7 @@ function renderResumenMensualPorServicio(rows) {
     container.innerHTML = html;
     renderTotalOrdenesChart(periods);
 
-    updateResumenMensualInfo(
-        `Meses operativos: ${periods.length}. Registros analizados: ${rows.length}. Fechas inválidas: ${invalidDateRows}.`,
-        'success'
-    );
+    updateResumenMensualInfo('');
 }
 
 async function refreshTotalesPorMes() {
@@ -1679,27 +1648,35 @@ async function refreshTotalesPorMes() {
         return;
     }
 
+    setRecalcularTotalesButtonState(true, '⏳ Calculando...');
+
     const container = document.getElementById('totalesMesContainer');
     if (container) {
-        container.innerHTML = '<div style="text-align:center; padding:16px; color:#94a3b8;">Calculando totales por mes...</div>';
+        container.innerHTML = getLoadingMarkup('Calculando totales por mes...');
     }
     const numeroOrdenesContainer = document.getElementById('numeroOrdenesContainer');
     if (numeroOrdenesContainer) {
-        numeroOrdenesContainer.innerHTML = '<div style="text-align:center; padding:16px; color:#94a3b8;">Calculando número de órdenes...</div>';
+        numeroOrdenesContainer.innerHTML = getLoadingMarkup('Calculando número de órdenes...');
     }
     const resumenMensualContainer = document.getElementById('resumenMensualContainer');
     if (resumenMensualContainer) {
-        resumenMensualContainer.innerHTML = '<div style="text-align:center; padding:16px; color:#94a3b8;">Calculando resumen mensual...</div>';
+        resumenMensualContainer.innerHTML = getLoadingMarkup('Calculando resumen mensual...');
     }
-    updateTotalesInfo('Consultando datos en Supabase...');
-    updateNumeroOrdenesInfo('Consultando datos en Supabase...');
-    updateResumenMensualInfo('Consultando datos en Supabase...');
+    setTotalOrdenesChartLoadingState(true, 'Calculando gráfica total...');
+    updateTotalesInfo('Consultando datos...');
+    updateNumeroOrdenesInfo('Consultando datos...');
+    updateResumenMensualInfo('Consultando datos...');
 
     try {
-        const rows = await fetchAllRowsFromTable(TABLE_NAME, 1000);
-        renderTotalesPivot(rows);
-        renderNumeroOrdenesPivot(rows);
-        renderResumenMensualPorServicio(rows);
+        const [totalesCorreriasRows, numeroOrdenesRows, resumenServicioRows] = await Promise.all([
+            callOrdenesRpc(ORDENES_RPC.totalesCorrerias, { p_meses: selectedMonthNumbers }),
+            callOrdenesRpc(ORDENES_RPC.numeroOrdenes, { p_meses: selectedMonthNumbers }),
+            callOrdenesRpc(ORDENES_RPC.totalesServicio, { p_meses: selectedMonthNumbers })
+        ]);
+
+        renderTotalesPivot(totalesCorreriasRows);
+        renderNumeroOrdenesPivot(numeroOrdenesRows);
+        renderResumenMensualPorServicio(resumenServicioRows);
     } catch (error) {
         if (container) {
             container.innerHTML = `<div style="text-align:center; padding:16px; color:#fca5a5;">Error al calcular totales: ${error.message}</div>`;
@@ -1713,6 +1690,9 @@ async function refreshTotalesPorMes() {
         updateTotalesInfo('Error al calcular totales por mes.', 'error');
         updateNumeroOrdenesInfo('Error al calcular número de órdenes.', 'error');
         updateResumenMensualInfo('Error al calcular resumen mensual.', 'error');
+    } finally {
+        setTotalOrdenesChartLoadingState(false);
+        setRecalcularTotalesButtonState(false);
     }
 }
 
@@ -2101,7 +2081,7 @@ async function sincronizarFechaEjecucionLocal({ targetTable: providedTargetTable
         return { updatedRows: 0, pendingRows: 0 };
     }
 
-    updateSyncProgress(25, `Aplicando ${updates.length} actualizaciones en Supabase...`);
+    updateSyncProgress(25, `Aplicando ${updates.length} actualizaciones...`);
 
     let affectedRows = 0;
     const fallbackDone = new Set();

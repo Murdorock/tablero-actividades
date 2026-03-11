@@ -446,6 +446,58 @@ body {
     min-width: 170px;
 }
 
+.ordenes-dashboard-months {
+    display: flex;
+    align-items: center;
+    min-height: 40px;
+}
+
+.ordenes-dashboard-select-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.ordenes-dashboard-month-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.ordenes-dashboard-month-chip {
+    border: 1px solid #475569;
+    background: #1e293b;
+    color: #e2e8f0;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.1s ease;
+}
+
+.ordenes-dashboard-month-chip:hover {
+    border-color: #60a5fa;
+    background: #26364d;
+}
+
+.ordenes-dashboard-month-chip.active {
+    border-color: #22c55e;
+    background: #14532d;
+    color: #dcfce7;
+}
+
+.ordenes-dashboard-month-chip:focus-visible {
+    outline: 2px solid #38bdf8;
+    outline-offset: 2px;
+}
+
 .ordenes-dashboard-grid {
     margin-top: 16px;
     display: grid;
@@ -484,6 +536,29 @@ body {
     border-radius: 14px;
     padding: 14px;
     min-height: 260px;
+    position: relative;
+    overflow: hidden;
+}
+
+.ordenes-chart-loading-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(6, 10, 20, 0.62);
+    backdrop-filter: blur(2px);
+    z-index: 2;
+}
+
+.ordenes-chart-loading-overlay .loading {
+    color: #f1f5f9;
+    padding: 20px;
+}
+
+.ordenes-chart-loading-overlay .spinner {
+    border: 3px solid rgba(203, 213, 225, 0.25);
+    border-top: 3px solid #f8fafc;
 }
 
 body.corporate-export-theme .ordenes-dashboard-card {
