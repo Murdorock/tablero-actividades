@@ -1885,7 +1885,10 @@ function shouldFallbackToLocalSync(error) {
         message.includes('failed to fetch') ||
         message.includes('non-2xx status code') ||
         message.includes('function not found') ||
-        message.includes('edge function returned a non-2xx')
+        message.includes('edge function returned a non-2xx') ||
+        message.includes('unauthorized') ||
+        message.includes('acceso denegado') ||
+        message.includes('jwt')
     );
 }
 
@@ -1893,13 +1896,50 @@ function getEdgeSyncErrorMessage(error) {
     const raw = String(error?.message || '').trim();
     if (!raw) return 'Error desconocido invocando la funcion Edge.';
 
-    // Supabase suele envolver el mensaje asi: "Edge Function returned a non-2xx status code: <status>"
     const normalized = normalizeText(raw);
+    if (normalized.includes('unauthorized') || normalized.includes('jwt')) {
+        return 'sesion no autorizada para ejecutar la funcion Edge';
+    }
+
+    if (normalized.includes('acceso denegado') || normalized.includes('forbidden')) {
+        return 'el usuario no tiene permisos de administrador para la funcion Edge';
+    }
+
+    // Supabase suele envolver el mensaje asi: "Edge Function returned a non-2xx status code: <status>"
     if (normalized.includes('edge function returned a non-2xx status code')) {
-        return `${raw}. Revisa los logs de la funcion sync-fecha-ejecucion-ordenes en Supabase.`;
+        return 'la funcion Edge devolvio una respuesta no valida';
     }
 
     return raw;
+}
+
+function getRpcSyncErrorMessage(error) {
+    const raw = String(error?.message || '').trim();
+    if (!raw) return 'Error desconocido invocando la RPC.';
+
+    const normalized = normalizeText(raw);
+    if (normalized.includes('could not find the function') || normalized.includes('pgrst202')) {
+        return 'no existe la RPC rpc_sync_fecha_ejecucion_ordenes en la base de datos';
+    }
+
+    return raw;
+}
+
+async function sincronizarFechaEjecucionViaRpc({ targetTable, calendarioTable }) {
+    const { data, error } = await supabase.rpc('rpc_sync_fecha_ejecucion_ordenes', {
+        p_target_table: targetTable,
+        p_calendario_table: calendarioTable
+    });
+
+    if (error) {
+        throw new Error(error.message || 'Error invocando rpc_sync_fecha_ejecucion_ordenes');
+    }
+
+    if (Array.isArray(data) && data.length > 0) {
+        return data[0] || {};
+    }
+
+    return data || {};
 }
 
 async function sincronizarFechaEjecucionViaEdge({ targetTable, calendarioTable }) {
@@ -1939,7 +1979,30 @@ async function sincronizarFechaEjecucion() {
             return;
         }
 
-        updateSyncProgress(15, 'Ejecutando sincronizacion en servidor...');
+        updateSyncProgress(12, 'Ejecutando sincronizacion RPC en base de datos...');
+
+        try {
+            const rpcResult = await sincronizarFechaEjecucionViaRpc({ targetTable, calendarioTable });
+            const affectedRows = Number(rpcResult.updated_rows ?? rpcResult.updatedRows ?? 0);
+            const pendingRows = Number(rpcResult.pending_rows ?? rpcResult.pendingRows ?? 0);
+
+            if (affectedRows === 0) {
+                updateSyncProgress(100, `Sin cambios en ${targetTable}. Pendientes detectados: ${pendingRows}.`);
+                showMessage(`No hubo cambios nuevos para aplicar en ${targetTable}`, 'info');
+            } else {
+                updateSyncProgress(100, `Finalizado por RPC: ${affectedRows} filas actualizadas en ${targetTable}.`);
+                showMessage(`Fecha ejecucion recalculada por RPC: ${affectedRows} filas afectadas en ${targetTable}`, 'success');
+            }
+
+            await loadAvailableMonthsForSelector();
+            setDashboardWaitingForMonthSelection();
+            return;
+        } catch (rpcError) {
+            updateSyncProgress(15, 'RPC no disponible. Intentando sincronizacion por Edge Function...');
+            showMessage(`RPC no disponible (${getRpcSyncErrorMessage(rpcError)}). Intentando via Edge.`, 'info');
+        }
+
+        updateSyncProgress(18, 'Ejecutando sincronizacion en Edge Function...');
 
         try {
             const result = await sincronizarFechaEjecucionViaEdge({ targetTable, calendarioTable });
@@ -1963,7 +2026,7 @@ async function sincronizarFechaEjecucion() {
             }
 
             updateSyncProgress(24, 'No se pudo usar la funcion Edge. Ejecutando sincronizacion local...');
-            showMessage(`La funcion Edge respondio con error: ${getEdgeSyncErrorMessage(edgeError)} Se ejecutara sincronizacion local.`, 'warning');
+            showMessage(`Se ejecutara sincronizacion local (${getEdgeSyncErrorMessage(edgeError)}).`, 'info');
         }
 
         await sincronizarFechaEjecucionLocal({ targetTable, calendarioTable });

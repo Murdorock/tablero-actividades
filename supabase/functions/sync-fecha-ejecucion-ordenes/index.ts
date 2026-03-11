@@ -261,7 +261,7 @@ async function updateByCycleAndMes({
   fechaEjecucion: unknown;
 }) {
   if (!cicloColumn || cicloValue === null || cicloValue === undefined) {
-    return 0;
+    return;
   }
 
   let query = client
@@ -273,10 +273,8 @@ async function updateByCycleAndMes({
     query = query.eq(mesColumn, mesValue);
   }
 
-  const { data, error } = await query.select("*");
+  const { error } = await query;
   if (error) throw error;
-
-  return Array.isArray(data) ? data.length : 0;
 }
 
 function chunkArray<T>(items: T[], size: number) {
@@ -297,47 +295,13 @@ Deno.serve(async (req: Request) => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const authHeader = req.headers.get("Authorization");
 
-  if (!supabaseUrl || !anonKey || !serviceRoleKey) {
+  if (!supabaseUrl || !serviceRoleKey) {
     return jsonResponse({ error: "Supabase env vars are missing" }, 500);
   }
 
-  if (!authHeader) {
-    return jsonResponse({ error: "Missing Authorization header" }, 401);
-  }
-
-  const userClient = createClient(supabaseUrl, anonKey, {
-    global: {
-      headers: {
-        Authorization: authHeader,
-      },
-    },
-  });
-
   const adminClient = createClient(supabaseUrl, serviceRoleKey);
-
-  const {
-    data: { user },
-    error: userError,
-  } = await userClient.auth.getUser();
-
-  if (userError || !user?.email) {
-    return jsonResponse({ error: userError?.message || "Unauthorized" }, 401);
-  }
-
-  const { data: perfil, error: perfilError } = await adminClient
-    .from("perfiles")
-    .select("rol")
-    .eq("email", user.email)
-    .limit(1)
-    .maybeSingle();
-
-  if (perfilError || !perfil || perfil.rol !== "ADMINISTRADOR") {
-    return jsonResponse({ error: "Acceso denegado" }, 403);
-  }
 
   let payload: RequestPayload = {};
   try {
@@ -359,7 +323,6 @@ Deno.serve(async (req: Request) => {
 
   try {
     const calendarioRows = await fetchAllRowsFromTable(adminClient, calendarioTable, 1000);
-    const ordenesRows = await fetchAllRowsFromTable(adminClient, targetTable, 1000);
 
     if (!calendarioRows.length) {
       return jsonResponse({
@@ -369,7 +332,15 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    if (!ordenesRows.length) {
+    const { data: sampleRows, error: sampleError } = await adminClient
+      .from(targetTable)
+      .select("*")
+      .limit(1);
+
+    if (sampleError) throw sampleError;
+
+    const ordenesSample = (sampleRows || []) as Record<string, unknown>[];
+    if (!ordenesSample.length) {
       return jsonResponse({
         updatedRows: 0,
         pendingRows: 0,
@@ -377,16 +348,16 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const primaryKey = detectPrimaryKeyFromRows(ordenesRows);
-    const hasUsablePrimaryKey = Object.prototype.hasOwnProperty.call(ordenesRows[0], primaryKey);
+    const primaryKey = detectPrimaryKeyFromRows(ordenesSample);
+    const hasUsablePrimaryKey = Object.prototype.hasOwnProperty.call(ordenesSample[0], primaryKey);
 
     const calendarioCicloCol = detectColumnName(calendarioRows, [/^ciclo$/, /cod.*ciclo/, /ciclo/]);
     const calendarioMesCol = detectColumnName(calendarioRows, [/^mes$/, /mes/]);
     const calendarioFechaCol = detectColumnName(calendarioRows, [/^fecha$/, /fecha/, /date/]);
 
-    const ordenesCicloCol = detectColumnName(ordenesRows, [/^ciclo$/, /cod.*ciclo/, /ciclo/]);
-    const ordenesMesCol = detectColumnName(ordenesRows, [/^mes$/, /mes/]);
-    const ordenesFechaProgramadaCol = detectColumnName(ordenesRows, [/fecha.*programada/, /fecha_programada/, /fecha/, /date/]);
+    const ordenesCicloCol = detectColumnName(ordenesSample, [/^ciclo$/, /cod.*ciclo/, /ciclo/]);
+    const ordenesMesCol = detectColumnName(ordenesSample, [/^mes$/, /mes/]);
+    const ordenesFechaProgramadaCol = detectColumnName(ordenesSample, [/fecha.*programada/, /fecha_programada/, /fecha/, /date/]);
 
     if (!calendarioCicloCol || !calendarioMesCol || !calendarioFechaCol) {
       return jsonResponse({ error: "No se detectaron columnas ciclo/mes/fecha en calendario" }, 400);
@@ -418,32 +389,106 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const updates: Array<{
-      id: unknown;
-      cicloRaw: unknown;
-      mesRaw: unknown;
-      fecha_ejecucion: unknown;
-    }> = [];
+    const selectedColumns = Array.from(new Set([
+      primaryKey,
+      ordenesCicloCol,
+      ordenesMesCol,
+      ordenesFechaProgramadaCol,
+      "fecha_ejecucion",
+    ].filter((col): col is string => Boolean(col))));
 
-    ordenesRows.forEach((row) => {
-      const rowId = row[primaryKey];
+    const selectClause = selectedColumns.join(",");
+    let from = 0;
+    const readBatchSize = 1500;
+    let pendingRows = 0;
+    let affectedRows = 0;
+    const fallbackDone = new Set<string>();
 
-      const mesOrden = getMesFromRow(row, ordenesMesCol, ordenesFechaProgramadaCol);
-      const key = buildJoinKey(row[ordenesCicloCol], mesOrden);
-      const fechaCalendario = key ? (calendarioMap.get(key) || null) : null;
+    while (true) {
+      const to = from + readBatchSize - 1;
+      const { data, error } = await adminClient
+        .from(targetTable)
+        .select(selectClause)
+        .range(from, to);
 
-      const fechaActual = row.fecha_ejecucion;
-      if (sameDateValue(fechaActual, fechaCalendario)) return;
+      if (error) throw error;
 
-      updates.push({
-        id: rowId,
-        cicloRaw: row[ordenesCicloCol],
-        mesRaw: ordenesMesCol ? row[ordenesMesCol] : null,
-        fecha_ejecucion: fechaCalendario,
+      const rows = (data || []) as Record<string, unknown>[];
+      if (!rows.length) break;
+
+      const updates: Array<{
+        id: unknown;
+        cicloRaw: unknown;
+        mesRaw: unknown;
+        fecha_ejecucion: unknown;
+      }> = [];
+
+      rows.forEach((row) => {
+        const rowId = row[primaryKey];
+        const mesOrden = getMesFromRow(row, ordenesMesCol, ordenesFechaProgramadaCol);
+        const key = buildJoinKey(row[ordenesCicloCol], mesOrden);
+        const fechaCalendario = key ? (calendarioMap.get(key) || null) : null;
+        const fechaActual = row.fecha_ejecucion;
+
+        if (sameDateValue(fechaActual, fechaCalendario)) return;
+
+        updates.push({
+          id: rowId,
+          cicloRaw: row[ordenesCicloCol],
+          mesRaw: ordenesMesCol ? row[ordenesMesCol] : null,
+          fecha_ejecucion: fechaCalendario,
+        });
       });
-    });
 
-    if (!updates.length) {
+      pendingRows += updates.length;
+
+      const updatesWithPrimaryKey = hasUsablePrimaryKey
+        ? updates.filter((item) => item.id !== null && item.id !== undefined && item.id !== "")
+        : [];
+
+      if (updatesWithPrimaryKey.length) {
+        const upsertPayload = updatesWithPrimaryKey.map((item) => ({
+          [primaryKey]: item.id,
+          fecha_ejecucion: item.fecha_ejecucion,
+        }));
+
+        const batches = chunkArray(upsertPayload, 500);
+        for (const batch of batches) {
+          const { error: upsertError } = await adminClient
+            .from(targetTable)
+            .upsert(batch, { onConflict: primaryKey });
+
+          if (upsertError) throw upsertError;
+          affectedRows += batch.length;
+        }
+      }
+
+      for (const item of updates) {
+        if (hasUsablePrimaryKey && item.id !== null && item.id !== undefined && item.id !== "") {
+          continue;
+        }
+
+        const fallbackKey = `${normalizeCiclo(item.cicloRaw)}|${convertMesToNumber(item.mesRaw)}|${item.fecha_ejecucion}`;
+        if (fallbackDone.has(fallbackKey)) continue;
+
+        await updateByCycleAndMes({
+          client: adminClient,
+          targetTable,
+          cicloColumn: ordenesCicloCol,
+          cicloValue: item.cicloRaw,
+          mesColumn: ordenesMesCol,
+          mesValue: item.mesRaw,
+          fechaEjecucion: item.fecha_ejecucion,
+        });
+
+        fallbackDone.add(fallbackKey);
+      }
+
+      if (rows.length < readBatchSize) break;
+      from += readBatchSize;
+    }
+
+    if (pendingRows === 0) {
       return jsonResponse({
         updatedRows: 0,
         pendingRows: 0,
@@ -451,58 +496,9 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    let affectedRows = 0;
-
-    const updatesWithPrimaryKey = hasUsablePrimaryKey
-      ? updates.filter((item) => item.id !== null && item.id !== undefined && item.id !== "")
-      : [];
-
-    if (updatesWithPrimaryKey.length) {
-      const upsertPayload = updatesWithPrimaryKey.map((item) => ({
-        [primaryKey]: item.id,
-        fecha_ejecucion: item.fecha_ejecucion,
-      }));
-
-      // Reduce round-trips and CPU by updating rows in batches instead of one-by-one.
-      const batches = chunkArray(upsertPayload, 500);
-      for (const batch of batches) {
-        const { data, error } = await adminClient
-          .from(targetTable)
-          .upsert(batch, { onConflict: primaryKey })
-          .select(primaryKey);
-
-        if (error) throw error;
-        affectedRows += Array.isArray(data) ? data.length : batch.length;
-      }
-    }
-
-    const fallbackDone = new Set<string>();
-    for (const item of updates) {
-      // Si hubo PK usable, estos updates ya se aplicaron por lote.
-      if (hasUsablePrimaryKey && item.id !== null && item.id !== undefined && item.id !== "") {
-        continue;
-      }
-
-      const fallbackKey = `${normalizeCiclo(item.cicloRaw)}|${convertMesToNumber(item.mesRaw)}|${item.fecha_ejecucion}`;
-      if (fallbackDone.has(fallbackKey)) continue;
-
-      const updated = await updateByCycleAndMes({
-        client: adminClient,
-        targetTable,
-        cicloColumn: ordenesCicloCol,
-        cicloValue: item.cicloRaw,
-        mesColumn: ordenesMesCol,
-        mesValue: item.mesRaw,
-        fechaEjecucion: item.fecha_ejecucion,
-      });
-
-      fallbackDone.add(fallbackKey);
-      affectedRows += updated;
-    }
-
     return jsonResponse({
       updatedRows: affectedRows,
-      pendingRows: updates.length,
+      pendingRows,
       targetTable,
       calendarioTable,
       primaryKey,
