@@ -24,12 +24,14 @@ function looksLikePhotoValue(columnName, value) {
     const trimmed = value.trim();
     if (!trimmed) return false;
 
+    const normalizedColumn = String(columnName || '').toLowerCase();
     const byColumnName = isPhotoColumn(columnName);
     const isHttpUrl = isImageUrl(trimmed);
+    const byUrlColumn = normalizedColumn.includes('url') && isHttpUrl;
     const hasImageExt = /\.(png|jpe?g|webp|gif|bmp)(\?|#|$)/i.test(trimmed);
     const isSupabasePublicObject = /\/storage\/v1\/object\/public\//i.test(trimmed);
 
-    return byColumnName || (isHttpUrl && (hasImageExt || isSupabasePublicObject));
+    return byColumnName || byUrlColumn || (isHttpUrl && (hasImageExt || isSupabasePublicObject));
 }
 
 function escapeHtmlAttr(value = '') {
