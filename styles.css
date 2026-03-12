@@ -854,6 +854,85 @@ body.corporate-export-theme #totalOrdenesChartPanel {
     font-weight: 500;
 }
 
+.personal-photo-thumb {
+    width: 44px;
+    height: 44px;
+    border-radius: 999px;
+    object-fit: cover;
+    border: 2px solid #334155;
+    background: #0f172a;
+    display: block;
+}
+
+.personal-photo-detail {
+    width: 120px;
+    height: 120px;
+    border-radius: 12px;
+    object-fit: cover;
+    border: 2px solid #334155;
+    background: #0f172a;
+    display: block;
+    margin: 6px 0;
+}
+
+.photo-thumb-btn {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    cursor: zoom-in;
+    line-height: 0;
+}
+
+.photo-preview-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(2, 6, 23, 0.85);
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.photo-preview-content {
+    position: relative;
+    max-width: min(92vw, 820px);
+    max-height: 92vh;
+}
+
+.photo-preview-image {
+    display: block;
+    max-width: 100%;
+    max-height: 92vh;
+    border-radius: 14px;
+    border: 2px solid #334155;
+    box-shadow: 0 12px 40px rgba(2, 6, 23, 0.65);
+    object-fit: contain;
+    background: #0f172a;
+}
+
+.photo-preview-close {
+    position: absolute;
+    top: -12px;
+    right: -12px;
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    border: 1px solid #64748b;
+    background: #0f172a;
+    color: #f1f5f9;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.photo-empty {
+    color: #94a3b8;
+    font-size: 12px;
+    font-style: italic;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .sidebar {

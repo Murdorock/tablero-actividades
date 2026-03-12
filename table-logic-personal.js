@@ -1,9 +1,94 @@
 // Configuración específica para tabla Personal
 const TABLE_NAME = 'personal';
 const PRIMARY_KEY = 'id_codigo';
+const PERSONAL_PHOTOS_BUCKET = 'cold';
+const PERSONAL_PHOTOS_PREFIX = 'fotos_personal';
 
 let currentData = [];
 let tableColumns = [];
+
+function isPhotoColumn(columnName = '') {
+    const normalized = columnName.toLowerCase();
+    return normalized.includes('foto') || normalized.includes('imagen') || normalized.includes('avatar');
+}
+
+function isImageUrl(value = '') {
+    if (typeof value !== 'string') return false;
+    const trimmed = value.trim();
+    if (!trimmed) return false;
+    return /^https?:\/\//i.test(trimmed);
+}
+
+function escapeHtmlAttr(value = '') {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+function escapeJsString(value = '') {
+    return String(value)
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/\r?\n/g, ' ');
+}
+
+function openPhotoPreview(encodedUrl = '', altText = 'Foto del personal') {
+    const photoUrl = decodeURIComponent(encodedUrl);
+    if (!isImageUrl(photoUrl)) return;
+
+    const existing = document.getElementById('photoPreviewOverlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'photoPreviewOverlay';
+    overlay.className = 'photo-preview-overlay';
+    overlay.innerHTML = `
+        <div class="photo-preview-content">
+            <button type="button" class="photo-preview-close" aria-label="Cerrar vista previa">×</button>
+            <img src="${escapeHtmlAttr(photoUrl)}" alt="${escapeHtmlAttr(altText)}" class="photo-preview-image">
+        </div>
+    `;
+
+    const closePreview = () => {
+        overlay.remove();
+        document.removeEventListener('keydown', onEscClose);
+    };
+
+    const onEscClose = (event) => {
+        if (event.key === 'Escape') {
+            closePreview();
+        }
+    };
+
+    overlay.addEventListener('click', (event) => {
+        if (event.target === overlay) {
+            closePreview();
+        }
+    });
+
+    const closeButton = overlay.querySelector('.photo-preview-close');
+    if (closeButton) {
+        closeButton.addEventListener('click', closePreview);
+    }
+
+    document.addEventListener('keydown', onEscClose);
+    document.body.appendChild(overlay);
+}
+
+function getPhotoCellHtml(photoUrl, altText = 'Foto del personal', imageClass = 'personal-photo-thumb') {
+    if (!photoUrl || !isImageUrl(photoUrl)) {
+        return '<span class="photo-empty">Sin foto</span>';
+    }
+
+    const safeUrl = escapeHtmlAttr(photoUrl);
+    const safeAlt = escapeHtmlAttr(altText);
+    const encodedUrl = encodeURIComponent(photoUrl);
+    const safeEncodedUrl = escapeJsString(encodedUrl);
+    const safeAltForJs = escapeJsString(altText);
+    return `<button type="button" class="photo-thumb-btn" onclick="openPhotoPreview('${safeEncodedUrl}', '${safeAltForJs}')"><img src="${safeUrl}" alt="${safeAlt}" class="${imageClass}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.parentElement.outerHTML='<span class=\'photo-empty\'>Sin foto</span>';"/></button>`;
+}
 
 // Cargar datos iniciales
 async function loadData() {
@@ -55,6 +140,11 @@ function renderTable(data) {
         html += '<tr>';
         tableColumns.forEach(column => {
             let value = row[column];
+
+            if (isPhotoColumn(column)) {
+                html += `<td>${getPhotoCellHtml(value, row[PRIMARY_KEY] || 'Personal')}</td>`;
+                return;
+            }
             
             // Formatear valores especiales
             if (value === null || value === undefined) {
@@ -211,8 +301,12 @@ async function viewDetails(id) {
         Object.entries(data).forEach(([key, value]) => {
             const displayName = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
             let displayValue = value || 'No especificado';
+
+            if (isPhotoColumn(key)) {
+                displayValue = getPhotoCellHtml(value, data[PRIMARY_KEY] || 'Personal', 'personal-photo-detail');
+            }
             
-            if (key.includes('fecha') && value) {
+            if (!isPhotoColumn(key) && key.includes('fecha') && value) {
                 const date = new Date(value);
                 if (!isNaN(date.getTime())) {
                     displayValue = date.toLocaleDateString('es-ES');
@@ -288,6 +382,8 @@ function generateFormFields(data = {}) {
                     value = date.toISOString().split('T')[0];
                 }
             }
+        } else if (isPhotoColumn(column) || column.includes('url')) {
+            inputType = 'url';
         } else if (column.includes('email') || column.includes('correo')) {
             inputType = 'email';
         } else if (column.includes('telefono') || column.includes('celular') || column.includes('phone')) {
@@ -521,4 +617,36 @@ function filterByGlobal(searchTerm) {
         });
     });
     renderTable(filteredData);
+}
+
+async function syncPhotoUrlsFromStorage() {
+    const confirmed = confirm('Esto sincronizara foto_url en personal usando los archivos del bucket cold/fotos_personal. ¿Deseas continuar?');
+    if (!confirmed) return;
+
+    try {
+        let { data, error } = await supabase.rpc('sync_personal_foto_url_from_storage', {
+            p_project_url: SUPABASE_CONFIG.url,
+            p_bucket: PERSONAL_PHOTOS_BUCKET,
+            p_prefix: PERSONAL_PHOTOS_PREFIX
+        });
+
+        // Backward compatibility if DB still has old 2-argument RPC signature.
+        if (error) {
+            const fallback = await supabase.rpc('sync_personal_foto_url_from_storage', {
+                p_project_url: SUPABASE_CONFIG.url,
+                p_bucket: PERSONAL_PHOTOS_BUCKET
+            });
+            data = fallback.data;
+            error = fallback.error;
+        }
+
+        if (error) throw error;
+
+        const result = Array.isArray(data) && data.length ? data[0] : { updated_rows: 0, matched_files: 0 };
+        alert(`Sincronizacion completada. Actualizados: ${result.updated_rows || 0}. Coincidencias por id_codigo: ${result.matched_files || 0}.`);
+        loadData();
+    } catch (error) {
+        console.error('Error sincronizando fotos desde Storage:', error);
+        alert('Error sincronizando fotos: ' + error.message + '. Verifica que exista la funcion RPC y permisos de ejecucion.');
+    }
 }
