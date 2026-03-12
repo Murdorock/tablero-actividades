@@ -356,6 +356,23 @@ body {
     top: var(--refutar-sticky-search-height, 56px);
 }
 
+.personal-table-wrapper {
+    --personal-sticky-search-height: 59px;
+}
+
+.personal-table-wrapper .personal-sticky-search {
+    top: 0;
+    z-index: 35;
+    background: #1e293b;
+    margin: 0 !important;
+    padding: 10px 12px 9px;
+    border-bottom: 1px solid #334155;
+}
+
+.personal-table-wrapper .data-table thead {
+    top: var(--personal-sticky-search-height);
+}
+
 .data-table {
     width: 100%;
     border-collapse: collapse;

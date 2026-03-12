@@ -137,7 +137,7 @@ async function loadData() {
 function renderTable(data) {
     const tableContainer = document.getElementById('tableContainer');
     // Filtro global fuera de la tabla, similar a base.js
-    let filterHtml = `<div style="margin-bottom: 10px; display: flex; gap: 10px; align-items: center;">
+    let filterHtml = `<div class="personal-table-wrapper"><div class="sticky-search-row personal-sticky-search" style="display: flex; gap: 10px; align-items: center;">
         <label for="filterSearch" style="font-weight:bold; font-size:1.1em;">Buscar:</label>
         <input type="text" id="filterSearch" style="width: 200px; height: 38px; font-size: 1.1em; padding: 6px 10px; border-radius: 6px; border: 1px solid #ccc;" placeholder="Buscar..." autocomplete="off">
         <select id="filterColumn" style="min-width:130px; height: 38px; font-size: 1.1em; border-radius: 6px; border: 1px solid #ccc; padding: 6px 10px;"></select>
@@ -202,7 +202,7 @@ function renderTable(data) {
         html += `<td class="actions"><button class="btn btn-sm btn-primary" onclick="openEditModal('${rowId}')" title="Editar">✏️</button><button class="btn btn-sm btn-danger" onclick="deleteRecord('${rowId}')" title="Eliminar">🗑️</button><button class="btn btn-sm btn-info" onclick="viewDetails('${rowId}')" title="Ver detalles">👁️</button></td>`;
         html += '</tr>';
     });
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
     tableContainer.innerHTML = filterHtml + html;
     // Poblamos el select de columnas
     const filterColumn = document.getElementById('filterColumn');
