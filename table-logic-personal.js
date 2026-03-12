@@ -2,7 +2,7 @@
 const TABLE_NAME = 'personal';
 const PRIMARY_KEY = 'id_codigo';
 const PERSONAL_PHOTOS_BUCKET = 'cold';
-const PERSONAL_PHOTOS_PREFIX = 'fotos_personal';
+const PERSONAL_PHOTOS_PREFIX = 'personal_fotos';
 
 let currentData = [];
 let tableColumns = [];
@@ -235,6 +235,7 @@ function renderTable(data) {
         btnClearFilter.onclick = function() {
             filterSearch.value = '';
             filterColumn.value = '';
+            window.lastFilterValue = '';
             applyFilterPersonal();
             filterSearch.focus();
         };
@@ -250,6 +251,7 @@ function applyFilterPersonal() {
     const searchText = document.getElementById('filterSearch').value.toLowerCase().trim();
     const filterColumn = document.getElementById('filterColumn').value;
     if (!searchText) {
+        window.lastFilterValue = '';
         renderTable(currentData);
         return;
     }
@@ -635,33 +637,117 @@ function filterByGlobal(searchTerm) {
 }
 
 async function syncPhotoUrlsFromStorage() {
-    const confirmed = confirm('Esto sincronizara foto_url en personal usando los archivos del bucket cold/fotos_personal. ¿Deseas continuar?');
+    const confirmed = confirm('Esto sincronizara foto_url en personal usando archivos de cold/personal_fotos, buscando coincidencia exacta con id_codigo (sin importar extension). ¿Deseas continuar?');
     if (!confirmed) return;
 
     try {
-        let { data, error } = await supabase.rpc('sync_personal_foto_url_from_storage', {
-            p_project_url: SUPABASE_CONFIG.url,
-            p_bucket: PERSONAL_PHOTOS_BUCKET,
-            p_prefix: PERSONAL_PHOTOS_PREFIX
-        });
+        const normalizeCode = (value) => String(value || '').trim().toUpperCase();
+        const buildPublicUrl = (bucket, prefix, fileName) => {
+            const encodedPrefix = String(prefix || '').split('/').filter(Boolean).map(encodeURIComponent).join('/');
+            const encodedFile = encodeURIComponent(fileName);
+            const objectPath = encodedPrefix ? `${encodedPrefix}/${encodedFile}` : encodedFile;
+            return `${SUPABASE_CONFIG.url}/storage/v1/object/public/${bucket}/${objectPath}`;
+        };
+        const extractCodeFromFileName = (fileName) => {
+            const name = String(fileName || '').trim();
+            if (!name || name === '.emptyFolderPlaceholder') return '';
+            const dotIdx = name.lastIndexOf('.');
+            const baseName = dotIdx > 0 ? name.slice(0, dotIdx) : name;
+            return normalizeCode(baseName);
+        };
 
-        // Backward compatibility if DB still has old 2-argument RPC signature.
-        if (error) {
-            const fallback = await supabase.rpc('sync_personal_foto_url_from_storage', {
-                p_project_url: SUPABASE_CONFIG.url,
-                p_bucket: PERSONAL_PHOTOS_BUCKET
-            });
-            data = fallback.data;
-            error = fallback.error;
+        const candidatePrefixes = [PERSONAL_PHOTOS_PREFIX, 'fotos_personal'];
+        const uniquePrefixes = [...new Set(candidatePrefixes.filter(Boolean))];
+
+        let chosenPrefix = null;
+        let allObjects = [];
+
+        for (const prefix of uniquePrefixes) {
+            const collected = [];
+            let offset = 0;
+            const pageSize = 100;
+
+            while (true) {
+                const { data: page, error: listError } = await supabase
+                    .storage
+                    .from(PERSONAL_PHOTOS_BUCKET)
+                    .list(prefix, { limit: pageSize, offset, sortBy: { column: 'name', order: 'asc' } });
+
+                if (listError) throw listError;
+                if (!page || !page.length) break;
+
+                collected.push(...page);
+                if (page.length < pageSize) break;
+                offset += pageSize;
+            }
+
+            if (collected.length > 0) {
+                chosenPrefix = prefix;
+                allObjects = collected;
+                break;
+            }
         }
 
-        if (error) throw error;
+        if (!chosenPrefix || !allObjects.length) {
+            alert('No se encontraron archivos en cold/personal_fotos (ni en cold/fotos_personal).');
+            return;
+        }
 
-        const result = Array.isArray(data) && data.length ? data[0] : { updated_rows: 0, matched_files: 0 };
-        alert(`Sincronizacion completada. Actualizados: ${result.updated_rows || 0}. Coincidencias por id_codigo: ${result.matched_files || 0}.`);
+        const { data: personalRows, error: personalError } = await supabase
+            .from(TABLE_NAME)
+            .select(`${PRIMARY_KEY}, foto_url`)
+            .limit(5000);
+        if (personalError) throw personalError;
+
+        const latestByCode = new Map();
+        allObjects.forEach((obj) => {
+            const fileName = obj?.name || '';
+            const code = extractCodeFromFileName(fileName);
+            if (!code) return;
+
+            const current = latestByCode.get(code);
+            const currentTs = current?.updated_at ? new Date(current.updated_at).getTime() : 0;
+            const nextTs = obj?.updated_at ? new Date(obj.updated_at).getTime() : 0;
+            if (!current || nextTs >= currentTs) {
+                latestByCode.set(code, obj);
+            }
+        });
+
+        const updates = [];
+        (personalRows || []).forEach((row) => {
+            const idCodigo = normalizeCode(row[PRIMARY_KEY]);
+            if (!idCodigo) return;
+            const foundObj = latestByCode.get(idCodigo);
+            if (!foundObj || !foundObj.name) return;
+
+            const targetUrl = buildPublicUrl(PERSONAL_PHOTOS_BUCKET, chosenPrefix, foundObj.name);
+            const currentUrl = row.foto_url || '';
+            if (currentUrl !== targetUrl) {
+                updates.push({ idCodigo, url: targetUrl });
+            }
+        });
+
+        let updatedCount = 0;
+        let failedCount = 0;
+
+        for (const item of updates) {
+            const { error: updateError } = await supabase
+                .from(TABLE_NAME)
+                .update({ foto_url: item.url })
+                .eq(PRIMARY_KEY, item.idCodigo);
+
+            if (updateError) {
+                failedCount++;
+            } else {
+                updatedCount++;
+            }
+        }
+
+        const matchedCount = (personalRows || []).filter((row) => latestByCode.has(normalizeCode(row[PRIMARY_KEY]))).length;
+        alert(`Sincronizacion completada usando cold/${chosenPrefix}. Coincidencias: ${matchedCount}. Actualizados: ${updatedCount}. Fallidos: ${failedCount}.`);
         loadData();
     } catch (error) {
         console.error('Error sincronizando fotos desde Storage:', error);
-        alert('Error sincronizando fotos: ' + error.message + '. Verifica que exista la funcion RPC y permisos de ejecucion.');
+        alert('Error sincronizando fotos: ' + error.message + '. Verifica permisos de lectura en Storage y escritura en la tabla personal.');
     }
 }
