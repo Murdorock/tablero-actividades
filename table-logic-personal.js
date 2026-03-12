@@ -19,6 +19,19 @@ function isImageUrl(value = '') {
     return /^https?:\/\//i.test(trimmed);
 }
 
+function looksLikePhotoValue(columnName, value) {
+    if (!value || typeof value !== 'string') return false;
+    const trimmed = value.trim();
+    if (!trimmed) return false;
+
+    const byColumnName = isPhotoColumn(columnName);
+    const isHttpUrl = isImageUrl(trimmed);
+    const hasImageExt = /\.(png|jpe?g|webp|gif|bmp)(\?|#|$)/i.test(trimmed);
+    const isSupabasePublicObject = /\/storage\/v1\/object\/public\//i.test(trimmed);
+
+    return byColumnName || (isHttpUrl && (hasImageExt || isSupabasePublicObject));
+}
+
 function escapeHtmlAttr(value = '') {
     return String(value)
         .replace(/&/g, '&amp;')
@@ -141,7 +154,7 @@ function renderTable(data) {
         tableColumns.forEach(column => {
             let value = row[column];
 
-            if (isPhotoColumn(column)) {
+            if (looksLikePhotoValue(column, value)) {
                 html += `<td>${getPhotoCellHtml(value, row[PRIMARY_KEY] || 'Personal')}</td>`;
                 return;
             }
@@ -302,11 +315,11 @@ async function viewDetails(id) {
             const displayName = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
             let displayValue = value || 'No especificado';
 
-            if (isPhotoColumn(key)) {
+            if (looksLikePhotoValue(key, value)) {
                 displayValue = getPhotoCellHtml(value, data[PRIMARY_KEY] || 'Personal', 'personal-photo-detail');
             }
             
-            if (!isPhotoColumn(key) && key.includes('fecha') && value) {
+            if (!looksLikePhotoValue(key, value) && key.includes('fecha') && value) {
                 const date = new Date(value);
                 if (!isNaN(date.getTime())) {
                     displayValue = date.toLocaleDateString('es-ES');
