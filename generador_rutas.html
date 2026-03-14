@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generador de Rutas - Sistema</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="table-logic-generador_rutas.js" defer></script>
+    <style>
+        .routes-panel {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .routes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 0.75rem;
+            margin-top: 0.75rem;
+        }
+
+        .route-card {
+            background: linear-gradient(135deg, #1f2937 0%, #0f172a 100%);
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 0.85rem;
+        }
+
+        .route-card h4 {
+            margin: 0 0 0.45rem 0;
+            color: #e2e8f0;
+            font-size: 0.95rem;
+        }
+
+        .route-card p {
+            margin: 0.2rem 0;
+            color: #cbd5e1;
+            font-size: 0.85rem;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 0.75rem;
+            align-items: end;
+        }
+
+        .form-control {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .form-control label {
+            color: #e2e8f0;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        .form-control input,
+        .form-control textarea,
+        .form-control select {
+            width: 100%;
+            background: #0f172a;
+            color: #f8fafc;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 0.55rem 0.65rem;
+            font-size: 0.9rem;
+        }
+
+        .form-control textarea {
+            min-height: 160px;
+            resize: vertical;
+            font-family: Consolas, monospace;
+            line-height: 1.35;
+        }
+
+        .hint {
+            color: #94a3b8;
+            font-size: 0.82rem;
+        }
+
+        .results-table td,
+        .results-table th {
+            white-space: nowrap;
+        }
+
+        .results-table td.wrap {
+            white-space: normal;
+            min-width: 280px;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            border: 1px solid #334155;
+            border-radius: 999px;
+            padding: 0.2rem 0.6rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #cbd5e1;
+            background: #0f172a;
+        }
+
+        .routes-map {
+            width: 100%;
+            height: 420px;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-top: 0.75rem;
+        }
+
+        .map-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+
+        .legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.25rem 0.6rem;
+            border: 1px solid #334155;
+            border-radius: 999px;
+            background: #0f172a;
+            color: #e2e8f0;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+
+        .legend-item:hover {
+            border-color: #60a5fa;
+        }
+
+        .legend-item.is-active {
+            border-color: #f8fafc;
+            box-shadow: 0 0 0 1px rgba(248, 250, 252, 0.7) inset;
+        }
+
+        .legend-item.is-muted {
+            opacity: 0.45;
+        }
+
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        @media (max-width: 768px) {
+            .table-actions {
+                width: 100%;
+                flex-wrap: wrap;
+            }
+
+            .table-actions .btn {
+                flex: 1 1 auto;
+                justify-content: center;
+            }
+
+            .results-table td.wrap {
+                min-width: 200px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="table-container">
+        <div class="table-header">
+            <h2>🧭 Generador de Rutas</h2>
+            <div class="table-actions">
+                <button class="btn btn-primary" id="btn-cargar-supabase">☁️ Cargar desde Coordenadas</button>
+                <button class="btn btn-secondary" id="btn-limpiar-datos">🗑️ Limpiar Datos</button>
+                <button class="btn btn-success" id="btn-generar-rutas">🚀 Generar Rutas</button>
+                <button class="btn btn-primary" id="btn-exportar" disabled>📤 Exportar CSV</button>
+            </div>
+        </div>
+
+        <div class="routes-panel">
+            <div class="form-grid">
+                <div class="form-control">
+                    <label for="personas-input">Cantidad de personas</label>
+                    <input type="number" id="personas-input" min="1" value="3">
+                </div>
+                <div class="form-control">
+                    <label for="velocidad-moto">Velocidad promedio moto (km/h)</label>
+                    <input type="number" id="velocidad-moto" min="5" max="80" step="1" value="30">
+                </div>
+                <div class="form-control">
+                    <label for="tiempo-punto-select">Tiempo por punto (min)</label>
+                    <select id="tiempo-punto-select">
+                        <option value="2">2 minutos</option>
+                        <option value="5" selected>5 minutos</option>
+                        <option value="10">10 minutos</option>
+                        <option value="15">15 minutos</option>
+                    </select>
+                </div>
+                <div class="form-control">
+                    <label for="tiempo-objetivo-ruta">Tiempo objetivo por ruta</label>
+                    <select id="tiempo-objetivo-ruta">
+                        <option value="5">5 horas</option>
+                        <option value="6" selected>6 horas</option>
+                        <option value="7">7 horas</option>
+                    </select>
+                </div>
+                <div class="form-control">
+                    <label for="inicio-lat">Latitud inicio (opcional)</label>
+                    <input type="text" id="inicio-lat" placeholder="6.25184">
+                </div>
+                <div class="form-control">
+                    <label for="inicio-lng">Longitud inicio (opcional)</label>
+                    <input type="text" id="inicio-lng" placeholder="-75.56359">
+                </div>
+                <div class="form-control">
+                    <label for="delimitador-select">Formato pegado</label>
+                    <select id="delimitador-select">
+                        <option value="auto">Detectar autom.</option>
+                        <option value="tab">Tabulador (Excel)</option>
+                        <option value="semicolon">Punto y coma</option>
+                        <option value="comma">Coma</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="routes-panel">
+            <div class="form-control">
+                <label for="entrada-datos">Pegar datos (Dirección + coordenada)</label>
+                <textarea id="entrada-datos" placeholder="Dirección\tcoordenada
+CL 100 A CR 76 -29\t6.29862286 -75.57774912
+CL 101 BB CR 77 -69\t6.30173052 -75.57822257"></textarea>
+                <p class="hint">Acepta coordenadas con espacio, coma o punto y coma: "6.2986 -75.5777", "6.2986,-75.5777" o "6.2986;-75.5777".</p>
+            </div>
+            <div class="table-actions" style="margin-top: 0.75rem;">
+                <button class="btn btn-primary" id="btn-procesar-pegado">📋 Procesar Pegado</button>
+                <span id="total-registros" class="badge">Registros: 0</span>
+            </div>
+        </div>
+
+        <div class="data-table-wrapper" style="margin-bottom: 1rem;">
+            <div id="tableContainer"></div>
+        </div>
+
+        <div class="routes-panel">
+            <h3 style="margin: 0; color: #f1f5f9;">Resumen de rutas</h3>
+            <div id="summaryContainer" class="routes-grid"></div>
+        </div>
+
+        <div class="routes-panel">
+            <h3 style="margin: 0; color: #f1f5f9;">Mapa de rutas</h3>
+            <p class="hint" style="margin-top: 0.45rem;">Cada color representa una persona y los numeros indican el orden de visita.</p>
+            <div id="routesMap" class="routes-map"></div>
+            <div id="mapLegend" class="map-legend"></div>
+        </div>
+
+        <div class="data-table-wrapper">
+            <div id="resultContainer"></div>
+        </div>
+    </div>
+</body>
+</html>
