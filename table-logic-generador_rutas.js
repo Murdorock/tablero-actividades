@@ -226,17 +226,18 @@ function parseCoordinate(value) {
 }
 
 function deduplicatePoints(points) {
-    const seen = new Set();
-    const unique = [];
+    const map = new Map();
 
     points.forEach((point) => {
-        const key = `${normalizeText(point.direccion)}|${point.lat}|${point.lng}`;
-        if (seen.has(key)) return;
-        seen.add(key);
-        unique.push(point);
+        const key = `${point.lat}|${point.lng}`;
+        if (map.has(key)) {
+            map.get(key).count += 1;
+        } else {
+            map.set(key, { ...point, count: 1 });
+        }
     });
 
-    return unique;
+    return Array.from(map.values());
 }
 
 function generateRoutes() {
@@ -426,7 +427,8 @@ function toBaseStop(stop) {
         direccion: stop.direccion,
         lat: stop.lat,
         lng: stop.lng,
-        coordenada: stop.coordenada || `${stop.lat} ${stop.lng}`
+        coordenada: stop.coordenada || `${stop.lat} ${stop.lng}`,
+        count: stop.count || 1
     };
 }
 
@@ -448,8 +450,10 @@ function buildRouteMetrics(stops, startPoint, speedKmh, serviceMinutes) {
         const travelMinutes = speedKmh > 0 ? (segmentDistanceKm / speedKmh) * 60 : 0;
         const roundedSegmentKm = Number(segmentDistanceKm.toFixed(2));
         const roundedTravelMinutes = Number(travelMinutes.toFixed(1));
+        const stopCount = stop.count || 1;
+        const stopServiceMinutes = stopCount * serviceMinutes;
 
-        accumulatedMinutes += roundedTravelMinutes + serviceMinutes;
+        accumulatedMinutes += roundedTravelMinutes + stopServiceMinutes;
         totalDistanceKm += roundedSegmentKm;
         totalTravelMinutes += roundedTravelMinutes;
 
@@ -459,13 +463,13 @@ function buildRouteMetrics(stops, startPoint, speedKmh, serviceMinutes) {
             ...stop,
             segmentDistanceKm: roundedSegmentKm,
             travelMinutes: roundedTravelMinutes,
-            serviceMinutes,
+            serviceMinutes: stopServiceMinutes,
             accumulatedMinutes: Number(accumulatedMinutes.toFixed(1))
         };
     });
 
     const roundedTotalTravelMinutes = Number(totalTravelMinutes.toFixed(1));
-    const totalServiceMinutes = enrichedStops.length * serviceMinutes;
+    const totalServiceMinutes = enrichedStops.reduce((sum, s) => sum + s.serviceMinutes, 0);
 
     return {
         stops: enrichedStops,
@@ -702,7 +706,11 @@ function haversineKm(a, b) {
 function renderInputTable() {
     const tableContainer = document.getElementById('tableContainer');
     const total = puntosBase.length;
-    document.getElementById('total-registros').textContent = `Registros: ${total}`;
+    const totalActas = puntosBase.reduce((sum, p) => sum + (p.count || 1), 0);
+    document.getElementById('total-registros').textContent =
+        totalActas !== total
+            ? `Registros: ${total} puntos / ${totalActas} actas`
+            : `Registros: ${total}`;
 
     if (!total) {
         tableContainer.innerHTML = '<div style="padding: 1rem; color: #94a3b8;">No hay puntos cargados.</div>';
@@ -712,17 +720,19 @@ function renderInputTable() {
     const preview = puntosBase.slice(0, MAX_ROWS_PREVIEW);
 
     let html = '<table class="data-table results-table"><thead><tr>';
-    html += '<th>#</th><th>Direccion</th><th>Coordenada</th><th>Google Maps</th>';
+    html += '<th>#</th><th>Direccion</th><th>Coordenada</th><th>Actas</th><th>Google Maps</th>';
     html += '</tr></thead><tbody>';
 
     preview.forEach((point, index) => {
         const coords = `${point.lat},${point.lng}`;
         const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(coords)}`;
+        const count = point.count || 1;
 
         html += '<tr>';
         html += `<td>${index + 1}</td>`;
         html += `<td class="wrap">${escapeHtml(point.direccion)}</td>`;
         html += `<td>${point.lat} ${point.lng}</td>`;
+        html += `<td>${count}</td>`;
         html += `<td><a href="${mapUrl}" target="_blank" rel="noopener noreferrer">Abrir</a></td>`;
         html += '</tr>';
     });
