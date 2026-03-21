@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reporte Ordenes Pendientes - Sistema</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script>
+        const TABLE_NAME = 'reporte_ordenes_pendientes'; 
+        const TABLE_TITLE = '🧾 Reporte Ordenes Pendientes';
+        const PRIMARY_KEY = 'id';
+    </script>
+    <script src="table-logic-reporte_ordenes_pendientes.js"></script>
+</head>
+<body>
+    <div class="table-container">
+        <div class="table-header">
+            <h2>🧾 Reporte Ordenes Pendientes</h2>
+            <div class="table-actions">
+                <button class="btn btn-secondary" onclick="loadData()">🔄 Refrescar</button>
+                <button class="btn btn-success" onclick="openImportModal()">📤 Cargar</button>
+                <button class="btn btn-info" onclick="descargarPlantillaCSV()">📄 Plantilla</button>
+                <button class="btn btn-danger" onclick="limpiarTabla()">🗑️ Limpiar</button>
+            </div>
+        </div>
+        
+        <!-- Filtros -->
+        <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div style="display: flex; gap: 15px; align-items: end; flex-wrap: wrap;">
+                <div class="form-group" style="margin: 0; flex: 1; min-width: 200px;">
+                    <label for="filterSearch" style="color: #1e293b; font-weight: 600; display: block; margin-bottom: 5px;">Buscar</label>
+                    <input type="text" id="filterSearch" placeholder="Buscar en todos los campos..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                </div>
+                <div class="form-group" style="margin: 0; flex: 1; min-width: 200px;">
+                    <label for="filterColumn" style="color: #1e293b; font-weight: 600; display: block; margin-bottom: 5px;">Columna</label>
+                    <select id="filterColumn" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="">Todas las columnas</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-primary" onclick="applyFilter()">🔍 Filtrar</button>
+                    <button class="btn btn-secondary" onclick="clearFilter()">✖️ Limpiar</button>
+                </div>
+            </div>
+            <div id="results-counter" style="margin-top: 10px; color: #334155; font-size: 0.92em; font-weight: 600;">
+                Resultados mostrados: 0
+            </div>
+        </div>
+        
+        <div class="data-table-wrapper">
+            <div id="loadingIndicator" class="loading"><div class="spinner"></div><p>Cargando...</p></div>
+            <div id="tableContainer"></div>
+        </div>
+    </div>
+
+    <!-- Modal para importar datos -->
+    <div id="dataModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h3 id="modalTitle">Modal</h3>
+            <div id="modalBody"></div>
+            <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+                <button class="btn btn-primary" id="modalConfirm" onclick="confirmAction()">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const EXPECTED_COLUMNS = [
+            'proceso_agi', 'segmento', 'grupo', 'orden_trabajo', 'id_actividad', 'solicitud', 'orden_aviso',
+            'producto', 'fecha_creacion', 'fecha_creacion_solicitud', 'visita', 'actividad', 'comentario',
+            'estado', 'orden_regenerada', 'mercado', 'cod_unico_direccion', 'cod_instalacion', 'nomenclatura_mp',
+            'municipio', 'coordenadax', 'coordenaday', 'correria_lectura', 'correria_reparto', 'descripcion_l',
+            'descripcion_r', 'tipo_direccion_mp', 'region', 'corregimiento', 'comuna', 'barrio', 'vereda',
+            'zona_operativa', 'desc_sector_operativo_ab', 'ciclo_operativo', 'ciclo_facturacion',
+            'servicio_pedidos_ab', 'tipo_producto_agrup', 'estado_corte', 'tipo_servicio', 'categoria',
+            'sub_categoria', 'medidor', 'consumo_cobrado', 'cons_inv', 'cuentas_saldo', 'saldo_cuentas',
+            'cuentas_vencidas', 'saldo_cuentasvencidas', 'cta_base_sus', 'ans_creacion', 'ans_primera_asignacion',
+            'ans_asignacion', 'zona_operativa_ped', 'nombre_cliente', 'telefono_avisar', 'celular_avisar',
+            'interiores_agrupados', 'serie_equipo', 'series_agrupados', 'transformador', 'criterio_pedidos', 'cod_contrato'
+        ];
+        const IMPORT_BATCH_SIZE = 1000;
+        const UI_YIELD_EVERY_ROWS = 2000;
+
+        function normalizeHeaderName(rawHeader) {
+            return String(rawHeader || '')
+                .trim()
+                .toLowerCase()
+                .replace(/\s+/g, '_');
+        }
+
+        function detectDelimiter(line) {
+            const delimiters = ['|', ';', '\t', ','];
+            let bestDelimiter = '|';
+            let bestCount = -1;
+
+            delimiters.forEach((candidate) => {
+                const count = line.split(candidate).length - 1;
+                if (count > bestCount) {
+                    bestCount = count;
+                    bestDelimiter = candidate;
+                }
+            });
+
+            return bestDelimiter;
+        }
+
+        function updateImportProgress(statusText, percent = null) {
+            const statusEl = document.getElementById('import-status');
+            const progressEl = document.getElementById('import-progress');
+
+            if (statusEl) {
+                statusEl.textContent = statusText;
+            }
+
+            if (progressEl && typeof percent === 'number') {
+                progressEl.value = Math.max(0, Math.min(100, percent));
+            }
+        }
+
+        async function insertBatchWithRetry(batch, maxRetries = 3) {
+            let attempt = 0;
+            while (attempt < maxRetries) {
+                attempt += 1;
+                const { error } = await supabase.from(TABLE_NAME).insert(batch);
+                if (!error) return;
+                if (attempt >= maxRetries) {
+                    throw error;
+                }
+                await new Promise((resolve) => setTimeout(resolve, 800 * attempt));
+            }
+        }
+
+        // Función para descargar plantilla CSV
+        function descargarPlantillaCSV() {
+            const columnas = EXPECTED_COLUMNS;
+            const csv = columnas.join(';') + '\n';
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'plantilla_reporte_ordenes_pendientes.csv';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Función para abrir modal de importación
+        function openImportModal() {
+            const modal = document.getElementById('dataModal');
+            const modalTitle = document.getElementById('modalTitle');
+            const modalBody = document.getElementById('modalBody');
+            const modalConfirm = document.getElementById('modalConfirm');
+            
+            modalTitle.textContent = '📤 Importar Datos';
+            modalBody.innerHTML = `
+                <div class="form-group">
+                    <label for="fileInput">Selecciona un archivo CSV o TXT:</label>
+                    <input type="file" id="fileInput" accept=".csv,.txt" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; margin-top: 10px;">
+                </div>
+                <div style="margin-top: 15px; color: #7f8c8d; font-size: 0.9em;">
+                    <p>Delimitadores soportados: barra vertical (|), punto y coma (;), tab y coma (,).</p>
+                    <p>Para archivos masivos se procesa por bloques para evitar bloqueo del navegador.</p>
+                </div>
+                <div style="margin-top: 16px;">
+                    <progress id="import-progress" value="0" max="100" style="width: 100%; height: 14px;"></progress>
+                    <p id="import-status" style="margin-top: 8px; color: #64748b; font-size: 0.9em;">Listo para importar</p>
+                </div>
+            `;
+            
+            modalConfirm.textContent = 'Importar';
+            modalConfirm.onclick = importData;
+            modal.style.display = 'block';
+        }
+
+        // Función para importar datos
+        async function importData() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            const modalConfirm = document.getElementById('modalConfirm');
+            
+            if (!file) {
+                alert('Por favor selecciona un archivo');
+                return;
+            }
+
+            const continueImport = confirm(
+                `El archivo pesa ${(file.size / (1024 * 1024)).toFixed(1)} MB.\n` +
+                'Se cargará por lotes para evitar bloqueo, pero puede tardar varios minutos.\n\n' +
+                '¿Deseas continuar?'
+            );
+
+            if (!continueImport) return;
+
+            modalConfirm.disabled = true;
+            modalConfirm.textContent = 'Importando...';
+            updateImportProgress('Inicializando lectura de archivo...', 0);
+
+            let insertedRows = 0;
+            let processedRows = 0;
+
+            try {
+                const decoder = new TextDecoder('utf-8');
+                const reader = file.stream().getReader();
+                let buffer = '';
+                let headerProcessed = false;
+                let delimiter = '|';
+                let headers = [];
+                let batch = [];
+                let bytesRead = 0;
+
+                const flushBatch = async () => {
+                    if (batch.length === 0) return;
+                    const currentBatch = batch;
+                    batch = [];
+                    await insertBatchWithRetry(currentBatch);
+                    insertedRows += currentBatch.length;
+                    updateImportProgress(
+                        `Procesadas: ${processedRows.toLocaleString('es-ES')} | Insertadas: ${insertedRows.toLocaleString('es-ES')}`,
+                        Math.floor((bytesRead / file.size) * 100)
+                    );
+                };
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+
+                    bytesRead += value.byteLength;
+                    buffer += decoder.decode(value, { stream: true });
+
+                    const lines = buffer.split(/\r?\n/);
+                    buffer = lines.pop() || '';
+
+                    for (let i = 0; i < lines.length; i++) {
+                        const line = lines[i];
+                        if (!line || !line.trim()) continue;
+
+                        if (!headerProcessed) {
+                            delimiter = detectDelimiter(line);
+                            headers = line.split(delimiter).map(normalizeHeaderName);
+
+                            const missingColumns = EXPECTED_COLUMNS.filter((col) => !headers.includes(col));
+                            if (missingColumns.length > 0) {
+                                throw new Error(
+                                    `El encabezado no coincide. Faltan ${missingColumns.length} columnas, por ejemplo: ${missingColumns.slice(0, 5).join(', ')}`
+                                );
+                            }
+
+                            headerProcessed = true;
+                            continue;
+                        }
+
+                        const values = line.split(delimiter);
+                        const row = {};
+
+                        headers.forEach((header, idx) => {
+                            if (EXPECTED_COLUMNS.includes(header)) {
+                                row[header] = values[idx] != null ? String(values[idx]).trim() : '';
+                            }
+                        });
+
+                        batch.push(row);
+                        processedRows += 1;
+
+                        if (batch.length >= IMPORT_BATCH_SIZE) {
+                            await flushBatch();
+                        }
+
+                        if (processedRows % UI_YIELD_EVERY_ROWS === 0) {
+                            await new Promise((resolve) => setTimeout(resolve, 0));
+                        }
+                    }
+                }
+
+                buffer += decoder.decode();
+                if (buffer.trim()) {
+                    const values = buffer.split(delimiter);
+                    const row = {};
+                    headers.forEach((header, idx) => {
+                        if (EXPECTED_COLUMNS.includes(header)) {
+                            row[header] = values[idx] != null ? String(values[idx]).trim() : '';
+                        }
+                    });
+                    batch.push(row);
+                    processedRows += 1;
+                }
+
+                await flushBatch();
+
+                if (insertedRows === 0) {
+                    alert('No se encontraron registros para importar');
+                    updateImportProgress('No se encontraron registros válidos en el archivo.', 100);
+                    return;
+                }
+
+                updateImportProgress(
+                    `Importación finalizada. Insertadas ${insertedRows.toLocaleString('es-ES')} filas.`,
+                    100
+                );
+                alert(`Importación completada: ${insertedRows.toLocaleString('es-ES')} registros insertados.`);
+                closeModal();
+                loadData();
+            } catch (error) {
+                console.error(error);
+                updateImportProgress(`Error: ${error.message}`, 0);
+                alert('Error al procesar el archivo: ' + error.message);
+            } finally {
+                modalConfirm.disabled = false;
+                modalConfirm.textContent = 'Importar';
+            }
+        }
+
+        // Función para limpiar tabla
+        async function limpiarTabla() {
+            if (confirm('¿Estás seguro de que deseas borrar todos los registros? Esta acción no se puede deshacer.')) {
+                try {
+                    const { error } = await supabase
+                        .from(TABLE_NAME)
+                        .delete()
+                        .neq('id', -1); // Delete all where id != -1 (todos)
+                    
+                    if (error) throw error;
+                    alert('Tabla limpiada correctamente');
+                    loadData();
+                } catch (error) {
+                    alert('Error al limpiar la tabla: ' + error.message);
+                    console.error(error);
+                }
+            }
+        }
+
+        // Función para cerrar modal
+        function closeModal() {
+            document.getElementById('dataModal').style.display = 'none';
+        }
+
+        // Cerrar modal al hacer click fuera
+        window.onclick = function(event) {
+            const modal = document.getElementById('dataModal');
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>
