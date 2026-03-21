@@ -1,6 +1,7 @@
 // Lógica específica para la tabla reporte_ordenes_pendientes
 let tableColumns = [];
 let currentData = [];
+let displayedData = [];
 const SEARCHABLE_COLUMNS = [
     'proceso_agi', 'segmento', 'grupo', 'orden_trabajo', 'id_actividad', 'solicitud', 'orden_aviso',
     'producto', 'fecha_creacion', 'fecha_creacion_solicitud', 'visita', 'actividad', 'comentario',
@@ -77,36 +78,133 @@ async function loadData() {
 }
 
 function populateFilterColumns() {
-    const filterColumn = document.getElementById('filterColumn');
-    if (!filterColumn || tableColumns.length === 0) return;
-    
-    // Mantener la opción "Todas las columnas"
-    const currentValue = filterColumn.value;
-    filterColumn.innerHTML = '<option value="">Todas las columnas</option>';
-    
-    tableColumns.forEach(col => {
-        const option = document.createElement('option');
-        option.value = col;
-        option.textContent = formatColumnName(col);
-        filterColumn.appendChild(option);
+    const columnSelectors = ['filterColumn', 'filterColumn2', 'filterColumn3']
+        .map((id) => document.getElementById(id))
+        .filter(Boolean);
+
+    if (columnSelectors.length === 0 || tableColumns.length === 0) return;
+
+    columnSelectors.forEach((selector) => {
+        const currentValue = selector.value;
+        selector.innerHTML = '<option value="">Todas las columnas</option>';
+
+        tableColumns.forEach((col) => {
+            const option = document.createElement('option');
+            option.value = col;
+            option.textContent = formatColumnName(col);
+            selector.appendChild(option);
+        });
+
+        selector.value = currentValue;
     });
-    
-    filterColumn.value = currentValue;
 }
 
 function applyFilter() {
     applyFilterServer();
 }
 
+function getActiveFilters() {
+    return [
+        {
+            searchText: (document.getElementById('filterSearch')?.value || '').trim(),
+            filterColumn: document.getElementById('filterColumn')?.value || ''
+        },
+        {
+            searchText: (document.getElementById('filterSearch2')?.value || '').trim(),
+            filterColumn: document.getElementById('filterColumn2')?.value || ''
+        },
+        {
+            searchText: (document.getElementById('filterSearch3')?.value || '').trim(),
+            filterColumn: document.getElementById('filterColumn3')?.value || ''
+        }
+    ].filter((f) => f.searchText);
+}
+
+async function fetchCandidatesByFilter(searchText, filterColumn) {
+    let filteredData = [];
+
+    if (filterColumn) {
+        const escapedText = escapeLikeValue(searchText);
+        const shouldTryExact = EXACT_FIRST_COLUMNS.has(filterColumn) || isPotentialIdValue(searchText);
+
+        if (shouldTryExact) {
+            const { data: exactData, error: exactError } = await supabase
+                .from(TABLE_NAME)
+                .select('*')
+                .eq(filterColumn, searchText)
+                .limit(MAX_SEARCH_RESULTS);
+
+            if (exactError) throw exactError;
+            filteredData = exactData || [];
+        }
+
+        if (filteredData.length === 0) {
+            const { data: prefixData, error: prefixError } = await supabase
+                .from(TABLE_NAME)
+                .select('*')
+                .ilike(filterColumn, `${escapedText}%`)
+                .limit(MAX_SEARCH_RESULTS);
+
+            if (prefixError) throw prefixError;
+            filteredData = prefixData || [];
+        }
+
+        if (filteredData.length === 0 && searchText.length <= 8) {
+            const { data: containsData, error: containsError } = await supabase
+                .from(TABLE_NAME)
+                .select('*')
+                .ilike(filterColumn, `%${escapedText}%`)
+                .limit(MAX_SEARCH_RESULTS);
+
+            if (containsError) throw containsError;
+            filteredData = containsData || [];
+        }
+    } else {
+        if (searchText.length < 4) {
+            throw new Error('Para búsqueda global usa al menos 4 caracteres o selecciona una columna.');
+        }
+
+        const searchTextForOr = escapeLikeValue(searchText).replace(/,/g, '\\,');
+        const orClause = SEARCHABLE_COLUMNS
+            .map(col => `${col}.ilike.${searchTextForOr}%`)
+            .join(',');
+
+        const { data, error } = await supabase
+            .from(TABLE_NAME)
+            .select('*')
+            .or(orClause)
+            .limit(MAX_SEARCH_RESULTS);
+
+        if (error) throw error;
+        filteredData = data || [];
+    }
+
+    return filteredData;
+}
+
+function rowMatchesFilter(row, filter) {
+    const searchLower = filter.searchText.toLowerCase();
+
+    if (filter.filterColumn) {
+        const value = String(row[filter.filterColumn] ?? '').trim().toLowerCase();
+        if (!value) return false;
+        return value === searchLower || value.startsWith(searchLower) || value.includes(searchLower);
+    }
+
+    return SEARCHABLE_COLUMNS.some((column) => {
+        const value = String(row[column] ?? '').trim().toLowerCase();
+        return value.includes(searchLower);
+    });
+}
+
 async function applyFilterServer() {
     const loadingIndicator = document.getElementById('loadingIndicator');
     const tableContainer = document.getElementById('tableContainer');
-    const searchText = document.getElementById('filterSearch').value.trim();
-    const filterColumn = document.getElementById('filterColumn').value;
+    const activeFilters = getActiveFilters();
     const existingNotice = document.getElementById('searchLimitNotice');
     if (existingNotice) existingNotice.remove();
-    
-    if (!searchText) {
+
+    if (activeFilters.length === 0) {
         renderTable(currentData);
         updateResultsCounter(currentData.length);
         return;
@@ -116,64 +214,10 @@ async function applyFilterServer() {
     tableContainer.innerHTML = '';
 
     try {
-        let filteredData = [];
+        let filteredData = await fetchCandidatesByFilter(activeFilters[0].searchText, activeFilters[0].filterColumn);
 
-        if (filterColumn) {
-            const escapedText = escapeLikeValue(searchText);
-            const shouldTryExact = EXACT_FIRST_COLUMNS.has(filterColumn) || isPotentialIdValue(searchText);
-
-            if (shouldTryExact) {
-                const { data: exactData, error: exactError } = await supabase
-                    .from(TABLE_NAME)
-                    .select('*')
-                    .eq(filterColumn, searchText)
-                    .limit(MAX_SEARCH_RESULTS);
-
-                if (exactError) throw exactError;
-                filteredData = exactData || [];
-            }
-
-            // Fallback rápido por prefijo para evitar timeout de '%texto%'.
-            if (filteredData.length === 0) {
-                const { data: prefixData, error: prefixError } = await supabase
-                    .from(TABLE_NAME)
-                    .select('*')
-                    .ilike(filterColumn, `${escapedText}%`)
-                    .limit(MAX_SEARCH_RESULTS);
-
-                if (prefixError) throw prefixError;
-                filteredData = prefixData || [];
-            }
-
-            // Solo si el texto es corto intentamos contains; en textos largos suele causar timeout.
-            if (filteredData.length === 0 && searchText.length <= 8) {
-                const { data: containsData, error: containsError } = await supabase
-                    .from(TABLE_NAME)
-                    .select('*')
-                    .ilike(filterColumn, `%${escapedText}%`)
-                    .limit(MAX_SEARCH_RESULTS);
-
-                if (containsError) throw containsError;
-                filteredData = containsData || [];
-            }
-        } else {
-            if (searchText.length < 4) {
-                throw new Error('Para búsqueda global usa al menos 4 caracteres o selecciona una columna.');
-            }
-
-            const searchTextForOr = escapeLikeValue(searchText).replace(/,/g, '\\,');
-            const orClause = SEARCHABLE_COLUMNS
-                .map(col => `${col}.ilike.${searchTextForOr}%`)
-                .join(',');
-
-            const { data, error } = await supabase
-                .from(TABLE_NAME)
-                .select('*')
-                .or(orClause)
-                .limit(MAX_SEARCH_RESULTS);
-
-            if (error) throw error;
-            filteredData = data || [];
+        for (let i = 1; i < activeFilters.length; i++) {
+            filteredData = filteredData.filter((row) => rowMatchesFilter(row, activeFilters[i]));
         }
 
         renderTable(filteredData);
@@ -200,14 +244,59 @@ async function applyFilterServer() {
 function clearFilter() {
     document.getElementById('filterSearch').value = '';
     document.getElementById('filterColumn').value = '';
+    const filterSearch2 = document.getElementById('filterSearch2');
+    const filterColumn2 = document.getElementById('filterColumn2');
+    const filterSearch3 = document.getElementById('filterSearch3');
+    const filterColumn3 = document.getElementById('filterColumn3');
+
+    if (filterSearch2) filterSearch2.value = '';
+    if (filterColumn2) filterColumn2.value = '';
+    if (filterSearch3) filterSearch3.value = '';
+    if (filterColumn3) filterColumn3.value = '';
+
     const oldNotice = document.getElementById('searchLimitNotice');
     if (oldNotice) oldNotice.remove();
     updateResultsCounter(currentData.length);
     loadData();
 }
 
+function exportFilteredResultsToXlsx() {
+    if (typeof XLSX === 'undefined') {
+        alert('No se pudo cargar la librería de Excel. Recarga la página e intenta de nuevo.');
+        return;
+    }
+
+    if (!Array.isArray(displayedData) || displayedData.length === 0) {
+        alert('No hay resultados para exportar. Aplica un filtro o carga datos primero.');
+        return;
+    }
+
+    const exportColumns = tableColumns.length > 0
+        ? tableColumns
+        : Object.keys(displayedData[0] || {}).filter((col) => col !== PRIMARY_KEY);
+
+    const rowsForExport = displayedData.map((row) => {
+        const exportRow = {};
+        exportColumns.forEach((col) => {
+            exportRow[formatColumnName(col)] = row[col] ?? '';
+        });
+        return exportRow;
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(rowsForExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Reporte');
+
+    const now = new Date();
+    const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+    const fileName = `reporte_ordenes_pendientes_${timestamp}.xlsx`;
+
+    XLSX.writeFile(workbook, fileName);
+}
+
 function renderTable(data) {
     const tableContainer = document.getElementById('tableContainer');
+    displayedData = Array.isArray(data) ? data : [];
     
     if (data.length === 0) {
         tableContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: #7f8c8d;">No hay registros que coincidan con el filtro</div>';

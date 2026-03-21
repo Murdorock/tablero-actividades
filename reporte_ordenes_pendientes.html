@@ -6,6 +6,7 @@
     <title>Reporte Ordenes Pendientes - Sistema</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="config.js"></script>
     <script>
         const TABLE_NAME = 'reporte_ordenes_pendientes'; 
@@ -28,19 +29,46 @@
         
         <!-- Filtros -->
         <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-            <div style="display: flex; gap: 15px; align-items: end; flex-wrap: wrap;">
+            <div style="display: flex; gap: 15px; align-items: end; flex-wrap: wrap; margin-bottom: 12px;">
                 <div class="form-group" style="margin: 0; flex: 1; min-width: 200px;">
-                    <label for="filterSearch" style="color: #1e293b; font-weight: 600; display: block; margin-bottom: 5px;">Buscar</label>
+                    <label for="filterSearch" style="color: #1e293b; font-weight: 600; display: block; margin-bottom: 5px;">Filtro 1 - Buscar</label>
                     <input type="text" id="filterSearch" placeholder="Buscar en todos los campos..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
                 </div>
                 <div class="form-group" style="margin: 0; flex: 1; min-width: 200px;">
-                    <label for="filterColumn" style="color: #1e293b; font-weight: 600; display: block; margin-bottom: 5px;">Columna</label>
+                    <label for="filterColumn" style="color: #1e293b; font-weight: 600; display: block; margin-bottom: 5px;">Filtro 1 - Columna</label>
                     <select id="filterColumn" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="">Todas las columnas</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 15px; align-items: end; flex-wrap: wrap; margin-bottom: 12px;">
+                <div class="form-group" style="margin: 0; flex: 1; min-width: 200px;">
+                    <label for="filterSearch2" style="color: #1e293b; font-weight: 600; display: block; margin-bottom: 5px;">Filtro 2 - Buscar</label>
+                    <input type="text" id="filterSearch2" placeholder="Opcional" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                </div>
+                <div class="form-group" style="margin: 0; flex: 1; min-width: 200px;">
+                    <label for="filterColumn2" style="color: #1e293b; font-weight: 600; display: block; margin-bottom: 5px;">Filtro 2 - Columna</label>
+                    <select id="filterColumn2" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="">Todas las columnas</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 15px; align-items: end; flex-wrap: wrap;">
+                <div class="form-group" style="margin: 0; flex: 1; min-width: 200px;">
+                    <label for="filterSearch3" style="color: #1e293b; font-weight: 600; display: block; margin-bottom: 5px;">Filtro 3 - Buscar</label>
+                    <input type="text" id="filterSearch3" placeholder="Opcional" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                </div>
+                <div class="form-group" style="margin: 0; flex: 1; min-width: 200px;">
+                    <label for="filterColumn3" style="color: #1e293b; font-weight: 600; display: block; margin-bottom: 5px;">Filtro 3 - Columna</label>
+                    <select id="filterColumn3" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
                         <option value="">Todas las columnas</option>
                     </select>
                 </div>
                 <div style="display: flex; gap: 10px;">
                     <button class="btn btn-primary" onclick="applyFilter()">🔍 Filtrar</button>
+                    <button class="btn btn-success" onclick="exportFilteredResultsToXlsx()">📊 Exportar Excel</button>
                     <button class="btn btn-secondary" onclick="clearFilter()">✖️ Limpiar</button>
                 </div>
             </div>
