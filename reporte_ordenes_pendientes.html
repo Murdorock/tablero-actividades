@@ -112,12 +112,22 @@
         ];
         const IMPORT_BATCH_SIZE = 1000;
         const UI_YIELD_EVERY_ROWS = 2000;
+        const DEFAULT_IMPORT_PROCESO_AGI_FILTER = 'LECTURA';
+        const DEFAULT_IMPORT_CICLO_OPERATIVO_FILTER = '';
 
         function normalizeHeaderName(rawHeader) {
             return String(rawHeader || '')
                 .trim()
                 .toLowerCase()
                 .replace(/\s+/g, '_');
+        }
+
+        function normalizeCicloOperativoValue(rawValue) {
+            const value = String(rawValue ?? '').trim();
+            if (!value) return '';
+            const numeric = Number(value);
+            if (Number.isNaN(numeric)) return value;
+            return String(Math.trunc(numeric));
         }
 
         function detectDelimiter(line) {
@@ -181,6 +191,10 @@
             const modalTitle = document.getElementById('modalTitle');
             const modalBody = document.getElementById('modalBody');
             const modalConfirm = document.getElementById('modalConfirm');
+            const cicloOptionsHtml = Array.from({ length: 20 }, (_, i) => {
+                const value = String(i + 1);
+                return `<option value="${value}">${value}</option>`;
+            }).join('');
             
             modalTitle.textContent = '📤 Importar Datos';
             modalBody.innerHTML = `
@@ -188,9 +202,24 @@
                     <label for="fileInput">Selecciona un archivo CSV o TXT:</label>
                     <input type="file" id="fileInput" accept=".csv,.txt" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; margin-top: 10px;">
                 </div>
+                <div class="form-group" style="margin-top: 12px;">
+                    <label for="importProcesoAgiFilter">Filtro de carga por proceso_agi:</label>
+                    <select id="importProcesoAgiFilter" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; margin-top: 10px;">
+                        <option value="LECTURA" selected>Solo LECTURA (recomendado)</option>
+                        <option value="">Todos los valores</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-top: 12px;">
+                    <label for="importCicloOperativoFilter">Filtro de carga por ciclo_operativo:</label>
+                    <select id="importCicloOperativoFilter" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; margin-top: 10px;">
+                        <option value="" selected>Todos los ciclos</option>
+                        ${cicloOptionsHtml}
+                    </select>
+                </div>
                 <div style="margin-top: 15px; color: #7f8c8d; font-size: 0.9em;">
                     <p>Delimitadores soportados: barra vertical (|), punto y coma (;), tab y coma (,).</p>
                     <p>Para archivos masivos se procesa por bloques para evitar bloqueo del navegador.</p>
+                    <p>Los filtros se aplican durante la lectura para reducir inserciones innecesarias.</p>
                 </div>
                 <div style="margin-top: 16px;">
                     <progress id="import-progress" value="0" max="100" style="width: 100%; height: 14px;"></progress>
@@ -208,6 +237,14 @@
             const fileInput = document.getElementById('fileInput');
             const file = fileInput.files[0];
             const modalConfirm = document.getElementById('modalConfirm');
+            const importProcesoAgiFilter = document.getElementById('importProcesoAgiFilter');
+            const procesoAgiFilter = String(importProcesoAgiFilter?.value || DEFAULT_IMPORT_PROCESO_AGI_FILTER)
+                .trim()
+                .toUpperCase();
+            const importCicloOperativoFilter = document.getElementById('importCicloOperativoFilter');
+            const cicloOperativoFilter = normalizeCicloOperativoValue(
+                importCicloOperativoFilter?.value || DEFAULT_IMPORT_CICLO_OPERATIVO_FILTER
+            );
             
             if (!file) {
                 alert('Por favor selecciona un archivo');
@@ -224,10 +261,19 @@
 
             modalConfirm.disabled = true;
             modalConfirm.textContent = 'Importando...';
-            updateImportProgress('Inicializando lectura de archivo...', 0);
+            const activeFilters = [];
+            if (procesoAgiFilter) activeFilters.push(`proceso_agi = ${procesoAgiFilter}`);
+            if (cicloOperativoFilter) activeFilters.push(`ciclo_operativo = ${cicloOperativoFilter}`);
+            updateImportProgress(
+                activeFilters.length > 0
+                    ? `Inicializando lectura de archivo (${activeFilters.join(' | ')})...`
+                    : 'Inicializando lectura de archivo (sin filtros)...',
+                0
+            );
 
             let insertedRows = 0;
             let processedRows = 0;
+            let skippedRows = 0;
 
             try {
                 const decoder = new TextDecoder('utf-8');
@@ -236,6 +282,8 @@
                 let headerProcessed = false;
                 let delimiter = '|';
                 let headers = [];
+                let procesoAgiIndex = -1;
+                let cicloOperativoIndex = -1;
                 let batch = [];
                 let bytesRead = 0;
 
@@ -246,7 +294,7 @@
                     await insertBatchWithRetry(currentBatch);
                     insertedRows += currentBatch.length;
                     updateImportProgress(
-                        `Procesadas: ${processedRows.toLocaleString('es-ES')} | Insertadas: ${insertedRows.toLocaleString('es-ES')}`,
+                        `Leidas: ${processedRows.toLocaleString('es-ES')} | Insertadas: ${insertedRows.toLocaleString('es-ES')} | Omitidas: ${skippedRows.toLocaleString('es-ES')}`,
                         Math.floor((bytesRead / file.size) * 100)
                     );
                 };
@@ -268,6 +316,8 @@
                         if (!headerProcessed) {
                             delimiter = detectDelimiter(line);
                             headers = line.split(delimiter).map(normalizeHeaderName);
+                            procesoAgiIndex = headers.indexOf('proceso_agi');
+                            cicloOperativoIndex = headers.indexOf('ciclo_operativo');
 
                             const missingColumns = EXPECTED_COLUMNS.filter((col) => !headers.includes(col));
                             if (missingColumns.length > 0) {
@@ -276,11 +326,45 @@
                                 );
                             }
 
+                            if (procesoAgiFilter && procesoAgiIndex === -1) {
+                                throw new Error('No se encontro la columna proceso_agi para aplicar el filtro.');
+                            }
+
+                            if (cicloOperativoFilter && cicloOperativoIndex === -1) {
+                                throw new Error('No se encontro la columna ciclo_operativo para aplicar el filtro.');
+                            }
+
                             headerProcessed = true;
                             continue;
                         }
 
                         const values = line.split(delimiter);
+                        processedRows += 1;
+
+                        if (procesoAgiFilter) {
+                            const procesoAgiValue = String(values[procesoAgiIndex] != null ? values[procesoAgiIndex] : '')
+                                .trim()
+                                .toUpperCase();
+                            if (procesoAgiValue !== procesoAgiFilter) {
+                                skippedRows += 1;
+                                if (processedRows % UI_YIELD_EVERY_ROWS === 0) {
+                                    await new Promise((resolve) => setTimeout(resolve, 0));
+                                }
+                                continue;
+                            }
+                        }
+
+                        if (cicloOperativoFilter) {
+                            const cicloOperativoValue = normalizeCicloOperativoValue(values[cicloOperativoIndex]);
+                            if (cicloOperativoValue !== cicloOperativoFilter) {
+                                skippedRows += 1;
+                                if (processedRows % UI_YIELD_EVERY_ROWS === 0) {
+                                    await new Promise((resolve) => setTimeout(resolve, 0));
+                                }
+                                continue;
+                            }
+                        }
+
                         const row = {};
 
                         headers.forEach((header, idx) => {
@@ -290,7 +374,6 @@
                         });
 
                         batch.push(row);
-                        processedRows += 1;
 
                         if (batch.length >= IMPORT_BATCH_SIZE) {
                             await flushBatch();
@@ -305,29 +388,56 @@
                 buffer += decoder.decode();
                 if (buffer.trim()) {
                     const values = buffer.split(delimiter);
-                    const row = {};
-                    headers.forEach((header, idx) => {
-                        if (EXPECTED_COLUMNS.includes(header)) {
-                            row[header] = values[idx] != null ? String(values[idx]).trim() : '';
-                        }
-                    });
-                    batch.push(row);
                     processedRows += 1;
+
+                    let shouldImport = true;
+                    if (procesoAgiFilter) {
+                        const procesoAgiValue = String(values[procesoAgiIndex] != null ? values[procesoAgiIndex] : '')
+                            .trim()
+                            .toUpperCase();
+                        shouldImport = procesoAgiValue === procesoAgiFilter;
+                    }
+
+                    if (shouldImport && cicloOperativoFilter) {
+                        const cicloOperativoValue = normalizeCicloOperativoValue(values[cicloOperativoIndex]);
+                        shouldImport = cicloOperativoValue === cicloOperativoFilter;
+                    }
+
+                    if (shouldImport) {
+                        const row = {};
+                        headers.forEach((header, idx) => {
+                            if (EXPECTED_COLUMNS.includes(header)) {
+                                row[header] = values[idx] != null ? String(values[idx]).trim() : '';
+                            }
+                        });
+                        batch.push(row);
+                    } else {
+                        skippedRows += 1;
+                    }
                 }
 
                 await flushBatch();
 
                 if (insertedRows === 0) {
-                    alert('No se encontraron registros para importar');
-                    updateImportProgress('No se encontraron registros válidos en el archivo.', 100);
+                    const noDataMsg = activeFilters.length > 0
+                        ? `No se encontraron registros para importar con ${activeFilters.join(' y ')}.`
+                        : 'No se encontraron registros para importar';
+                    alert(noDataMsg);
+                    updateImportProgress(
+                        `${noDataMsg} Leidas: ${processedRows.toLocaleString('es-ES')} | Omitidas: ${skippedRows.toLocaleString('es-ES')}`,
+                        100
+                    );
                     return;
                 }
 
                 updateImportProgress(
-                    `Importación finalizada. Insertadas ${insertedRows.toLocaleString('es-ES')} filas.`,
+                    `Importacion finalizada. Leidas ${processedRows.toLocaleString('es-ES')}, insertadas ${insertedRows.toLocaleString('es-ES')} y omitidas ${skippedRows.toLocaleString('es-ES')}.`,
                     100
                 );
-                alert(`Importación completada: ${insertedRows.toLocaleString('es-ES')} registros insertados.`);
+                const alertMsg = activeFilters.length > 0
+                    ? `Importacion completada: ${insertedRows.toLocaleString('es-ES')} registros insertados con ${activeFilters.join(' y ')}.\nOmitidas: ${skippedRows.toLocaleString('es-ES')} filas.`
+                    : `Importacion completada: ${insertedRows.toLocaleString('es-ES')} registros insertados.`;
+                alert(alertMsg);
                 closeModal();
                 loadData();
             } catch (error) {
