@@ -22,6 +22,7 @@
                 <button class="btn btn-secondary" onclick="loadData()">🔄 Refrescar</button>
                 <button class="btn btn-success" onclick="openImportModal()">📤 Cargar</button>
                 <button class="btn btn-primary" onclick="openUpdateModal()">🔄 Actualizar</button>
+                <button class="btn btn-warning" onclick="openIndicatorUpdateModal()">🧩 Indicadores</button>
                 <button class="btn btn-danger" onclick="limpiarTabla()">🗑️ Limpiar</button>
                 <button class="btn btn-info" onclick="descargarPlantillaCSVBase()">📄 Plantilla</button>
                         <script>
@@ -158,6 +159,39 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="closeUpdateModal()">Cancelar</button>
                 <button type="button" class="btn btn-success" id="btnUpdate" onclick="updateData()" disabled>Actualizar Datos</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para actualización masiva de cumple_jornada e indicador -->
+    <div id="indicatorUpdateModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🧩 Actualizar cumple_jornada e indicador</h3>
+            </div>
+            <div style="padding: 20px;">
+                <p style="margin-bottom: 15px; color: #cbd5e1;">
+                    Pega la información con <strong>3 columnas</strong>: <strong>id_lector</strong>, <strong>cumple_jornada</strong>, <strong>indicador</strong>.
+                    Solo se actualizarán esas dos columnas usando <strong>id_lector</strong> como llave.
+                </p>
+                <div class="form-group" style="margin-top: 15px;">
+                    <label for="pastedDataIndicatorUpdate">Pegado directo (Excel/CSV)</label>
+                    <textarea id="pastedDataIndicatorUpdate" rows="8" placeholder="id_lector;cumple_jornada;indicador" style="width: 100%; padding: 10px; border: 1px solid #374151; border-radius: 6px; background: #0f172a; color: #f1f5f9; resize: vertical;"></textarea>
+                    <button type="button" class="btn btn-info" onclick="parsePastedIndicatorUpdateData()" style="margin-top: 10px;">📋 Procesar Pegado</button>
+                </div>
+                <div id="indicatorUpdateProgressSection" style="margin-top: 15px; display: none;">
+                    <h4 style="color: #f1f5f9; margin-bottom: 10px;">Progreso de actualización</h4>
+                    <div style="width: 100%; background: #e9ecef; border-radius: 999px; overflow: hidden; height: 14px;">
+                        <div id="indicatorUpdateProgressBar" style="width: 0%; height: 100%; background: #f59e0b; transition: width 0.2s ease;"></div>
+                    </div>
+                    <p id="indicatorUpdateProgressText" style="margin-top: 10px; font-size: 14px; color: #cbd5e1;">
+                        Texto listo para procesar
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeIndicatorUpdateModal()">Cancelar</button>
+                <button type="button" class="btn btn-success" id="btnIndicatorUpdate" onclick="updateIndicatorData()" disabled>Actualizar Indicadores</button>
             </div>
         </div>
     </div>

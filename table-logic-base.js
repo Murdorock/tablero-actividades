@@ -10,8 +10,6 @@ const HIDDEN_COLUMNS = new Set([
     'obs_general',
     'estado',
     'dir_cierre',
-    'cumple_jornada',
-    'indicador',
     'adicional',
     'peso',
     'dir_llegada',
@@ -243,6 +241,7 @@ function closeModal() {
 
 let importedData = [];
 let updateDataArray = [];
+let indicatorUpdateDataArray = [];
 
 const ALLOWED_IMPORT_COLUMNS = [
     'id_lector',
@@ -415,6 +414,206 @@ function setUpdateProgress(processed, total, updated = 0, errors = 0) {
     const percent = Math.min(100, Math.round((processed / safeTotal) * 100));
     bar.style.width = `${percent}%`;
     text.textContent = `${processed}/${total} procesados · ${updated} actualizados · ${errors} errores`;
+}
+
+const INDICATOR_UPDATE_REQUIRED_COLUMNS = ['id_lector', 'cumple_jornada', 'indicador'];
+const INDICATOR_UPDATE_HEADER_MAP = {
+    id_lector: 'id_lector',
+    codigo: 'id_lector',
+    cumple_jornada: 'cumple_jornada',
+    cumplejornada: 'cumple_jornada',
+    indicador: 'indicador'
+};
+
+function openIndicatorUpdateModal() {
+    document.getElementById('indicatorUpdateModal').classList.add('show');
+    const pastedDataIndicatorUpdate = document.getElementById('pastedDataIndicatorUpdate');
+    if (pastedDataIndicatorUpdate) pastedDataIndicatorUpdate.value = '';
+    resetIndicatorUpdateProgress();
+    document.getElementById('btnIndicatorUpdate').disabled = true;
+    indicatorUpdateDataArray = [];
+}
+
+function closeIndicatorUpdateModal() {
+    document.getElementById('indicatorUpdateModal').classList.remove('show');
+}
+
+function resetIndicatorUpdateProgress() {
+    const section = document.getElementById('indicatorUpdateProgressSection');
+    const bar = document.getElementById('indicatorUpdateProgressBar');
+    const text = document.getElementById('indicatorUpdateProgressText');
+
+    if (section) section.style.display = 'none';
+    if (bar) bar.style.width = '0%';
+    if (text) text.textContent = 'Texto listo para procesar';
+}
+
+function setIndicatorUpdateProgress(processed, total, updated = 0, errors = 0) {
+    const section = document.getElementById('indicatorUpdateProgressSection');
+    const bar = document.getElementById('indicatorUpdateProgressBar');
+    const text = document.getElementById('indicatorUpdateProgressText');
+
+    if (!section || !bar || !text) return;
+
+    section.style.display = 'block';
+
+    const safeTotal = total > 0 ? total : 1;
+    const percent = Math.min(100, Math.round((processed / safeTotal) * 100));
+    bar.style.width = `${percent}%`;
+    text.textContent = `${processed}/${total} procesados · ${updated} actualizados · ${errors} errores`;
+}
+
+function parsePastedIndicatorUpdateData() {
+    const pastedData = document.getElementById('pastedDataIndicatorUpdate')?.value || '';
+    if (!pastedData.trim()) {
+        showMessage('Pega primero la información para procesarla', 'error');
+        return;
+    }
+
+    try {
+        const parseResult = Papa.parse(pastedData, {
+            header: true,
+            skipEmptyLines: true,
+            delimitersToGuess: [',', ';', '\t', '|']
+        });
+
+        if (parseResult.errors && parseResult.errors.length > 0) {
+            const realErrors = parseResult.errors.filter(err => err.code !== 'UndetectableDelimiter');
+            if (realErrors.length > 0) {
+                throw new Error(`Error al leer el texto pegado: ${realErrors[0].message}`);
+            }
+        }
+
+        const parsedRows = parseResult.data || [];
+        if (parsedRows.length === 0) {
+            throw new Error('No se encontraron registros válidos en el texto pegado');
+        }
+
+        const normalizedHeaderMap = {};
+        Object.keys(parsedRows[0]).forEach(header => {
+            const normalized = normalizeHeaderName(header);
+            const snakeCase = normalized.replace(/\s+/g, '_');
+            const mapped = INDICATOR_UPDATE_HEADER_MAP[snakeCase] || INDICATOR_UPDATE_HEADER_MAP[normalized] || null;
+            if (mapped) {
+                normalizedHeaderMap[header] = mapped;
+            }
+        });
+
+        const presentColumns = new Set(Object.values(normalizedHeaderMap));
+        const missingColumns = INDICATOR_UPDATE_REQUIRED_COLUMNS.filter(col => !presentColumns.has(col));
+        if (missingColumns.length > 0) {
+            throw new Error(`Faltan columnas requeridas: ${missingColumns.join(', ')}`);
+        }
+
+        indicatorUpdateDataArray = parsedRows.map(row => {
+            const transformed = {
+                id_lector: null,
+                cumple_jornada: null,
+                indicador: null
+            };
+
+            Object.keys(row || {}).forEach(originalKey => {
+                const mappedKey = normalizedHeaderMap[originalKey];
+                if (!mappedKey) return;
+
+                let value = row[originalKey];
+                if (typeof value === 'string') {
+                    value = value.trim();
+                }
+                if (value === '') {
+                    value = null;
+                }
+
+                transformed[mappedKey] = value;
+            });
+
+            return transformed;
+        }).filter(row => row.id_lector !== null && row.id_lector !== undefined && String(row.id_lector).trim() !== '');
+
+        if (indicatorUpdateDataArray.length === 0) {
+            throw new Error('No se encontraron filas con id_lector válido');
+        }
+
+        const progressSection = document.getElementById('indicatorUpdateProgressSection');
+        const progressBar = document.getElementById('indicatorUpdateProgressBar');
+        const progressText = document.getElementById('indicatorUpdateProgressText');
+
+        if (progressSection) progressSection.style.display = 'block';
+        if (progressBar) progressBar.style.width = '0%';
+        if (progressText) progressText.textContent = `${indicatorUpdateDataArray.length} registros listos para actualizar`;
+        document.getElementById('btnIndicatorUpdate').disabled = false;
+
+        showMessage('Texto procesado correctamente. Puedes actualizar ahora.', 'success');
+    } catch (error) {
+        showMessage(error.message || 'Error al procesar el texto pegado', 'error');
+        document.getElementById('btnIndicatorUpdate').disabled = true;
+    }
+}
+
+async function updateIndicatorData() {
+    if (indicatorUpdateDataArray.length === 0) {
+        showMessage('No hay datos para actualizar', 'error');
+        return;
+    }
+
+    if (!confirm(`¿Deseas actualizar ${indicatorUpdateDataArray.length} registros (cumple_jornada e indicador) usando la columna ${PRIMARY_KEY}?`)) {
+        return;
+    }
+
+    const btnIndicatorUpdate = document.getElementById('btnIndicatorUpdate');
+    btnIndicatorUpdate.disabled = true;
+    btnIndicatorUpdate.textContent = 'Actualizando...';
+    setIndicatorUpdateProgress(0, indicatorUpdateDataArray.length, 0, 0);
+
+    try {
+        let updated = 0;
+        let errors = 0;
+
+        for (let i = 0; i < indicatorUpdateDataArray.length; i++) {
+            const row = indicatorUpdateDataArray[i];
+            const id = row[PRIMARY_KEY];
+
+            if (!id) {
+                errors++;
+                continue;
+            }
+
+            const updateRow = {
+                cumple_jornada: row.cumple_jornada,
+                indicador: row.indicador
+            };
+
+            const { error } = await supabase
+                .from(TABLE_NAME)
+                .update(updateRow)
+                .eq(PRIMARY_KEY, id);
+
+            if (error) {
+                console.error(`Error al actualizar ${id}:`, error);
+                errors++;
+            } else {
+                updated++;
+            }
+
+            const processed = i + 1;
+            btnIndicatorUpdate.textContent = `Actualizando... ${processed}/${indicatorUpdateDataArray.length}`;
+            setIndicatorUpdateProgress(processed, indicatorUpdateDataArray.length, updated, errors);
+        }
+
+        let message = `${updated} registros actualizados (cumple_jornada e indicador)`;
+        if (errors > 0) {
+            message += `, ${errors} errores`;
+        }
+
+        showMessage(message, errors > 0 ? 'info' : 'success');
+        closeIndicatorUpdateModal();
+        loadData();
+    } catch (error) {
+        showMessage('Error al actualizar indicadores: ' + error.message, 'error');
+    } finally {
+        btnIndicatorUpdate.disabled = false;
+        btnIndicatorUpdate.textContent = 'Actualizar Indicadores';
+    }
 }
 
 // Manejar selección de archivo CSV para importar
@@ -777,5 +976,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     document.getElementById('dataModal')?.addEventListener('click', function(e) {
         if (e.target === this) closeModal();
+    });
+
+    document.getElementById('indicatorUpdateModal')?.addEventListener('click', function(e) {
+        if (e.target === this) closeIndicatorUpdateModal();
     });
 });
