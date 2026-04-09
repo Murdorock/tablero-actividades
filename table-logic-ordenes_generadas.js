@@ -907,6 +907,13 @@ function getDatePartsInTimeZone(value, timeZone = APP_TIME_ZONE) {
 }
 
 function normalizeDateForStorage(value) {
+    if (value === null || value === undefined || value === '') return null;
+    const asString = String(value).trim();
+    // Si ya es YYYY-MM-DD (date puro), usarlo directamente sin conversión de zona horaria
+    const dateOnly = asString.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (dateOnly) {
+        return `${dateOnly[1]}T00:00:00${BOGOTA_UTC_OFFSET}`;
+    }
     const parts = getDatePartsInTimeZone(value);
     if (parts) {
         return `${parts.isoDate}T00:00:00${BOGOTA_UTC_OFFSET}`;
@@ -2127,8 +2134,13 @@ async function sincronizarFechaEjecucionLocal({ targetTable: providedTargetTable
         const key = buildJoinKey(row[ordenesCicloCol], mesOrden);
         const fechaCalendario = key ? (calendarioMap.get(key) || null) : null;
 
-        const fechaActual = row.fecha_ejecucion;
-        if (sameDateValue(fechaActual, fechaCalendario)) return;
+        const fechaActual = row.fecha_ejecucion
+            ? String(row.fecha_ejecucion).slice(0, 10)
+            : null;
+        const fechaCalendarioDate = fechaCalendario
+            ? String(fechaCalendario).slice(0, 10)
+            : null;
+        if (fechaActual === fechaCalendarioDate) return;
 
         updates.push({
             id: rowId,

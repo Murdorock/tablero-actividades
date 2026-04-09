@@ -52,7 +52,7 @@ begin
                     when lower(trim(coalesce(mes::text, ''))) like 'diciembre%%' then 12
                     else null
                 end as mes_norm,
-                (date_trunc('day', fecha::timestamptz at time zone 'America/Bogota'))::date as fecha_ejec
+                fecha::date as fecha_ejec
             from %I
             where ciclo is not null
               and mes is not null
@@ -77,7 +77,7 @@ begin
                     when t.fecha_programada is not null then extract(month from (t.fecha_programada::timestamptz at time zone 'America/Bogota'))::int
                     else null
                 end as mes_norm,
-                (date_trunc('day', t.fecha_ejecucion::timestamptz at time zone 'America/Bogota'))::date as fecha_actual
+                left(t.fecha_ejecucion, 10)::date as fecha_actual
             from %I t
         ),
         candidate as (
@@ -94,7 +94,7 @@ begin
         ),
         updated as (
             update %I t
-               set fecha_ejecucion = (candidate.fecha_ejec::text || 'T00:00:00-05:00')::timestamptz
+               set fecha_ejecucion = candidate.fecha_ejec::text || 'T00:00:00-05:00'
               from candidate
              where t.id = candidate.id
             returning 1

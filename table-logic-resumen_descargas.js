@@ -857,8 +857,8 @@ Si el punto (3,4,5) tienen novedades, el detalle y evidencias fotográficas esta
 Atentamente.`;
         
         // Abrir cliente de email con datos prellenados (codificar el body y subject)
-        const mailto = 'juan.jaramillo.valencia@epm.com.co';
-        const cc = 'daniel.sotelo@epm.com.co,Sol.Marquez@epm.com.co,wilmar.agudelo@epm.com.co,miguel.escobar@icintegral.co,Lady.Molina@epm.com.co,santiago.florez@inmel.co,victor.ramirez@epm.com.co,yonathan.zambrano@epm.com.co,heilder.martinez@epm.com.co,erik.bustamante@epm.com.co,andres.herrera@epm.com.co,yoneison.pineda@epm.com.co,Jesus.Escobar@epm.com.co,juan.castaneda.garcia@epm.com.co,john.hincapie@icintegral.co';
+        const mailto = 'yonathan.zambrano@epm.com.co,juan.castaneda.garcia@epm.com.co,wilmar.agudelo@epm.com.co,juan.jaramillo.valencia@epm.com.co';
+        const cc = 'jonathan.ledesma@epm.com.co,john.hincapie@icintegral.co,miguel.escobar@icintegral.co,santiago.florez@inmel.co';
         const mailtoLink = `mailto:${mailto}?cc=${cc}&subject=${encodeURIComponent(asuntoEmail)}&body=${encodeURIComponent(mensajeTexto)}`;
         window.location.href = mailtoLink;
         

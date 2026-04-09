@@ -209,6 +209,13 @@ function sameDateValue(a: unknown, b: unknown) {
 }
 
 function normalizeDateForStorage(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  const asString = String(value).trim();
+  // Si ya es YYYY-MM-DD (date puro), usarlo directamente sin conversión de zona horaria
+  const dateOnly = asString.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (dateOnly) {
+    return `${dateOnly[1]}T00:00:00${BOGOTA_UTC_OFFSET}`;
+  }
   const parts = getDatePartsInTimeZone(value);
   if (parts) {
     return `${parts.isoDate}T00:00:00${BOGOTA_UTC_OFFSET}`;
