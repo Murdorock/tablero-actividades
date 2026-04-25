@@ -433,6 +433,119 @@
             max-height: 300px;
             overflow-y: auto;
         }
+
+        .summary-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .summary-panel {
+            background: #1e293b;
+            border: 1px solid #475569;
+            border-radius: 12px;
+            padding: 14px;
+        }
+
+        .summary-label {
+            display: block;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #94a3b8;
+            margin-bottom: 8px;
+        }
+
+        .summary-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #f8fafc;
+            line-height: 1.1;
+        }
+
+        .summary-inline-note {
+            margin-top: 6px;
+            color: #cbd5e1;
+            font-size: 0.9rem;
+        }
+
+        .ciclos-chip-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .ciclo-chip {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 42px;
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: #0f172a;
+            border: 1px solid #475569;
+            color: #e2e8f0;
+            font-weight: 600;
+            font-size: 0.92rem;
+        }
+
+        .card-helper {
+            color: #cbd5e1;
+            line-height: 1.5;
+            margin-bottom: 14px;
+        }
+
+        .delete-cycle-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .delete-cycle-controls label {
+            color: #e2e8f0;
+            font-weight: 600;
+            font-size: 0.92rem;
+        }
+
+        .delete-cycle-controls select {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 10px;
+            border: 1px solid #475569;
+            background: #1e293b;
+            color: #e2e8f0;
+            font-size: 1rem;
+        }
+
+        .delete-cycle-controls select:focus {
+            outline: none;
+            border-color: #2196F3;
+            box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.2);
+        }
+
+        .delete-cycle-message {
+            min-height: 20px;
+            font-size: 0.92rem;
+            color: #cbd5e1;
+        }
+
+        .delete-cycle-message.success {
+            color: #4ade80;
+        }
+
+        .delete-cycle-message.error {
+            color: #f87171;
+        }
+
+        .delete-cycle-message.warning {
+            color: #facc15;
+        }
+
+        .file-status-block {
+            margin-top: 18px;
+            padding-top: 18px;
+            border-top: 1px solid rgba(148, 163, 184, 0.2);
+        }
     </style>
 </head>
 <body>
@@ -455,20 +568,33 @@
                 </div>
                 
                 <div class="status-card" id="tableCard">
-                    <h3>📋 Ciclos Disponibles</h3>
+                    <h3>📋 Resumen de Históricos</h3>
                     <div id="ciclosTableContainer" style="margin-top: 15px;">
-                        <div style="text-align: center; color: #7f8c8d; padding: 15px;">Cargando ciclos...</div>
+                        <div style="text-align: center; color: #7f8c8d; padding: 15px;">Cargando resumen...</div>
                     </div>
                 </div>
                 
                 <div class="status-card" id="fileCard">
-                    <h3>📁 Archivo de Datos</h3>
-                    <div class="status-indicator">
-                        <div class="indicator-dot" id="fileDot"></div>
-                        <span id="fileStatus">Sin archivo</span>
+                    <h3>🗑️ Borrar Datos por Ciclo</h3>
+                    
+                    <div class="delete-cycle-controls">
+                        <label for="deleteCodCicloSelect">Selecciona un ciclo</label>
+                        <select id="deleteCodCicloSelect" onchange="handleDeleteCicloChange()">
+                            <option value="">Seleccione un ciclo</option>
+                        </select>
+                        <button class="btn btn-danger" id="deleteCicloBtn" onclick="deleteHistoricosByCiclo()" disabled>
+                            🗑️ Borrar registros del ciclo
+                        </button>
+                        <div id="deleteCicloMessage" class="delete-cycle-message">Selecciona un ciclo para consultar y borrar sus registros.</div>
                     </div>
-                    <div id="fileDetails" class="hidden">
-                        <small id="fileDetailsText"></small>
+                    <div class="file-status-block">
+                        <div class="status-indicator">
+                            <div class="indicator-dot" id="fileDot"></div>
+                            <span id="fileStatus">Sin archivo</span>
+                        </div>
+                        <div id="fileDetails" class="hidden">
+                            <small id="fileDetailsText"></small>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -647,6 +773,7 @@
         let uploadCancelled = false;
         let startTime = null;
         let timeInterval = null;
+        const HISTORICOS_SUMMARY_CACHE_KEY = 'historicos-summary-cache';
         let currentUploadStats = {
             processed: 0,
             successful: 0,
@@ -669,6 +796,7 @@
         // Inicialización
         document.addEventListener('DOMContentLoaded', function() {
             setupEventListeners();
+            setDeleteControlsState();
             checkConnection();
             logEvent('🚀 Tablero inicializado', 'info');
         });
@@ -714,80 +842,392 @@
         }
         
         async function checkTable() {
+            const container = document.getElementById('ciclosTableContainer');
+            const cachedSummary = getCachedHistoricosSummary();
+
             try {
-                logEvent('📊 Cargando ciclos disponibles...', 'info');
-                
-                // Obtener todos los registros de la tabla hystoricos
-                const { data, error } = await supabaseHistoricos
-                    .from('hystoricos')
-                    .select('cod_ciclo');
-                
-                if (error) {
-                    throw error;
-                }
-                
-                // Procesar datos para obtener ciclos únicos y sus conteos
-                const ciclosMap = {};
-                if (data && data.length > 0) {
-                    data.forEach(record => {
-                        if (record.cod_ciclo) {
-                            ciclosMap[record.cod_ciclo] = (ciclosMap[record.cod_ciclo] || 0) + 1;
-                        }
-                    });
-                    
-                    // Ordenar ciclos numéricamente
-                    const ciclosOrdenados = Object.keys(ciclosMap)
-                        .sort((a, b) => parseInt(a) - parseInt(b));
-                    
-                    // Construir tabla HTML
-                    let tableHTML = `
-                        <table class="ciclos-table">
-                            <thead>
-                                <tr>
-                                    <th>Ciclo</th>
-                                    <th style="text-align: right;">Registros</th>
-                                </tr>
-                            </thead>
-                            <tbody>`;
-                    
-                    ciclosOrdenados.forEach(ciclo => {
-                        const count = ciclosMap[ciclo];
-                        tableHTML += `
-                            <tr>
-                                <td><strong>${ciclo}</strong></td>
-                                <td style="text-align: right;"><span class="ciclos-count">${count}</span></td>
-                            </tr>`;
-                    });
-                    
-                    tableHTML += `
-                            </tbody>
-                        </table>`;
-                    
-                    const container = document.getElementById('ciclosTableContainer');
-                    container.innerHTML = tableHTML;
-                    
-                    const totalRegistros = data.length;
-                    logEvent(`✅ Se encontraron ${ciclosOrdenados.length} ciclos diferentes con ${totalRegistros} registros totales`, 'success');
+                logEvent('📊 Cargando resumen de históricos...', 'info');
+
+                if (cachedSummary) {
+                    renderHistoricosSummary(
+                        cachedSummary.totalRegistros,
+                        cachedSummary.ciclosOrdenados,
+                        cachedSummary.totalRegistrosEsEstimado,
+                        true
+                    );
+
+                    if (cachedSummary.ciclosOrdenados.length > 0) {
+                        populateDeleteCicloSelect(cachedSummary.ciclosOrdenados);
+                    }
                 } else {
-                    const container = document.getElementById('ciclosTableContainer');
-                    container.innerHTML = '<div style="text-align: center; color: #f39c12; padding: 15px;">⚠️ No hay registros disponibles en la tabla históricos</div>';
+                    container.innerHTML = '<div style="text-align: center; color: #7f8c8d; padding: 15px;">Cargando resumen...</div>';
+                }
+
+                const [totalResult, ciclosResult] = await Promise.allSettled([
+                    executeRpcWithRetry(() => supabaseHistoricos.rpc('rpc_hystoricos_total_registros')),
+                    executeRpcWithRetry(() => supabaseHistoricos.rpc('rpc_hystoricos_cod_ciclo_unicos'))
+                ]);
+
+                let totalRegistros = null;
+                let totalRegistrosEsEstimado = false;
+                let ciclosOrdenados = [];
+                let totalError = null;
+                let ciclosError = null;
+
+                if (totalResult.status === 'fulfilled') {
+                    const { data, error } = totalResult.value;
+                    if (error) {
+                        totalError = error;
+                    } else {
+                        const totalData = Array.isArray(data) ? data[0] : data;
+                        totalRegistros = Number(totalData?.total_registros || 0);
+                    }
+                } else {
+                    totalError = totalResult.reason;
+                }
+
+                if (ciclosResult.status === 'fulfilled') {
+                    const { data, error } = ciclosResult.value;
+                    if (error) {
+                        ciclosError = error;
+                    } else {
+                        ciclosOrdenados = getSortedUniqueCiclosFromArray(
+                            (Array.isArray(data) ? data : []).map(item => item?.cod_ciclo)
+                        );
+                    }
+                } else {
+                    ciclosError = ciclosResult.reason;
+                }
+
+                if (totalRegistros === null && totalError) {
+                    const { data, error } = await executeRpcWithRetry(
+                        () => supabaseHistoricos.rpc('rpc_hystoricos_total_registros_estimado')
+                    );
+
+                    if (!error) {
+                        const totalEstimadoData = Array.isArray(data) ? data[0] : data;
+                        totalRegistros = Number(totalEstimadoData?.total_registros || 0);
+                        totalRegistrosEsEstimado = true;
+                    }
+                }
+
+                if (totalRegistros === null && cachedSummary) {
+                    totalRegistros = cachedSummary.totalRegistros;
+                    totalRegistrosEsEstimado = cachedSummary.totalRegistrosEsEstimado;
+                }
+
+                if (ciclosOrdenados.length === 0 && cachedSummary?.ciclosOrdenados?.length > 0) {
+                    ciclosOrdenados = cachedSummary.ciclosOrdenados;
+                }
+
+                if (totalRegistros === null && ciclosOrdenados.length === 0) {
+                    throw ciclosError || totalError || new Error('No se pudo cargar el resumen de históricos');
+                }
+
+                const usedCachedSummary = Boolean(cachedSummary) && (
+                    totalError !== null || ciclosError !== null
+                );
+
+                renderHistoricosSummary(totalRegistros, ciclosOrdenados, totalRegistrosEsEstimado, usedCachedSummary);
+
+                if (ciclosOrdenados.length > 0) {
+                    populateDeleteCicloSelect(ciclosOrdenados);
+                }
+
+                saveCachedHistoricosSummary({
+                    totalRegistros,
+                    ciclosOrdenados,
+                    totalRegistrosEsEstimado
+                });
+
+                if (totalRegistros === 0 && !totalRegistrosEsEstimado) {
                     logEvent('⚠️ La tabla históricos está vacía', 'warning');
+                } else {
+                    const totalText = totalRegistros === null
+                        ? 'total no disponible'
+                        : `${totalRegistros.toLocaleString()} ${totalRegistrosEsEstimado ? 'registros estimados' : 'registros'}`;
+                    logEvent(`✅ Resumen cargado: ${totalText} y ${ciclosOrdenados.length} ciclos únicos`, 'success');
+                }
+
+                if (totalRegistrosEsEstimado) {
+                    logEvent('⚠️ Se usó un conteo estimado porque el conteo exacto excedió el tiempo disponible', 'warning');
+                }
+
+                if (usedCachedSummary) {
+                    logEvent('⚠️ Se reutilizó el ultimo resumen valido mientras una consulta expiraba', 'warning');
                 }
                 
             } catch (error) {
                 console.error('Error al cargar ciclos:', error);
-                let errorMsg = error.message;
-                const container = document.getElementById('ciclosTableContainer');
+                let errorMsg = getHistoricosRpcErrorMessage(error, 'rpc_hystoricos_resumen');
                 
                 if (error.message.includes('timeout') || error.message.includes('canceling statement')) {
-                    errorMsg = 'Timeout al cargar ciclos';
+                    errorMsg = 'Timeout al cargar resumen';
                     container.innerHTML = '<div style="text-align: center; color: #ff9800; padding: 15px;">⚠️ ' + errorMsg + ' (la tabla puede ser muy grande)</div>';
-                    logEvent('⚠️ Timeout al cargar ciclos, pero la tabla está disponible', 'warning');
+                    logEvent('⚠️ Timeout al cargar resumen de históricos', 'warning');
                 } else {
-                    container.innerHTML = '<div style="text-align: center; color: #f44336; padding: 15px;">❌ Error al cargar ciclos: ' + errorMsg + '</div>';
-                    logEvent('❌ Error al cargar ciclos: ' + errorMsg, 'error');
+                    container.innerHTML = '<div style="text-align: center; color: #f44336; padding: 15px;">❌ Error al cargar resumen: ' + errorMsg + '</div>';
+                    logEvent('❌ Error al cargar resumen: ' + errorMsg, 'error');
                 }
             }
+        }
+
+        function getSortedUniqueCiclosFromArray(ciclos) {
+            const uniqueCiclos = [...new Set(
+                (Array.isArray(ciclos) ? ciclos : [])
+                    .filter(ciclo => ciclo !== null && ciclo !== undefined && String(ciclo).trim() !== '')
+                    .map(ciclo => String(ciclo).trim())
+            )];
+
+            return uniqueCiclos.sort((left, right) => {
+                const leftNumber = Number(left);
+                const rightNumber = Number(right);
+                const bothNumeric = !Number.isNaN(leftNumber) && !Number.isNaN(rightNumber);
+                return bothNumeric ? leftNumber - rightNumber : left.localeCompare(right, 'es');
+            });
+        }
+
+        function renderHistoricosSummary(totalRegistros, ciclosOrdenados, totalRegistrosEsEstimado = false, usaCache = false) {
+            const container = document.getElementById('ciclosTableContainer');
+            const totalValue = totalRegistros === null ? 'No disponible' : totalRegistros.toLocaleString();
+            const totalLabel = totalRegistrosEsEstimado ? 'Total estimado de filas cargadas' : 'Total de filas cargadas';
+            const noteParts = [];
+
+            if (totalRegistrosEsEstimado) {
+                noteParts.push('Valor estimado a partir de las estadisticas de la tabla.');
+            }
+
+            if (usaCache) {
+                noteParts.push('Mostrando el ultimo resumen valido mientras se estabiliza la consulta.');
+            }
+
+            const totalNote = noteParts.length > 0
+                ? `<div class="summary-inline-note">${noteParts.join(' ')}</div>`
+                : '';
+            const ciclosChips = ciclosOrdenados.length > 0
+                ? ciclosOrdenados.map(ciclo => `<span class="ciclo-chip">${escapeHtml(ciclo)}</span>`).join('')
+                : '<span style="color: #facc15;">Sin valores únicos disponibles</span>';
+
+            container.innerHTML = `
+                <div class="summary-stack">
+                    <div class="summary-panel">
+                        <span class="summary-label">${totalLabel}</span>
+                        <div class="summary-value">${totalValue}</div>
+                        ${totalNote}
+                    </div>
+                    <div class="summary-panel">
+                        <span class="summary-label">Ciclos Cargados</span>
+                        <div class="ciclos-chip-list">${ciclosChips}</div>
+                    </div>
+                </div>`;
+        }
+
+        function getCachedHistoricosSummary() {
+            try {
+                const raw = sessionStorage.getItem(HISTORICOS_SUMMARY_CACHE_KEY);
+                if (!raw) {
+                    return null;
+                }
+
+                const parsed = JSON.parse(raw);
+                return {
+                    totalRegistros: parsed.totalRegistros ?? null,
+                    ciclosOrdenados: Array.isArray(parsed.ciclosOrdenados) ? parsed.ciclosOrdenados : [],
+                    totalRegistrosEsEstimado: Boolean(parsed.totalRegistrosEsEstimado)
+                };
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function saveCachedHistoricosSummary(summary) {
+            try {
+                sessionStorage.setItem(HISTORICOS_SUMMARY_CACHE_KEY, JSON.stringify(summary));
+            } catch (error) {
+                // Ignorar fallos de almacenamiento del navegador.
+            }
+        }
+
+        async function executeRpcWithRetry(executor, maxAttempts = 2, delayMs = 800) {
+            let lastResult = null;
+            let lastError = null;
+
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                try {
+                    const result = await executor();
+                    lastResult = result;
+
+                    if (!result?.error || !isTimeoutLikeError(result.error) || attempt === maxAttempts) {
+                        return result;
+                    }
+
+                    lastError = result.error;
+                } catch (error) {
+                    lastError = error;
+
+                    if (!isTimeoutLikeError(error) || attempt === maxAttempts) {
+                        throw error;
+                    }
+                }
+
+                await sleep(delayMs);
+            }
+
+            if (lastError) {
+                throw lastError;
+            }
+
+            return lastResult;
+        }
+
+        function isTimeoutLikeError(error) {
+            const message = String(error?.message || error || '').toLowerCase();
+            return message.includes('timeout') || message.includes('canceling statement');
+        }
+
+        function populateDeleteCicloSelect(ciclosOrdenados) {
+            const select = document.getElementById('deleteCodCicloSelect');
+            const selectedValue = select.value;
+
+            select.innerHTML = '<option value="">Seleccione un ciclo</option>';
+
+            ciclosOrdenados.forEach(ciclo => {
+                const option = document.createElement('option');
+                option.value = ciclo;
+                option.textContent = ciclo;
+                select.appendChild(option);
+            });
+
+            if (selectedValue && ciclosOrdenados.includes(selectedValue)) {
+                select.value = selectedValue;
+            }
+
+            setDeleteControlsState();
+        }
+
+        function setDeleteControlsState(message = 'Selecciona un ciclo para consultar y borrar sus registros.', type = '') {
+            const select = document.getElementById('deleteCodCicloSelect');
+            const deleteBtn = document.getElementById('deleteCicloBtn');
+            const messageElement = document.getElementById('deleteCicloMessage');
+
+            deleteBtn.disabled = !select.value;
+            messageElement.textContent = message;
+            messageElement.className = type ? `delete-cycle-message ${type}` : 'delete-cycle-message';
+        }
+
+        async function handleDeleteCicloChange() {
+            const ciclo = document.getElementById('deleteCodCicloSelect').value;
+
+            if (!ciclo) {
+                setDeleteControlsState();
+                return;
+            }
+
+            setDeleteControlsState(`Se borrarán los registros historicos de ciclo ${ciclo}.`, 'warning');
+        }
+
+        async function deleteHistoricosByCiclo() {
+            const select = document.getElementById('deleteCodCicloSelect');
+            const deleteBtn = document.getElementById('deleteCicloBtn');
+            const ciclo = select.value;
+            const batchSize = 10000;
+
+            if (!ciclo) {
+                setDeleteControlsState();
+                return;
+            }
+
+            const confirmed = window.confirm(`Se eliminarán todos los registros historicos del ciclo ${ciclo}. Esta acción no se puede deshacer. ¿Deseas continuar?`);
+            if (!confirmed) {
+                return;
+            }
+
+            const originalText = deleteBtn.textContent;
+            deleteBtn.disabled = true;
+            deleteBtn.textContent = '⏳ Borrando...';
+            setDeleteControlsState(`Borrando registros historicos del ciclo ${ciclo}...`, 'warning');
+
+            try {
+                let totalDeletedRows = 0;
+                let deletedRows = 0;
+                let batchNumber = 0;
+
+                do {
+                    batchNumber += 1;
+                    setDeleteControlsState(`Borrando lote ${batchNumber} del ciclo ${ciclo}...`, 'warning');
+
+                    const { data, error: deleteError } = await supabaseHistoricos
+                        .rpc('rpc_borrar_hystoricos_por_ciclo', {
+                            p_cod_ciclo: ciclo,
+                            p_batch_size: batchSize
+                        });
+
+                    if (deleteError) {
+                        throw deleteError;
+                    }
+
+                    const resultado = Array.isArray(data) ? data[0] : data;
+                    deletedRows = Number(resultado?.deleted_rows || 0);
+                    totalDeletedRows += deletedRows;
+
+                    if (deletedRows > 0) {
+                        setDeleteControlsState(`Lote ${batchNumber}: ${deletedRows.toLocaleString()} registros eliminados. Total acumulado: ${totalDeletedRows.toLocaleString()}.`, 'warning');
+                    }
+                } while (deletedRows > 0);
+
+                logEvent(`🗑️ Se eliminaron ${totalDeletedRows.toLocaleString()} registros del ciclo ${ciclo}`, 'success');
+                select.value = '';
+                setDeleteControlsState(`Se eliminaron ${totalDeletedRows.toLocaleString()} registros del ciclo ${ciclo}.`, 'success');
+                await checkTable();
+            } catch (error) {
+                console.error('Error al borrar ciclo:', error);
+                const errorMsg = getHistoricosRpcErrorMessage(error, 'rpc_borrar_hystoricos_por_ciclo');
+                logEvent('❌ Error al borrar registros por ciclo: ' + errorMsg, 'error');
+                setDeleteControlsState('Error al borrar registros: ' + errorMsg, 'error');
+            } finally {
+                deleteBtn.textContent = originalText;
+                if (select.value) {
+                    deleteBtn.disabled = false;
+                }
+            }
+        }
+
+        function getHistoricosRpcErrorMessage(error, rpcName) {
+            const raw = String(error?.message || '').trim();
+            const normalized = raw.toLowerCase();
+
+            if (normalized.includes('could not find the function') || normalized.includes('pgrst202')) {
+                if (rpcName === 'rpc_hystoricos_total_registros') {
+                    return 'La RPC rpc_hystoricos_total_registros no existe en la base de datos. Ejecuta el SQL en supabase/sql/rpc_hystoricos_resumen_y_borrado.sql';
+                }
+
+                if (rpcName === 'rpc_hystoricos_total_registros_estimado') {
+                    return 'La RPC rpc_hystoricos_total_registros_estimado no existe en la base de datos. Ejecuta el SQL en supabase/sql/rpc_hystoricos_resumen_y_borrado.sql';
+                }
+
+                if (rpcName === 'rpc_hystoricos_cod_ciclo_unicos') {
+                    return 'La RPC rpc_hystoricos_cod_ciclo_unicos no existe en la base de datos. Ejecuta el SQL en supabase/sql/rpc_hystoricos_resumen_y_borrado.sql';
+                }
+
+                if (rpcName === 'rpc_hystoricos_resumen') {
+                    return 'La RPC rpc_hystoricos_resumen no existe en la base de datos. Ejecuta el SQL en supabase/sql/rpc_hystoricos_resumen_y_borrado.sql';
+                }
+
+                if (rpcName === 'rpc_borrar_hystoricos_por_ciclo') {
+                    return 'La RPC rpc_borrar_hystoricos_por_ciclo no existe en la base de datos. Ejecuta el SQL en supabase/sql/rpc_hystoricos_resumen_y_borrado.sql';
+                }
+            }
+
+            return raw || 'Error desconocido invocando la RPC.';
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
         }
         
         // Funciones de UI
@@ -814,13 +1254,11 @@
         function updateFileStatus(message, type, details = '') {
             const statusElement = document.getElementById('fileStatus');
             const dotElement = document.getElementById('fileDot');
-            const cardElement = document.getElementById('fileCard');
             const detailsElement = document.getElementById('fileDetails');
             const detailsTextElement = document.getElementById('fileDetailsText');
             
             statusElement.textContent = message;
             dotElement.className = `indicator-dot ${type}`;
-            cardElement.className = `status-card ${type}`;
             
             if (details) {
                 detailsTextElement.textContent = details;
