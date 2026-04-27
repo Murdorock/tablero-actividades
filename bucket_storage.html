@@ -118,6 +118,56 @@
             color: #86efac;
         }
 
+        .search-progress {
+            margin-top: 8px;
+            display: none;
+        }
+
+        .search-progress.visible {
+            display: block;
+        }
+
+        .search-progress-track {
+            width: 100%;
+            height: 8px;
+            border-radius: 999px;
+            border: 1px solid #334155;
+            background: #0f172a;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .search-progress-fill {
+            height: 100%;
+            width: 0%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #0ea5e9 0%, #3b82f6 100%);
+            transition: width 0.18s ease;
+        }
+
+        .search-progress-fill.indeterminate {
+            width: 36%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            animation: searchProgressIndeterminate 1.05s linear infinite;
+        }
+
+        .search-progress-label {
+            margin-top: 4px;
+            color: #94a3b8;
+            font-size: 12px;
+        }
+
+        @keyframes searchProgressIndeterminate {
+            0% {
+                transform: translateX(-130%);
+            }
+            100% {
+                transform: translateX(320%);
+            }
+        }
+
         .action-group {
             display: flex;
             gap: 6px;
@@ -197,8 +247,8 @@
                     </select>
                 </div>
                 <div class="form-group" style="margin: 0; display: flex; align-items: center; gap: 8px;">
-                    <input id="loadAllItems" type="checkbox" checked>
-                    <label for="loadAllItems" style="margin: 0;">Ver todo el contenido</label>
+                    <input id="loadAllItems" type="checkbox">
+                    <label for="loadAllItems" style="margin: 0;">Traer todas las coincidencias en busqueda</label>
                 </div>
                 <div class="form-group" style="margin: 0;">
                     <button class="btn btn-primary" id="btnLoadFiles">Ver archivos</button>
@@ -211,6 +261,12 @@
                 <span class="selection-pill" id="selectedCount">0 seleccionados</span>
             </div>
             <div class="status-line" id="statusLine"></div>
+            <div class="search-progress" id="searchProgress">
+                <div class="search-progress-track">
+                    <div class="search-progress-fill" id="searchProgressFill"></div>
+                </div>
+                <div class="search-progress-label" id="searchProgressLabel"></div>
+            </div>
         </div>
 
         <div class="storage-panel">
@@ -276,10 +332,16 @@
         const btnDownloadFolder = document.getElementById('btnDownloadFolder');
         const selectedCount = document.getElementById('selectedCount');
         const selectAllRows = document.getElementById('selectAllRows');
+        const searchProgress = document.getElementById('searchProgress');
+        const searchProgressFill = document.getElementById('searchProgressFill');
+        const searchProgressLabel = document.getElementById('searchProgressLabel');
 
         let currentItems = [];
         let filteredItems = [];
         const selectedEntries = new Map();
+        const DEFAULT_RECENT_LIMIT = 5;
+        const SEARCH_DEBOUNCE_MS = 350;
+        let searchDebounceTimer = null;
 
         function normalizePath(path) {
             if (!path) return '';
@@ -324,6 +386,37 @@
             const normalizedPath = normalizePath(path);
             const fullPath = normalizedPath ? '/' + normalizedPath : '/';
             currentPathLabel.textContent = 'Ruta: ' + fullPath + ' (bucket: ' + bucket + ')';
+        }
+
+        function hideSearchProgress() {
+            if (!searchProgress || !searchProgressFill || !searchProgressLabel) return;
+            searchProgress.classList.remove('visible');
+            searchProgressFill.classList.remove('indeterminate');
+            searchProgressFill.style.width = '0%';
+            searchProgressLabel.textContent = '';
+        }
+
+        function showSearchProgress(options = {}) {
+            if (!searchProgress || !searchProgressFill || !searchProgressLabel) return;
+
+            const isIndeterminate = !!options.indeterminate;
+            const current = Number(options.current) || 0;
+            const total = Number(options.total) || 0;
+
+            searchProgress.classList.add('visible');
+
+            if (isIndeterminate) {
+                searchProgressFill.classList.add('indeterminate');
+                searchProgressFill.style.width = '36%';
+            } else {
+                const percent = total > 0
+                    ? Math.max(0, Math.min(100, (current / total) * 100))
+                    : Math.max(0, Math.min(100, current));
+                searchProgressFill.classList.remove('indeterminate');
+                searchProgressFill.style.width = percent.toFixed(2) + '%';
+            }
+
+            searchProgressLabel.textContent = String(options.label || '');
         }
 
         function formatDateValue(value) {
@@ -438,6 +531,126 @@
             }
         }
 
+        function getSearchQuery() {
+            return (searchInput.value || '').trim();
+        }
+
+        function getItemTimestamp(item) {
+            const value = item && (item.updated_at || item.created_at);
+            const timestamp = value ? new Date(value).getTime() : 0;
+            return Number.isFinite(timestamp) ? timestamp : 0;
+        }
+
+        function sortItemsByRecent(items) {
+            return [...items].sort((left, right) => {
+                const timestampDiff = getItemTimestamp(right) - getItemTimestamp(left);
+                if (timestampDiff !== 0) {
+                    return timestampDiff;
+                }
+
+                return String(left.name || '').localeCompare(String(right.name || ''), 'es', {
+                    numeric: true,
+                    sensitivity: 'base'
+                });
+            });
+        }
+
+        function hydrateStorageEntries(entries, currentPath) {
+            return (entries || []).map((entry) => ({
+                ...entry,
+                objectPath: resolveObjectPath(currentPath, entry.name)
+            }));
+        }
+
+        async function listStorageEntries(bucket, path, options = {}) {
+            const requestOptions = {
+                limit: Math.max(1, Number(options.limit) || 100),
+                offset: Math.max(0, Number(options.offset) || 0),
+                sortBy: options.sortBy || { column: 'name', order: 'asc' }
+            };
+
+            const search = (options.search || '').trim();
+            if (search) {
+                requestOptions.search = search;
+            }
+
+            const { data, error } = await supabase
+                .storage
+                .from(bucket)
+                .list(path || undefined, requestOptions);
+
+            if (error) {
+                throw error;
+            }
+
+            return hydrateStorageEntries(data, path);
+        }
+
+        async function collectScopedSearchMatches(bucket, basePath, query, pageSize, maxMatches, onProgress) {
+            const normalizedBase = normalizePath(basePath);
+            const normalizedQuery = String(query || '').trim().toLowerCase();
+            const matches = [];
+            let scannedCount = 0;
+
+            const emitProgress = () => {
+                if (typeof onProgress === 'function') {
+                    onProgress({
+                        scannedCount,
+                        matchesCount: matches.length
+                    });
+                }
+            };
+
+            emitProgress();
+
+            async function visitPath(pathToVisit) {
+                let offset = 0;
+
+                while (true) {
+                    const batch = await listStorageEntries(bucket, pathToVisit, {
+                        limit: pageSize,
+                        offset,
+                        sortBy: { column: 'name', order: 'asc' }
+                    });
+
+                    for (const entry of batch) {
+                        scannedCount += 1;
+                        const entryName = String(entry.name || '').toLowerCase();
+                        const entryPath = getObjectPathFromItem(entry);
+
+                        if (entryName.includes(normalizedQuery)) {
+                            matches.push(entry);
+                            emitProgress();
+                            if (matches.length >= maxMatches) {
+                                return true;
+                            }
+                        } else if (scannedCount % 25 === 0) {
+                            emitProgress();
+                        }
+
+                        if (isFolderItem(entry)) {
+                            const reachedLimit = await visitPath(entryPath);
+                            if (reachedLimit) {
+                                return true;
+                            }
+                        }
+                    }
+
+                    if (batch.length < pageSize) {
+                        break;
+                    }
+
+                    offset += pageSize;
+                }
+
+                return false;
+            }
+
+            await visitPath(normalizedBase);
+            emitProgress();
+            return matches;
+        }
+
         function escapeHtml(text) {
             const value = String(text || '');
             return value
@@ -490,21 +703,11 @@
             updateSelectionUI();
         }
 
-        function applySearchFilter() {
-            const query = (searchInput.value || '').trim().toLowerCase();
-
-            if (!query) {
-                filteredItems = [...currentItems];
-            } else {
-                filteredItems = currentItems.filter((item) => {
-                    const itemName = String(item.name || '').toLowerCase();
-                    const typeLabel = isFolderItem(item) ? 'carpeta' : 'archivo';
-                    return itemName.includes(query) || typeLabel.includes(query);
-                });
-            }
-
+        function updateVisibleItems(items) {
+            currentItems = [...items];
+            filteredItems = [...items];
+            selectedEntries.clear();
             renderItems(filteredItems);
-            setStatus('Mostrando ' + filteredItems.length + ' de ' + currentItems.length + ' elementos.', 'success');
         }
 
         function setSelectAllVisible(checked) {
@@ -527,64 +730,124 @@
         async function loadFiles() {
             const bucket = bucketInput.value.trim();
             const path = normalizePath(folderInput.value);
-            const pageSize = Math.max(1, Number(pageSizeInput.value) || 500);
-            const loadAll = !!loadAllItemsInput.checked;
+            hideSearchProgress();
 
             if (!bucket) {
                 setStatus('Debes indicar el nombre del bucket.', 'error');
                 return;
             }
 
-            setStatus('Cargando archivos...', null);
+            setStatus('Cargando ultimos archivos...', null);
             updateCurrentPathLabel(bucket, path);
 
             try {
-                let offset = 0;
-                let allItems = [];
+                let recentItems = [];
 
-                while (true) {
-                    const { data, error } = await supabase
-                        .storage
-                        .from(bucket)
-                        .list(path || undefined, {
-                            limit: pageSize,
-                            offset,
-                            sortBy: { column: 'name', order: 'asc' }
-                        });
-
-                    if (error) {
-                        throw error;
-                    }
-
-                    const batch = (data || []).map((entry) => ({
-                        ...entry,
-                        objectPath: resolveObjectPath(path, entry.name)
-                    }));
-                    allItems = allItems.concat(batch);
-
-                    if (!loadAll || batch.length < pageSize) {
-                        break;
-                    }
-
-                    offset += pageSize;
-                    setStatus('Cargando archivos... ' + allItems.length + ' encontrados', null);
+                try {
+                    recentItems = await listStorageEntries(bucket, path, {
+                        limit: DEFAULT_RECENT_LIMIT,
+                        offset: 0,
+                        sortBy: { column: 'updated_at', order: 'desc' }
+                    });
+                } catch (sortError) {
+                    console.warn('No se pudo ordenar por fecha directamente en Storage. Se aplicara fallback local.', sortError);
+                    const fallbackItems = await listStorageEntries(bucket, path, {
+                        limit: Math.max(DEFAULT_RECENT_LIMIT, Math.min(100, Number(pageSizeInput.value) || 100)),
+                        offset: 0,
+                        sortBy: { column: 'name', order: 'asc' }
+                    });
+                    recentItems = sortItemsByRecent(fallbackItems).slice(0, DEFAULT_RECENT_LIMIT);
                 }
 
-                currentItems = allItems;
-                selectedEntries.clear();
-                applySearchFilter();
-
-                if (loadAll) {
-                    setStatus('Listado completo cargado: ' + currentItems.length + ' elementos.', 'success');
-                } else {
-                    setStatus('Listado parcial cargado: ' + currentItems.length + ' elementos.', 'success');
-                }
+                updateVisibleItems(recentItems);
+                setStatus('Mostrando los ' + recentItems.length + ' archivo(s) mas recientes de esta carpeta.', 'success');
             } catch (error) {
                 setStatus('No se pudo listar: ' + error.message, 'error');
                 filesTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#fecaca;padding:24px;">Error al listar archivos.</td></tr>';
                 selectedEntries.clear();
                 updateSelectionUI();
             }
+        }
+
+        async function searchFilesInBucket() {
+            const bucket = bucketInput.value.trim();
+            const path = normalizePath(folderInput.value);
+            const query = getSearchQuery();
+            const pageSize = Math.max(1, Number(pageSizeInput.value) || 100);
+            const loadAllMatches = !!loadAllItemsInput.checked;
+            const maxMatches = loadAllMatches ? Number.POSITIVE_INFINITY : pageSize;
+
+            if (!bucket) {
+                setStatus('Debes indicar el nombre del bucket.', 'error');
+                return;
+            }
+
+            if (!query) {
+                hideSearchProgress();
+                await loadFiles();
+                return;
+            }
+
+            setStatus('Buscando en la ruta actual del bucket...', null);
+            showSearchProgress({
+                indeterminate: loadAllMatches,
+                current: 0,
+                total: loadAllMatches ? 0 : maxMatches,
+                label: loadAllMatches
+                    ? 'Analizando archivos en la ruta actual...'
+                    : '0/' + maxMatches + ' coincidencias encontradas'
+            });
+            updateCurrentPathLabel(bucket, path);
+
+            try {
+                const matches = await collectScopedSearchMatches(bucket, path, query, pageSize, maxMatches, (progress) => {
+                    if (loadAllMatches) {
+                        showSearchProgress({
+                            indeterminate: true,
+                            label: 'Analizados: ' + progress.scannedCount + ' | Coincidencias: ' + progress.matchesCount
+                        });
+                        return;
+                    }
+
+                    showSearchProgress({
+                        indeterminate: false,
+                        current: Math.min(progress.matchesCount, maxMatches),
+                        total: maxMatches,
+                        label: progress.matchesCount + '/' + maxMatches + ' coincidencias encontradas | Analizados: ' + progress.scannedCount
+                    });
+                });
+
+                updateVisibleItems(matches);
+                hideSearchProgress();
+
+                if (matches.length) {
+                    setStatus('Busqueda completada en la ruta actual: ' + matches.length + ' coincidencia(s).', 'success');
+                } else {
+                    setStatus('No se encontraron coincidencias en la ruta actual del bucket.', 'success');
+                }
+            } catch (error) {
+                hideSearchProgress();
+                setStatus('No se pudo buscar en el bucket: ' + error.message, 'error');
+                filesTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#fecaca;padding:24px;">Error al buscar archivos.</td></tr>';
+                selectedEntries.clear();
+                updateSelectionUI();
+            }
+        }
+
+        function scheduleSearch() {
+            clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = setTimeout(() => {
+                searchFilesInBucket();
+            }, SEARCH_DEBOUNCE_MS);
+        }
+
+        async function refreshCurrentView() {
+            if (getSearchQuery()) {
+                await searchFilesInBucket();
+                return;
+            }
+
+            await loadFiles();
         }
 
         async function getFileUrl(bucket, objectPath) {
@@ -910,12 +1173,12 @@
 
         function goToFolder(item) {
             folderInput.value = joinPath(folderInput.value, item.name);
-            loadFiles();
+            refreshCurrentView();
         }
 
         function goToRoot() {
             folderInput.value = '';
-            loadFiles();
+            refreshCurrentView();
         }
 
         async function uploadFile() {
@@ -953,7 +1216,7 @@
 
             uploadFileInput.value = '';
             setStatus('Archivo subido correctamente a ' + targetPath, 'success');
-            await loadFiles();
+            await refreshCurrentView();
         }
 
         filesTableBody.addEventListener('click', async (event) => {
@@ -1010,13 +1273,13 @@
             setSelectAllVisible(target.checked);
         });
 
-        document.getElementById('btnLoadFiles').addEventListener('click', loadFiles);
-        document.getElementById('btnRefresh').addEventListener('click', loadFiles);
+        document.getElementById('btnLoadFiles').addEventListener('click', refreshCurrentView);
+        document.getElementById('btnRefresh').addEventListener('click', refreshCurrentView);
         document.getElementById('btnGoRoot').addEventListener('click', goToRoot);
         document.getElementById('btnUploadFile').addEventListener('click', uploadFile);
         btnDownloadSelected.addEventListener('click', downloadSelectedItems);
         btnDownloadFolder.addEventListener('click', downloadCurrentFolder);
-        searchInput.addEventListener('input', applySearchFilter);
+        searchInput.addEventListener('input', scheduleSearch);
 
         updateCurrentPathLabel(bucketInput.value.trim() || '-', '');
         updateSelectionUI();
