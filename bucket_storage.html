@@ -297,6 +297,21 @@
             return normalizedBase || normalizedExtra;
         }
 
+        function resolveObjectPath(currentPath, itemName) {
+            const normalizedCurrent = normalizePath(currentPath);
+            const normalizedItem = normalizePath(itemName);
+
+            if (!normalizedCurrent) return normalizedItem;
+            if (!normalizedItem) return normalizedCurrent;
+
+            const currentPrefix = normalizedCurrent + '/';
+            if (normalizedItem === normalizedCurrent || normalizedItem.startsWith(currentPrefix)) {
+                return normalizedItem;
+            }
+
+            return normalizedCurrent + '/' + normalizedItem;
+        }
+
         function setStatus(message, type) {
             statusLine.textContent = message;
             statusLine.className = 'status-line';
@@ -337,7 +352,66 @@
         }
 
         function getObjectPathFromItem(item) {
-            return joinPath(folderInput.value, item.name);
+            if (item && item.objectPath) {
+                return normalizePath(item.objectPath);
+            }
+            return resolveObjectPath(folderInput.value, item.name);
+        }
+
+        function buildPathCandidates(currentPath, itemName, bucket) {
+            const candidates = [];
+
+            const addCandidate = (value) => {
+                const normalized = normalizePath(value);
+                if (!normalized) return;
+                if (!candidates.includes(normalized)) {
+                    candidates.push(normalized);
+                }
+            };
+
+            const normalizedCurrent = normalizePath(currentPath);
+            const normalizedItem = normalizePath(itemName);
+            addCandidate(resolveObjectPath(normalizedCurrent, normalizedItem));
+            addCandidate(normalizedItem);
+
+            if (normalizedCurrent && normalizedItem) {
+                const currentPrefix = normalizedCurrent + '/';
+                if (normalizedItem.startsWith(currentPrefix)) {
+                    addCandidate(normalizedItem.slice(currentPrefix.length));
+                }
+            }
+
+            const normalizedBucket = normalizePath(bucket);
+            if (normalizedBucket) {
+                const bucketPrefix = normalizedBucket + '/';
+                const snapshot = [...candidates];
+                snapshot.forEach((candidate) => {
+                    if (candidate.startsWith(bucketPrefix)) {
+                        addCandidate(candidate.slice(bucketPrefix.length));
+                    }
+                });
+            }
+
+            return candidates;
+        }
+
+        async function downloadBlobWithCandidates(bucket, candidates) {
+            let lastError = null;
+
+            for (const candidatePath of candidates) {
+                const { data, error } = await supabase
+                    .storage
+                    .from(bucket)
+                    .download(candidatePath);
+
+                if (!error && data) {
+                    return { blob: data, path: candidatePath };
+                }
+
+                lastError = error || new Error('No se recibio contenido del archivo.');
+            }
+
+            throw lastError || new Error('No se pudo descargar el archivo.');
         }
 
         function getVisibleObjectPaths() {
@@ -482,7 +556,10 @@
                         throw error;
                     }
 
-                    const batch = data || [];
+                    const batch = (data || []).map((entry) => ({
+                        ...entry,
+                        objectPath: resolveObjectPath(path, entry.name)
+                    }));
                     allItems = allItems.concat(batch);
 
                     if (!loadAll || batch.length < pageSize) {
@@ -534,24 +611,36 @@
 
         async function openFile(item, downloadMode) {
             const bucket = bucketInput.value.trim();
-            const path = normalizePath(folderInput.value);
-            const objectPath = joinPath(path, item.name);
+            const objectPath = getObjectPathFromItem(item);
+            const candidates = buildPathCandidates(folderInput.value, item.name, bucket);
+            if (objectPath) {
+                candidates.unshift(objectPath);
+            }
+            const uniqueCandidates = [...new Set(candidates.map((value) => normalizePath(value)).filter(Boolean))];
 
             try {
-                setStatus('Generando enlace para ' + item.name + '...', null);
-                const fileUrl = await getFileUrl(bucket, objectPath);
+                setStatus((downloadMode ? 'Descargando ' : 'Abriendo ') + item.name + '...', null);
+                const result = await downloadBlobWithCandidates(bucket, uniqueCandidates);
+                const blob = result.blob;
+                const resolvedPath = result.path;
 
-                const link = document.createElement('a');
-                link.href = fileUrl;
-                link.target = '_blank';
                 if (downloadMode) {
-                    link.download = item.name;
+                    triggerBlobDownload(blob, item.name || getFileNameFromPath(resolvedPath));
+                    setStatus('Descarga iniciada.', 'success');
+                    return;
                 }
+
+                const objectUrl = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = objectUrl;
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
+                setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
 
-                setStatus(downloadMode ? 'Descarga iniciada.' : 'Archivo abierto en nueva pestana.', 'success');
+                setStatus('Archivo abierto en nueva pestana.', 'success');
             } catch (error) {
                 setStatus('No se pudo abrir/descargar: ' + error.message, 'error');
             }
