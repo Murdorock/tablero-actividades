@@ -259,6 +259,14 @@
                 <button class="btn btn-secondary" id="btnDownloadSelected">Descargar seleccionados (.zip)</button>
                 <button class="btn btn-secondary" id="btnDownloadFolder">Descargar carpeta completa (.zip)</button>
                 <span class="selection-pill" id="selectedCount">0 seleccionados</span>
+                <label for="zipBatchSizeInput" style="color:#cbd5e1;font-size:13px;margin-left:4px;">Archivos por ZIP:</label>
+                <select id="zipBatchSizeInput" style="background:#0f172a;color:#e2e8f0;border:1px solid #475569;border-radius:6px;padding:4px 8px;font-size:13px;">
+                    <option value="0">Sin lotes (1 ZIP)</option>
+                    <option value="500">500 por ZIP</option>
+                    <option value="1000" selected>1000 por ZIP</option>
+                    <option value="2000">2000 por ZIP</option>
+                    <option value="5000">5000 por ZIP</option>
+                </select>
             </div>
             <div class="status-line" id="statusLine"></div>
             <div class="search-progress" id="searchProgress">
@@ -331,6 +339,7 @@
         const btnDownloadSelected = document.getElementById('btnDownloadSelected');
         const btnDownloadFolder = document.getElementById('btnDownloadFolder');
         const selectedCount = document.getElementById('selectedCount');
+        const zipBatchSizeInput = document.getElementById('zipBatchSizeInput');
         const selectAllRows = document.getElementById('selectAllRows');
         const searchProgress = document.getElementById('searchProgress');
         const searchProgressFill = document.getElementById('searchProgressFill');
@@ -1054,46 +1063,81 @@
             }
 
             const uniquePaths = [...new Set(filePaths.map((value) => normalizePath(value)).filter(Boolean))];
-            let okCount = 0;
-            let errorCount = 0;
-            const zip = new JSZip();
             const basePath = normalizePath(options.basePath || folderInput.value || '');
-            const zipFileName = options.zipFileName || buildZipFileName(bucket, basePath, options.prefix || 'descarga');
+            const configuredBatch = Math.max(0, Number(zipBatchSizeInput.value) || 0);
+            const batchSize = configuredBatch > 0 ? configuredBatch : uniquePaths.length;
+            const totalBatches = Math.ceil(uniquePaths.length / batchSize);
 
-            setStatus('Preparando ZIP con ' + uniquePaths.length + ' archivo(s)...', null);
+            setStatus('Preparando ' + totalBatches + ' ZIP(s) con ' + uniquePaths.length + ' archivo(s) en total...', null);
 
-            for (let i = 0; i < uniquePaths.length; i += 1) {
-                const filePath = uniquePaths[i];
-                try {
-                    setStatus('Agregando al ZIP: ' + (i + 1) + '/' + uniquePaths.length, null);
-                    const blob = await downloadFileBlob(bucket, filePath);
-                    const entryName = getZipEntryName(filePath, basePath) || getFileNameFromPath(filePath);
-                    zip.file(entryName, blob);
-                    okCount += 1;
-                } catch (error) {
-                    console.error('Error al descargar', filePath, error);
-                    errorCount += 1;
+            let totalOk = 0;
+            let totalErrors = 0;
+
+            for (let batchIndex = 0; batchIndex < totalBatches; batchIndex += 1) {
+                const batchStart = batchIndex * batchSize;
+                const batchPaths = uniquePaths.slice(batchStart, batchStart + batchSize);
+                const partLabel = totalBatches > 1
+                    ? '_parte' + String(batchIndex + 1).padStart(2, '0') + 'de' + String(totalBatches).padStart(2, '0')
+                    : '';
+                const batchPrefix = (options.prefix || 'descarga') + partLabel;
+                const zipFileName = buildZipFileName(bucket, basePath, batchPrefix);
+
+                const zip = new JSZip();
+                let okCount = 0;
+                let errorCount = 0;
+
+                for (let i = 0; i < batchPaths.length; i += 1) {
+                    const filePath = batchPaths[i];
+                    try {
+                        setStatus(
+                            (totalBatches > 1 ? 'Lote ' + (batchIndex + 1) + '/' + totalBatches + ' – ' : '') +
+                            'Agregando al ZIP: ' + (i + 1) + '/' + batchPaths.length, null
+                        );
+                        const blob = await downloadFileBlob(bucket, filePath);
+                        const entryName = getZipEntryName(filePath, basePath) || getFileNameFromPath(filePath);
+                        zip.file(entryName, blob);
+                        okCount += 1;
+                    } catch (error) {
+                        console.error('Error al descargar', filePath, error);
+                        errorCount += 1;
+                    }
+                }
+
+                if (okCount === 0) {
+                    setStatus('Lote ' + (batchIndex + 1) + ': No se pudo descargar ningun archivo.', 'error');
+                    totalErrors += errorCount;
+                    continue;
+                }
+
+                setStatus(
+                    (totalBatches > 1 ? 'Lote ' + (batchIndex + 1) + '/' + totalBatches + ' – ' : '') +
+                    'Generando archivo ZIP...', null
+                );
+                const zipBlob = await zip.generateAsync({
+                    type: 'blob',
+                    compression: 'DEFLATE',
+                    compressionOptions: { level: 6 }
+                });
+
+                triggerBlobDownload(zipBlob, zipFileName);
+                totalOk += okCount;
+                totalErrors += errorCount;
+
+                // Breve pausa entre lotes para no saturar el navegador
+                if (batchIndex < totalBatches - 1) {
+                    await new Promise((resolve) => setTimeout(resolve, 400));
                 }
             }
 
-            if (okCount === 0) {
-                setStatus('No se pudo descargar ningun archivo para crear el ZIP.', 'error');
-                return;
-            }
-
-            setStatus('Generando archivo ZIP...', null);
-            const zipBlob = await zip.generateAsync({
-                type: 'blob',
-                compression: 'DEFLATE',
-                compressionOptions: { level: 6 }
-            });
-
-            triggerBlobDownload(zipBlob, zipFileName);
-
-            if (errorCount > 0) {
-                setStatus('ZIP generado con errores parciales. Incluidos: ' + okCount + ', fallidos: ' + errorCount + '.', 'error');
+            if (totalErrors > 0) {
+                setStatus('ZIP(s) generado(s) con errores parciales. Incluidos: ' + totalOk + ', fallidos: ' + totalErrors + '.', 'error');
             } else {
-                setStatus('ZIP generado correctamente con ' + okCount + ' archivo(s).', 'success');
+                setStatus(
+                    totalBatches > 1
+                        ? 'Se generaron ' + totalBatches + ' ZIPs correctamente con ' + totalOk + ' archivo(s) en total.'
+                        : 'ZIP generado correctamente con ' + totalOk + ' archivo(s).',
+                    'success'
+                );
             }
         }
 
