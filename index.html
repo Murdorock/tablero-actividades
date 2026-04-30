@@ -580,6 +580,22 @@
                 mainContainer.style.display = 'none';
             }
 
+            async function enviarSesionAlModulo() {
+                if (!contentFrame || !contentFrame.contentWindow) return;
+
+                try {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    contentFrame.contentWindow.postMessage({
+                        type: 'SUPABASE_ACCESS_TOKEN',
+                        accessToken: session?.access_token || null
+                    }, '*');
+                } catch (e) {
+                    console.warn('No se pudo enviar la sesion al modulo:', e);
+                }
+            }
+
+            contentFrame.addEventListener('load', enviarSesionAlModulo);
+
             // --- Navegación del Bento Grid ---
             const navCards = document.querySelectorAll('.nav-card');
             navCards.forEach(card => {
@@ -590,6 +606,9 @@
                     // Cargar el módulo
                     contentFrame.src = page;
                     moduleTitle.textContent = title;
+
+                    // Intentar enviar sesion de inmediato; en carga del iframe se reenviara.
+                    enviarSesionAlModulo();
                     
                     // Mostrar vista de módulo
                     dashboardView.classList.add('hidden');
