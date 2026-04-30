@@ -16,6 +16,8 @@
 
     document.addEventListener('DOMContentLoaded', function() {
         loadData();
+        const form = document.getElementById('dataForm');
+        if (form) form.addEventListener('submit', saveRecord);
     });
 
     async function loadData() {
@@ -104,4 +106,54 @@
         });
         renderTable(filteredData);
     }
+
+    function openCreateModal() {
+        document.getElementById('modalTitle').textContent = 'Nuevo Perfil';
+        document.getElementById('recordId').value = '';
+        const formFields = document.getElementById('formFields');
+        formFields.innerHTML = '';
+        const editableColumns = columns.filter(col => col !== 'creado_en' && col !== 'created_at');
+        editableColumns.forEach(col => {
+            const group = document.createElement('div');
+            group.className = 'form-group';
+            const label = document.createElement('label');
+            label.textContent = col.replace(/_/g, ' ').toUpperCase();
+            label.setAttribute('for', 'field_' + col);
+            const input = document.createElement('input');
+            input.type = col === 'email' ? 'email' : 'text';
+            input.id = 'field_' + col;
+            input.name = col;
+            input.required = true;
+            group.appendChild(label);
+            group.appendChild(input);
+            formFields.appendChild(group);
+        });
+        document.getElementById('dataModal').classList.add('show');
+    }
+
+    async function saveRecord(event) {
+        event.preventDefault();
+        const formData = {};
+        const editableColumns = columns.filter(col => col !== 'creado_en' && col !== 'created_at');
+        editableColumns.forEach(col => {
+            const input = document.getElementById('field_' + col);
+            if (input) formData[col] = input.value;
+        });
+        try {
+            const { error } = await supabaseClient.from('perfiles').insert([formData]);
+            if (error) throw error;
+            closeModal();
+            loadData();
+        } catch (err) {
+            alert('Error al guardar: ' + err.message);
+        }
+    }
+
+    function closeModal() {
+        document.getElementById('dataModal').classList.remove('show');
+    }
+
+    window.openCreateModal = openCreateModal;
+    window.closeModal = closeModal;
+    window.loadData = loadData;
 })();
