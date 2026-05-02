@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Certificaciones Reparto - Sistema</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script>
+        const TABLE_NAME = 'certificaciones_reparto';
+        const TABLE_TITLE = '🏅 Certificaciones Reparto';
+    </script>
+    <script src="table-logic-certificaciones_reparto.js"></script>
+</head>
+<body>
+    <div class="table-container">
+        <div class="table-header">
+            <h2>🏅 Certificaciones Reparto</h2>
+            <div class="table-actions">
+                <input id="filterInput" type="text" placeholder="Buscar en la tabla..." style="padding: 8px; border: 1px solid #ddd; border-radius: 6px; min-width: 240px;">
+                <button class="btn btn-secondary" onclick="loadData()">🔄 Actualizar</button>
+                <button class="btn btn-success" onclick="openImportModal()">📤 Cargar Excel</button>
+                <button class="btn btn-primary" onclick="openAssignModal()">🧩 Asignar Ordenes</button>
+                <button class="btn btn-info" onclick="exportToExcel()">📥 Exportar Excel</button>
+            </div>
+        </div>
+
+        <div class="data-table-wrapper">
+            <div id="loadingIndicator" class="loading">
+                <div class="spinner"></div>
+                <p>Cargando...</p>
+            </div>
+            <div id="tableContainer"></div>
+        </div>
+    </div>
+
+    <div id="importModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📤 Cargar Excel de Certificaciones</h3>
+            </div>
+            <div style="padding: 20px;">
+                <p style="margin-bottom: 15px; color: #555;">
+                    Selecciona un archivo Excel (.xlsx) con las columnas requeridas para cargar en certificaciones_reparto.
+                </p>
+                <div class="form-group">
+                    <label for="excelFile">Archivo Excel</label>
+                    <input type="file" id="excelFile" accept=".xlsx" style="padding: 5px;">
+                </div>
+                <div id="importPreview" style="margin-top: 15px; display: none;">
+                    <h4 style="color: #2c3e50; margin-bottom: 10px;">Vista previa</h4>
+                    <div id="previewContent" style="max-height: 300px; overflow: auto; background: #f8f9fa; padding: 10px; border-radius: 4px;"></div>
+                    <p style="margin-top: 10px; font-size: 14px; color: #7f8c8d;">
+                        <strong id="previewCount">0</strong> registros listos para importar
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeImportModal()">Cancelar</button>
+                <button type="button" class="btn btn-success" id="btnImport" onclick="importData()" disabled>Importar Datos</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="assignModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🧩 Asignar Ordenes por Correria</h3>
+            </div>
+            <form id="assignForm" style="padding: 20px;">
+                <p style="margin-bottom: 15px; color: #555;">
+                    Esta accion actualiza la columna funcionario para una correria especifica y solo en filas sin certificacion_nombre_del_cliente.
+                </p>
+                <div class="form-group">
+                    <label for="assignNumeroCorreria">Numero de Correria</label>
+                    <input type="text" id="assignNumeroCorreria" required placeholder="Ej: 12345">
+                </div>
+                <div class="form-group">
+                    <label for="assignFuncionario">Nuevo codigo de Funcionario</label>
+                    <input type="text" id="assignFuncionario" required placeholder="Ej: F000123">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeAssignModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="btnAssign">Asignar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</body>
+</html>
