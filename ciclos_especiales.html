@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ciclos Especiales - Sistema</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script>
+        const TABLE_NAME = 'ciclos_especiales';
+        const TABLE_TITLE = 'CICLOS ESPECIALES';
+    </script>
+    <script src="table-logic-ciclos_especiales.js"></script>
+</head>
+<body>
+    <div class="table-container">
+        <div class="table-header">
+            <h2>CICLOS ESPECIALES</h2>
+            <div class="table-actions">
+                <button class="btn btn-primary" onclick="openCreateModal()">Nuevo</button>
+                <button class="btn btn-secondary" onclick="loadData()">Actualizar</button>
+                <button class="btn btn-success" onclick="exportFilteredToExcel()">Exportar filtrado</button>
+            </div>
+        </div>
+        <div class="data-table-wrapper">
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
+                <input
+                    id="filterSearch"
+                    type="text"
+                    placeholder="Buscar..."
+                    oninput="applyFilter()"
+                    style="min-width: 220px;"
+                >
+                <select id="filterColumn" onchange="applyFilter()" style="min-width: 220px;">
+                    <option value="">Todas las columnas</option>
+                </select>
+                <button class="btn btn-secondary" onclick="clearFilter()">Limpiar filtro</button>
+                <span id="filterResultCount" style="opacity: 0.9;"></span>
+            </div>
+            <div id="loadingIndicator" class="loading"><div class="spinner"></div><p>Cargando...</p></div>
+            <div id="tableContainer"></div>
+        </div>
+    </div>
+
+    <div id="dataModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header"><h3 id="modalTitle">Nuevo Registro</h3></div>
+            <form id="dataForm">
+                <input type="hidden" id="recordId">
+                <div id="formFields"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+</body>
+</html>

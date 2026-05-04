@@ -41,6 +41,18 @@
         .float-animation {
             animation: float 3s ease-in-out infinite;
         }
+        .nav-card.tooltip {
+            position: relative;
+        }
+        .nav-card.tooltip:hover,
+        .nav-card.tooltip.tooltip-open {
+            z-index: 60;
+        }
+        .nav-card.tooltip::before,
+        .nav-card.tooltip::after {
+            z-index: 70;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body class="bg-gray-50">
@@ -400,6 +412,12 @@
                     <h3 class="text-white font-bold text-lg">Reporte Ordenes Pendientes</h3>
                 </div>
 
+                <!-- Ciclos Especiales -->
+                <div class="bento-card nav-card bg-gradient-to-br from-emerald-800 to-slate-950 rounded-2xl p-6 cursor-pointer group hover:shadow-2xl transition-all h-40 flex flex-col justify-between" data-page="ciclos_especiales.html">
+                    <div class="text-4xl">🔁</div>
+                    <h3 class="text-white font-bold text-lg">Ciclos Especiales</h3>
+                </div>
+
             </div>
         </div>
 
@@ -604,6 +622,56 @@
 
             // --- Navegación del Bento Grid ---
             const navCards = document.querySelectorAll('.nav-card');
+
+            const moduleDescriptions = {
+                'aproximados.html': 'Carga una plantilla de la próxima programación con el objetivo que esta pueda ser modificada por los supervisores.',
+                'base.html': 'Carga el archivo de cierre de operación.',
+                'siguiente_base.html': 'Carga el archivo del próximo cierre de jornada, el cual ayuda a que los funcionarios sepan la actividad en la que están programados al día siguiente.',
+                'cmlec.html': 'Carga el archivo donde se puede hacer seguimiento de las descargas pendientes en la actividad de lectura.',
+                'control_descargas.html': 'Ayuda a consultar el estado de la descarga de las correrías de lectura, incluye gráficos y totales agrupados por supervisor.',
+                'controles_reparto.html': 'Permite consultar los controles de entrega de las correrías de reparto el cual se carga desde supabase.',
+                'coordenadas.html': 'Sirve para realizar consultas de las coordenadas de las instalaciones, tiene un hipervínculo que abre Google maps para visualizar donde esta ubicada la instalación.',
+                'generador_rutas.html': 'Genera rutas optimizadas para recorridos.',
+                'evidencias.html': 'Administra evidencias fotograficas y soportes.',
+                'bucket_storage.html': 'Consulta archivos almacenados en el bucket.',
+                'hist_lectura.html': 'Revisa historico detallado de lecturas.',
+                'historicos.html': 'Consulta historicos consolidados del sistema.',
+                'inconsistencias.html': 'Detecta y gestiona inconsistencias de datos.',
+                'llegadas_tarde.html': 'Monitorea reportes de llegadas tarde.',
+                'metricas.html': 'Visualiza metricas clave de desempeno.',
+                'perfiles.html': 'Administra perfiles y configuracion de usuarios.',
+                'personal.html': 'Consulta y gestiona informacion del personal.',
+                'gestion_usuarios.html': 'Crea y administra cuentas de usuarios.',
+                'programacion_lectura.html': 'Gestiona la programacion de lectura.',
+                'programacion_repartida.html': 'Revisa la programacion repartida por zonas.',
+                'siguiente_programacion.html': 'Consulta la siguiente programacion disponible.',
+                'calendario_lectura.html': 'Visualiza el calendario de lecturas.',
+                'quejas.html': 'Registra y da seguimiento a quejas.',
+                'rangos.html': 'Consulta y configura rangos operativos.',
+                'rangos_reparto.html': 'Administra rangos aplicados al reparto.',
+                'refutar_errores.html': 'Refuta errores reportados y gestiona su estado.',
+                'registro_formacion.html': 'Controla el registro de formacion del personal.',
+                'certificaciones_reparto.html': 'Consulta certificaciones del equipo de reparto.',
+                'resumen_descargas.html': 'Muestra un resumen consolidado de descargas.',
+                'resumen_jornada.html': 'Visualiza el resumen de la jornada diaria.',
+                'retenidas.html': 'Gestiona ordenes y casos retenidos.',
+                'secuencia_lectura.html': 'Analiza la secuencia de lectura programada.',
+                'secuencia_sin_lectura.html': 'Detecta secuencias pendientes sin lectura.',
+                'ordenes_generadas.html': 'Consulta ordenes generadas por el sistema.',
+                'reporte_ordenes_pendientes.html': 'Revisa reporte de ordenes pendientes.',
+                'ciclos_especiales.html': 'Consulta y gestiona registros de ciclos especiales.'
+            };
+
+            navCards.forEach(card => {
+                const page = card.getAttribute('data-page');
+                const description = moduleDescriptions[page] || 'Abrir modulo.';
+
+                card.classList.add('tooltip', 'tooltip-bottom');
+                card.setAttribute('data-tip', description);
+                card.setAttribute('title', description);
+                card.setAttribute('aria-label', description);
+            });
+
             navCards.forEach(card => {
                 card.addEventListener('click', function() {
                     const page = this.getAttribute('data-page');
