@@ -3,6 +3,9 @@ let tableColumns = [];
 let currentData = [];
 let currentFilteredData = null;
 let importedData = [];
+let allSupabaseData = null;
+let filterDebounceTimer = null;
+let filterRequestToken = 0;
 
 const REQUIRED_COLUMNS = [
     'funcionario',
@@ -166,7 +169,21 @@ function renderTable(data) {
     tableContainer.innerHTML = html;
 }
 
-function applyFilter() {
+function filterRowsByText(rows, filterText, columns = null) {
+    const normalizedFilter = String(filterText || '').trim().toLowerCase();
+    if (!normalizedFilter) return rows;
+
+    return rows.filter((row) => {
+        const keys = columns && columns.length ? columns : Object.keys(row || {});
+        return keys.some((col) => {
+            const value = row[col];
+            if (value === null || value === undefined) return false;
+            return String(value).toLowerCase().includes(normalizedFilter);
+        });
+    });
+}
+
+async function applyFilter() {
     const filterInput = document.getElementById('filterInput');
     if (!filterInput) return;
 
@@ -177,16 +194,25 @@ function applyFilter() {
         return;
     }
 
-    const filteredData = currentData.filter((row) => {
-        return tableColumns.some((col) => {
-            const value = row[col];
-            if (value === null || value === undefined) return false;
-            return String(value).toLowerCase().includes(filter);
-        });
-    });
+    const currentToken = ++filterRequestToken;
 
-    currentFilteredData = filteredData;
-    renderTable(filteredData);
+    try {
+        if (!allSupabaseData) {
+            showMessage('Buscando en toda la tabla de Supabase...', 'info');
+            allSupabaseData = await fetchAllFromSupabase();
+
+            if (currentToken !== filterRequestToken) {
+                return;
+            }
+        }
+
+        const filteredData = filterRowsByText(allSupabaseData, filter, tableColumns);
+
+        currentFilteredData = filteredData;
+        renderTable(filteredData);
+    } catch (error) {
+        handleError(error, 'al filtrar certificaciones de reparto');
+    }
 }
 
 async function fetchAllFromSupabase() {
@@ -299,6 +325,8 @@ async function loadData() {
         if (error) throw error;
 
         currentData = data || [];
+    allSupabaseData = null;
+    currentFilteredData = null;
 
         if (currentData.length === 0) {
             tableColumns = [];
@@ -626,7 +654,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const assignForm = document.getElementById('assignForm');
 
     if (filterInput) {
-        filterInput.addEventListener('input', applyFilter);
+        filterInput.addEventListener('input', function() {
+            if (filterDebounceTimer) {
+                clearTimeout(filterDebounceTimer);
+            }
+
+            filterDebounceTimer = setTimeout(() => {
+                applyFilter();
+            }, 250);
+        });
     }
 
     if (excelFile) {
