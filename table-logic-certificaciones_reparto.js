@@ -578,15 +578,29 @@ async function assignOrdersByCorreria(numeroCorreria, nuevoFuncionario) {
     try {
         const numeroCorreriaSanitized = sanitizeText(numeroCorreria);
         const nuevoFuncionarioSanitized = sanitizeText(nuevoFuncionario);
+        const fechaCargaDesdeInput = document.getElementById('fechaCargaDesde');
+        const fechaCargaHastaInput = document.getElementById('fechaCargaHasta');
+        const fechaCargaDesde = fechaCargaDesdeInput ? fechaCargaDesdeInput.value : '';
+        const fechaCargaHasta = fechaCargaHastaInput ? fechaCargaHastaInput.value : '';
 
         if (!numeroCorreriaSanitized || !nuevoFuncionarioSanitized) {
             showMessage('Debes ingresar numero de correria y funcionario.', 'error');
             return;
         }
 
+        if (!fechaCargaDesde || !fechaCargaHasta) {
+            showMessage('Para asignar ordenes debes seleccionar un rango completo en FECHA CARGA (desde y hasta).', 'error');
+            return;
+        }
+
+        if (fechaCargaDesde > fechaCargaHasta) {
+            showMessage('El rango de FECHA CARGA no es valido: la fecha desde no puede ser mayor que la fecha hasta.', 'error');
+            return;
+        }
+
         const { data: targetRows, error: targetError } = await supabase
             .from(TABLE_NAME)
-            .select('id_cert_reparto, funcionario, numero_correria, certificacion_nombre_del_cliente')
+            .select('id_cert_reparto, funcionario, numero_correria, certificacion_nombre_del_cliente, fecha_carga')
             .eq('numero_correria', numeroCorreriaSanitized)
             .or('certificacion_nombre_del_cliente.is.null,certificacion_nombre_del_cliente.eq.');
 
@@ -597,7 +611,16 @@ async function assignOrdersByCorreria(numeroCorreria, nuevoFuncionario) {
             return;
         }
 
-        const rowsToAssign = targetRows;
+        const rowsToAssign = targetRows.filter((row) => {
+            const fechaCarga = toIsoDateOnly(row.fecha_carga);
+            if (!fechaCarga) return false;
+            return fechaCarga >= fechaCargaDesde && fechaCarga <= fechaCargaHasta;
+        });
+
+        if (rowsToAssign.length === 0) {
+            showMessage('No hay filas elegibles para esa correria dentro del rango FECHA CARGA seleccionado.', 'error');
+            return;
+        }
 
         const targetIds = rowsToAssign.map((row) => row.id_cert_reparto).filter((id) => id !== null && id !== undefined);
 
@@ -636,7 +659,7 @@ async function assignOrdersByCorreria(numeroCorreria, nuevoFuncionario) {
             console.table(failedRows);
             showMessage(`Asignacion parcial: ${updatedCount} fila(s) actualizadas, ${failedRows.length} con error.`, 'error');
         } else {
-            showMessage(`Asignacion completada para ${updatedCount} fila(s).`, 'success');
+            showMessage(`Asignacion completada para ${updatedCount} fila(s) dentro del rango FECHA CARGA ${fechaCargaDesde} a ${fechaCargaHasta}.`, 'success');
         }
 
         closeAssignModal();
