@@ -14,15 +14,39 @@
     <script src="table-logic-certificaciones_reparto.js"></script>
 </head>
 <body>
-    <div class="table-container">
+    <div class="table-container cert-reparto-page">
         <div class="table-header">
             <h2>🏅 Certificaciones Reparto</h2>
-            <div class="table-actions">
-                <input id="filterInput" type="text" placeholder="Buscar en la tabla..." style="padding: 8px; border: 1px solid #ddd; border-radius: 6px; min-width: 240px;">
-                <button class="btn btn-secondary" onclick="loadData()">🔄 Actualizar</button>
-                <button class="btn btn-success" onclick="openImportModal()">📤 Cargar Excel</button>
-                <button class="btn btn-primary" onclick="openAssignModal()">🧩 Asignar Ordenes</button>
-                <button class="btn btn-info" onclick="exportToExcel()">📥 Exportar Excel</button>
+            <div class="table-actions cert-reparto-actions">
+                <div class="cert-reparto-filters-row">
+                    <input id="filterInput" class="cert-reparto-search" type="text" placeholder="Buscar en la tabla...">
+
+                    <div class="cert-reparto-date-group">
+                        <label for="fechaFinalEjecucionDesde">Fecha Final Ejecucion</label>
+                        <div class="cert-reparto-date-range">
+                            <input id="fechaFinalEjecucionDesde" type="date" title="Desde - Fecha Final Ejecucion">
+                            <span>hasta</span>
+                            <input id="fechaFinalEjecucionHasta" type="date" title="Hasta - Fecha Final Ejecucion">
+                        </div>
+                    </div>
+
+                    <div class="cert-reparto-date-group">
+                        <label for="fechaCargaDesde">Fecha Carga</label>
+                        <div class="cert-reparto-date-range">
+                            <input id="fechaCargaDesde" type="date" title="Desde - Fecha Carga">
+                            <span>hasta</span>
+                            <input id="fechaCargaHasta" type="date" title="Hasta - Fecha Carga">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cert-reparto-buttons-row">
+                    <button class="btn btn-secondary" onclick="clearDateFilters()">🧹 Limpiar Fechas</button>
+                    <button class="btn btn-secondary" onclick="loadData()">🔄 Actualizar</button>
+                    <button class="btn btn-success" onclick="openImportModal()">📤 Cargar Excel</button>
+                    <button class="btn btn-primary" onclick="openAssignModal()">🧩 Asignar Ordenes</button>
+                    <button class="btn btn-info" onclick="exportToExcel()">📥 Exportar Excel</button>
+                </div>
             </div>
         </div>
 

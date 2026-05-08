@@ -7,6 +7,19 @@ let allSupabaseData = null;
 let filterDebounceTimer = null;
 let filterRequestToken = 0;
 
+const DATE_RANGE_FILTERS = [
+    {
+        fromInputId: 'fechaFinalEjecucionDesde',
+        toInputId: 'fechaFinalEjecucionHasta',
+        preferredColumns: ['fecha_final_ejecucion', 'fecha final ejecucion']
+    },
+    {
+        fromInputId: 'fechaCargaDesde',
+        toInputId: 'fechaCargaHasta',
+        preferredColumns: ['fecha_carga', 'fecha carga']
+    }
+];
+
 const REQUIRED_COLUMNS = [
     'funcionario',
     'numero_correria',
@@ -183,12 +196,137 @@ function filterRowsByText(rows, filterText, columns = null) {
     });
 }
 
+function normalizeFieldName(value) {
+    return String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[_\s]+/g, '_')
+        .trim();
+}
+
+function toIsoDateOnly(value) {
+    if (value === null || value === undefined || value === '') return null;
+
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        const y = value.getFullYear();
+        const m = String(value.getMonth() + 1).padStart(2, '0');
+        const d = String(value.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
+    const raw = String(value).trim();
+    const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+
+    const dmyMatch = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (dmyMatch) return `${dmyMatch[3]}-${dmyMatch[2]}-${dmyMatch[1]}`;
+
+    const parsed = new Date(raw);
+    if (!Number.isNaN(parsed.getTime())) {
+        const y = parsed.getFullYear();
+        const m = String(parsed.getMonth() + 1).padStart(2, '0');
+        const d = String(parsed.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
+    return null;
+}
+
+function readDateRangeFilterValues() {
+    return DATE_RANGE_FILTERS.map((config) => {
+        const fromInput = document.getElementById(config.fromInputId);
+        const toInput = document.getElementById(config.toInputId);
+        return {
+            ...config,
+            from: fromInput ? fromInput.value : '',
+            to: toInput ? toInput.value : ''
+        };
+    });
+}
+
+function hasActiveDateRangeFilters(dateRangeFilters) {
+    return dateRangeFilters.some((filter) => filter.from || filter.to);
+}
+
+function resolveDateColumns(rows, dateRangeFilters) {
+    if (!rows || rows.length === 0) return new Map();
+
+    const availableColumns = Object.keys(rows[0]);
+    const normalizedColumns = availableColumns.map((column) => ({
+        original: column,
+        normalized: normalizeFieldName(column)
+    }));
+
+    const resolved = new Map();
+    dateRangeFilters.forEach((filter) => {
+        const preferredNormalized = filter.preferredColumns.map((name) => normalizeFieldName(name));
+        const found = normalizedColumns.find((col) => preferredNormalized.includes(col.normalized));
+        if (found) {
+            resolved.set(filter.fromInputId, found.original);
+        }
+    });
+
+    return resolved;
+}
+
+function applyDateRangeFilters(rows, dateRangeFilters) {
+    if (!hasActiveDateRangeFilters(dateRangeFilters)) return rows;
+
+    const resolvedColumns = resolveDateColumns(rows, dateRangeFilters);
+
+    return rows.filter((row) => {
+        return dateRangeFilters.every((filter) => {
+            if (!filter.from && !filter.to) return true;
+
+            const dateColumn = resolvedColumns.get(filter.fromInputId);
+            if (!dateColumn) return false;
+
+            const rowDate = toIsoDateOnly(row[dateColumn]);
+            if (!rowDate) return false;
+
+            if (filter.from && rowDate < filter.from) return false;
+            if (filter.to && rowDate > filter.to) return false;
+            return true;
+        });
+    });
+}
+
+function applyCombinedFilters(rows, filterText, dateRangeFilters, columns = null) {
+    const textFiltered = filterRowsByText(rows, filterText, columns);
+    return applyDateRangeFilters(textFiltered, dateRangeFilters);
+}
+
+function scheduleApplyFilter() {
+    if (filterDebounceTimer) {
+        clearTimeout(filterDebounceTimer);
+    }
+
+    filterDebounceTimer = setTimeout(() => {
+        applyFilter();
+    }, 250);
+}
+
+function clearDateFilters() {
+    DATE_RANGE_FILTERS.forEach((config) => {
+        const fromInput = document.getElementById(config.fromInputId);
+        const toInput = document.getElementById(config.toInputId);
+        if (fromInput) fromInput.value = '';
+        if (toInput) toInput.value = '';
+    });
+
+    applyFilter();
+}
+
 async function applyFilter() {
     const filterInput = document.getElementById('filterInput');
     if (!filterInput) return;
 
     const filter = filterInput.value.trim().toLowerCase();
-    if (!filter) {
+    const dateRangeFilters = readDateRangeFilterValues();
+    const hasAnyFilter = Boolean(filter) || hasActiveDateRangeFilters(dateRangeFilters);
+
+    if (!hasAnyFilter) {
         currentFilteredData = null;
         renderTable(currentData);
         return;
@@ -206,7 +344,8 @@ async function applyFilter() {
             }
         }
 
-        const filteredData = filterRowsByText(allSupabaseData, filter, tableColumns);
+        const columns = allSupabaseData.length ? Object.keys(allSupabaseData[0]) : tableColumns;
+        const filteredData = applyCombinedFilters(allSupabaseData, filter, dateRangeFilters, columns);
 
         currentFilteredData = filteredData;
         renderTable(filteredData);
@@ -253,6 +392,8 @@ async function exportToExcel() {
     try {
         const filterInput = document.getElementById('filterInput');
         const filterText = filterInput ? filterInput.value.trim().toLowerCase() : '';
+        const dateRangeFilters = readDateRangeFilterValues();
+        const hasAnyFilter = Boolean(filterText) || hasActiveDateRangeFilters(dateRangeFilters);
 
         showMessage('Descargando todos los registros de Supabase...', 'info');
         const allRows = await fetchAllFromSupabase();
@@ -262,15 +403,9 @@ async function exportToExcel() {
             return;
         }
 
-        // Aplicar el mismo filtro de texto sobre el total completo
-        const dataToExport = filterText
-            ? allRows.filter((row) => {
-                return Object.values(row).some((value) => {
-                    if (value === null || value === undefined) return false;
-                    return String(value).toLowerCase().includes(filterText);
-                });
-            })
-            : allRows;
+        // Aplicar los mismos filtros activos de la vista (texto y rangos de fecha)
+        const columns = allRows.length ? Object.keys(allRows[0]) : tableColumns;
+        const dataToExport = applyCombinedFilters(allRows, filterText, dateRangeFilters, columns);
 
         if (!dataToExport.length) {
             showMessage('El filtro no encontro registros para exportar.', 'error');
@@ -293,7 +428,7 @@ async function exportToExcel() {
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, 'Certificaciones');
 
-        const filtro = filterText ? '_filtrado' : '';
+        const filtro = hasAnyFilter ? '_filtrado' : '';
         const fecha = new Date().toISOString().slice(0, 10);
         const fileName = `certificaciones_reparto${filtro}_${fecha}.xlsx`;
 
@@ -325,8 +460,8 @@ async function loadData() {
         if (error) throw error;
 
         currentData = data || [];
-    allSupabaseData = null;
-    currentFilteredData = null;
+        allSupabaseData = null;
+        currentFilteredData = null;
 
         if (currentData.length === 0) {
             tableColumns = [];
@@ -652,18 +787,22 @@ document.addEventListener('DOMContentLoaded', function() {
     const filterInput = document.getElementById('filterInput');
     const excelFile = document.getElementById('excelFile');
     const assignForm = document.getElementById('assignForm');
+    const dateInputs = DATE_RANGE_FILTERS.flatMap((config) => [
+        document.getElementById(config.fromInputId),
+        document.getElementById(config.toInputId)
+    ]).filter(Boolean);
 
     if (filterInput) {
         filterInput.addEventListener('input', function() {
-            if (filterDebounceTimer) {
-                clearTimeout(filterDebounceTimer);
-            }
-
-            filterDebounceTimer = setTimeout(() => {
-                applyFilter();
-            }, 250);
+            scheduleApplyFilter();
         });
     }
+
+    dateInputs.forEach((input) => {
+        input.addEventListener('change', function() {
+            scheduleApplyFilter();
+        });
+    });
 
     if (excelFile) {
         excelFile.addEventListener('change', function(event) {
