@@ -3,127 +3,136 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Resumen Repartida - Sistema</title>
+    <title>Resumen Repartida</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="config.js"></script>
-    <script>const TABLE_NAME = 'programacion_reparto'; const TABLE_TITLE = '📊 Resumen Repartida';</script>
     <script src="table-logic-resumen_repartida.js"></script>
     <style>
-        .resumen-kpi-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 12px;
-            margin-bottom: 16px;
-        }
-
-        .resumen-kpi-card,
-        .resumen-chart-card {
+        .section-block {
             background: #1e293b;
             border: 1px solid #334155;
             border-radius: 12px;
-            padding: 14px;
+            padding: 20px;
+            margin-bottom: 28px;
         }
-
-        .resumen-kpi-card {
-            border-left: 4px solid #475569;
-        }
-
-        .resumen-kpi-label {
-            font-size: 12px;
-            color: #94a3b8;
-            margin-bottom: 6px;
-        }
-
-        .resumen-kpi-value {
-            font-size: 22px;
-            font-weight: 700;
+        .section-block h2 {
             color: #f1f5f9;
-            line-height: 1.1;
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 14px;
         }
-
-        .resumen-kpi-sub {
-            color: #cbd5e1;
-            font-size: 12px;
-            margin-top: 4px;
-        }
-
-        .resumen-charts-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-            margin-bottom: 16px;
-        }
-
-        .resumen-chart-card h3 {
-            margin: 0 0 12px;
-            color: #e2e8f0;
-            font-size: 14px;
-            font-weight: 600;
-        }
-
-        .resumen-chart-box {
-            background: #0f172a;
+        .rr-search {
+            width: 100%;
+            padding: 9px 14px;
             border: 1px solid #334155;
-            border-radius: 10px;
-            padding: 10px;
-            min-height: 280px;
+            border-radius: 6px;
+            background: #0f172a;
+            color: #f1f5f9;
+            font-size: 14px;
+            margin-bottom: 10px;
+            box-sizing: border-box;
         }
-
-        @media (max-width: 1200px) {
-            .resumen-charts-grid {
-                grid-template-columns: 1fr;
-            }
+        .rr-search::placeholder { color: #64748b; }
+        .rr-search:focus { outline: none; border-color: #3b82f6; }
+        .rr-select {
+            padding: 9px 14px;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            background: #0f172a;
+            color: #f1f5f9;
+            font-size: 14px;
+            min-width: 220px;
+            margin-bottom: 10px;
+            cursor: pointer;
+        }
+        .rr-select:focus { outline: none; border-color: #3b82f6; }
+        .rr-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .rr-table th {
+            background: #0f172a;
+            color: #94a3b8;
+            font-weight: 600;
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid #334155;
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        .rr-table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid #263244;
+            color: #e2e8f0;
+        }
+        .rr-table tbody tr:hover { background: #1e3a5f; }
+        .rr-scroll {
+            overflow-x: auto;
+            max-height: 420px;
+            overflow-y: auto;
+            border-radius: 8px;
+            border: 1px solid #334155;
+        }
+        .rr-empty { text-align: center; padding: 30px; color: #64748b; font-size: 14px; }
+        .rr-loading { text-align: center; padding: 30px; color: #94a3b8; font-size: 14px; }
+        .rr-count { font-size: 12px; color: #64748b; margin-bottom: 8px; }
+        .c-cert { color: #34d399; font-weight: 600; }
+        .c-ctrl { color: #60a5fa; font-weight: 600; }
+        .c-paq  { color: #f59e0b; font-weight: 600; }
+        .rr-toolbar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
         }
     </style>
 </head>
 <body>
     <div class="table-container">
-        <div class="table-header">
-            <h2>📊 Resumen Repartida</h2>
-            <div class="table-actions">
-                <button class="btn btn-primary" onclick="abrirModalCompacto()">📱 Compacto</button>
-                <button class="btn btn-success" onclick="exportarTablas()">📥 Exportar</button>
-                <button class="btn btn-secondary" onclick="loadData()">🔄 Actualizar</button>
-            </div>
-        </div>
-        <div id="summaryDashboard" style="display: none;">
-            <div id="summaryKpis" class="resumen-kpi-grid"></div>
-            <div class="resumen-charts-grid">
-                <div class="resumen-chart-card">
-                    <h3>Correrias, Controles y Certificaciones por Supervisor</h3>
-                    <div class="resumen-chart-box">
-                        <canvas id="chart-registro-supervisores"></canvas>
-                    </div>
-                </div>
-                <div class="resumen-chart-card">
-                    <h3>Entrega Total y Promedio por Supervisor</h3>
-                    <div class="resumen-chart-box">
-                        <canvas id="chart-descargas-supervisores"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="data-table-wrapper">
-            <div id="loadingIndicator" class="loading"><div class="spinner"></div><p>Cargando...</p></div>
-            <div id="tableContainer"></div>
-        </div>
-    </div>
 
-    <!-- Modal Resumen Compacto -->
-    <div id="modalCompacto" class="modal" style="display: none;">
-        <div class="modal-content" style="max-width: 95vw; max-height: 95vh; overflow: auto; background: #1e293b;">
-            <div class="modal-header" style="background: #475569; color: white; padding: 1rem; display: flex; justify-content: space-between; align-items: center;">
-                <h3 style="margin: 0;">📊 Repartida Compacta para Compartir</h3>
-                <span class="close" onclick="cerrarModalCompacto()" style="cursor: pointer; font-size: 1.5rem;">&times;</span>
+        <!-- TABLA 0: Resumen agrupado por supervisor -->
+        <div class="section-block" id="summaryExportSection">
+            <h2>Resumen por Supervisor</h2>
+            <div class="rr-toolbar">
+                <button class="btn btn-info" id="exportSummaryImageBtn" type="button" onclick="exportSummaryAsImage()">Exportar imagen</button>
             </div>
-            <div class="modal-body" id="modalCompactoBody" style="padding: 1rem; background: #1e293b;">
-                <!-- Contenido generado dinámicamente -->
+            <div class="rr-count" id="countT0"></div>
+            <div class="rr-scroll">
+                <div id="table0Container" class="rr-loading">Cargando...</div>
             </div>
         </div>
+
+        <!-- TABLA 1: Consulta por correria/codigo -->
+        <div class="section-block">
+            <h2>Resumen Repartida</h2>
+            <input type="text" id="searchT1" class="rr-search" placeholder="Buscar por ID Correria o Codigo...">
+            <div class="rr-count" id="countT1"></div>
+            <div class="rr-scroll">
+                <div id="table1Container" class="rr-loading">Cargando...</div>
+            </div>
+        </div>
+
+        <!-- TABLA 2: Detalle por supervisor cruzado con certificaciones -->
+        <div class="section-block" id="detailExportSection">
+            <h2>Detalle por Supervisor</h2>
+            <div class="rr-toolbar">
+                <select id="supSelect" class="rr-select">
+                    <option value="">-- Seleccione un supervisor --</option>
+                </select>
+                <button class="btn btn-info" id="exportDetailImageBtn" type="button" onclick="exportDetailAsImage()">Exportar imagen</button>
+            </div>
+            <div class="rr-count" id="countT2"></div>
+            <div class="rr-scroll">
+                <div id="table2Container" class="rr-empty">Seleccione un supervisor para ver el detalle.</div>
+            </div>
+        </div>
+
     </div>
 </body>
 </html>

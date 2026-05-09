@@ -1,754 +1,532 @@
-// Logica especifica para Resumen Repartida
-const PRIMARY_KEY = 'sup';
-// TABLE_NAME y TABLE_TITLE se definen en el HTML
+﻿// Resumen Repartida - logica limpia
+let allT0Data = [];
+let allT1Data = [];
+const DETAIL_TYPES = ['CERTIFICACION', 'CONTROL ENTREGA', 'PAQUETE ENTREGA'];
 
-let supervisoresData = [];
-let detalleRepartidaData = [];
-let detalleSearchTerm = '';
-let isLoading = false;
-const summaryChartInstances = {};
-
-function toNumber(value) {
-    if (value === null || value === undefined || value === '') return 0;
-    const normalized = String(value).replace(/,/g, '.').trim();
-    const num = Number(normalized);
-    return Number.isFinite(num) ? num : 0;
-}
-
-function formatNumber(value, decimals = 0) {
-    return Number(value || 0).toLocaleString('es-ES', {
-        minimumFractionDigits: decimals,
-        maximumFractionDigits: decimals
-    });
-}
-
-function normalizeKey(value) {
-    if (value === null || value === undefined) return '';
-    return String(value).trim().toUpperCase();
-}
-
-function hasTextValue(value) {
-    if (value === null || value === undefined) return false;
-    return String(value).trim() !== '';
-}
-
-async function loadData() {
-    console.log('Cargando datos de supervisores desde', TABLE_NAME);
-    const loadingIndicator = document.getElementById('loadingIndicator');
-    const tableContainer = document.getElementById('tableContainer');
-
-    if (!loadingIndicator || !tableContainer) {
-        console.error('Elementos DOM no encontrados');
-        return;
-    }
-
-    if (isLoading) {
-        console.log('Ya hay una carga en proceso');
-        return;
-    }
-
-    try {
-        isLoading = true;
-        loadingIndicator.style.display = 'block';
-        tableContainer.innerHTML = '';
-        clearSummaryDashboard();
-
-        const { data, error } = await supabase
-            .from(TABLE_NAME)
-            .select('sup, codigo, id_correria, controles, certificaciones, entrega')
-            .limit(10000);
-
-        if (error) {
-            throw error;
-        }
-
-        const { data: certificacionesData, error: certificacionesError } = await supabase
-            .from('certificaciones_reparto')
-            .select('numero_correria, nombre_correria, certificacion_nombre_del_cliente')
-            .limit(50000);
-
-        if (certificacionesError) {
-            throw certificacionesError;
-        }
-
-        const controlEntregaByCorreria = {};
-        const certificacionesByCorreria = {};
-        const paqueteEntregaByCorreria = {};
-
-        (certificacionesData || []).forEach(row => {
-            const nombreCorreria = String(row?.nombre_correria || '').toUpperCase();
-            const correriaKey = normalizeKey(row?.numero_correria);
-            if (!correriaKey) return;
-
-            if (nombreCorreria.includes('CONTROL ENTREGA')) {
-                if (!controlEntregaByCorreria[correriaKey]) {
-                    controlEntregaByCorreria[correriaKey] = { total: 0, realizados: 0 };
-                }
-
-                controlEntregaByCorreria[correriaKey].total += 1;
-                if (hasTextValue(row?.certificacion_nombre_del_cliente)) {
-                    controlEntregaByCorreria[correriaKey].realizados += 1;
-                }
-            }
-
-            if (nombreCorreria.includes('CERTIFICACIONES')) {
-                if (!certificacionesByCorreria[correriaKey]) {
-                    certificacionesByCorreria[correriaKey] = { total: 0, realizados: 0 };
-                }
-
-                certificacionesByCorreria[correriaKey].total += 1;
-                if (hasTextValue(row?.certificacion_nombre_del_cliente)) {
-                    certificacionesByCorreria[correriaKey].realizados += 1;
-                }
-            }
-
-            if (nombreCorreria.includes('PAQUETE ENTREGA')) {
-                if (!paqueteEntregaByCorreria[correriaKey]) {
-                    paqueteEntregaByCorreria[correriaKey] = { total: 0, realizados: 0 };
-                }
-
-                paqueteEntregaByCorreria[correriaKey].total += 1;
-                if (hasTextValue(row?.certificacion_nombre_del_cliente)) {
-                    paqueteEntregaByCorreria[correriaKey].realizados += 1;
-                }
-            }
-        });
-
-        const aggregateBySup = {};
-        detalleRepartidaData = [];
-
-        (data || []).forEach(row => {
-            const supRaw = row?.sup;
-            if (!supRaw || String(supRaw).trim() === '') return;
-
-            const sup = String(supRaw).trim();
-            if (!aggregateBySup[sup]) {
-                aggregateBySup[sup] = {
-                    supervisor: sup,
-                    cantidad: 0,
-                    controles: 0,
-                    certificaciones: 0,
-                    entrega: 0
-                };
-            }
-
-            const controlesValor = Math.round(toNumber(row?.controles));
-            const certificacionesValor = Math.round(toNumber(row?.certificaciones));
-            const entregaValor = Math.round(toNumber(row?.entrega));
-
-            aggregateBySup[sup].cantidad += 1;
-            aggregateBySup[sup].controles += controlesValor;
-            aggregateBySup[sup].certificaciones += certificacionesValor;
-            aggregateBySup[sup].entrega += entregaValor;
-
-            const idCorreria = row?.id_correria ?? '-';
-            const correriaKey = normalizeKey(idCorreria);
-            const statsControl = controlEntregaByCorreria[correriaKey] || { total: 0, realizados: 0 };
-            const statsCertificaciones = certificacionesByCorreria[correriaKey] || { total: 0, realizados: 0 };
-            const statsPaqueteEntrega = paqueteEntregaByCorreria[correriaKey] || { total: 0, realizados: 0 };
-            const realizadosControlEntrega = Math.round(statsControl.realizados || 0);
-            const realizadosCertificaciones = Math.round(statsCertificaciones.realizados || 0);
-            const realizadosEntrega = Math.round(statsPaqueteEntrega.realizados || 0);
-            const pendientesControles = Math.max(controlesValor - realizadosControlEntrega, 0);
-            const pendientesCertificaciones = Math.max(certificacionesValor - realizadosCertificaciones, 0);
-            const pendientesEntrega = Math.max(entregaValor - realizadosEntrega, 0);
-
-            detalleRepartidaData.push({
-                sup,
-                codigo: row?.codigo ?? '-',
-                id_correria: idCorreria,
-                controles: controlesValor,
-                certificaciones: certificacionesValor,
-                entrega: entregaValor,
-                realizados_control_entrega: realizadosControlEntrega,
-                realizados_certificaciones: realizadosCertificaciones,
-                realizados_entrega: realizadosEntrega,
-                pendientes_controles: pendientesControles,
-                pendientes_certificaciones: pendientesCertificaciones,
-                pendientes_entrega: pendientesEntrega
-            });
-        });
-
-        supervisoresData = Object.values(aggregateBySup).map(item => ({
-            ...item,
-            promedioEntrega: item.cantidad > 0 ? item.entrega / item.cantidad : 0
-        }));
-
-        supervisoresData.sort((a, b) => a.supervisor.localeCompare(b.supervisor));
-        renderTable();
-    } catch (error) {
-        console.error('Error al cargar datos:', error);
-
-        const errorMessage = error?.message || 'Error desconocido';
-        clearSummaryDashboard();
-
-        tableContainer.innerHTML = `
-            <div class="error-message" style="text-align: center; padding: 2rem; color: #dc3545;">
-                <h3>Error al cargar los datos</h3>
-                <p><strong>Mensaje:</strong> ${errorMessage}</p>
-                <p><strong>Tabla:</strong> ${TABLE_NAME}</p>
-                <button onclick="loadData()" class="btn btn-primary" style="margin-top: 1rem;">Reintentar</button>
-            </div>
-        `;
-    } finally {
-        isLoading = false;
-        loadingIndicator.style.display = 'none';
-    }
-}
-
-function destroySummaryChart(chartId) {
-    if (summaryChartInstances[chartId]) {
-        summaryChartInstances[chartId].destroy();
-        delete summaryChartInstances[chartId];
-    }
-}
-
-function clearSummaryDashboard() {
-    const dashboard = document.getElementById('summaryDashboard');
-    const summaryKpis = document.getElementById('summaryKpis');
-
-    destroySummaryChart('chart-registro-supervisores');
-    destroySummaryChart('chart-descargas-supervisores');
-
-    if (summaryKpis) {
-        summaryKpis.innerHTML = '';
-    }
-
-    if (dashboard) {
-        dashboard.style.display = 'none';
-    }
-}
-
-function renderSummaryDashboard(data) {
-    const dashboard = document.getElementById('summaryDashboard');
-    const summaryKpis = document.getElementById('summaryKpis');
-
-    if (!dashboard || !summaryKpis || !data || data.length === 0) {
-        clearSummaryDashboard();
-        return;
-    }
-
-    const totalSupervisores = data.length;
-    const totalCantidad = data.reduce((sum, item) => sum + item.cantidad, 0);
-    const totalControles = data.reduce((sum, item) => sum + item.controles, 0);
-    const totalCertificaciones = data.reduce((sum, item) => sum + item.certificaciones, 0);
-    const totalEntrega = data.reduce((sum, item) => sum + item.entrega, 0);
-    const promedioEntregaGlobal = totalCantidad > 0 ? totalEntrega / totalCantidad : 0;
-
-    summaryKpis.innerHTML = `
-        <div class="resumen-kpi-card">
-            <div class="resumen-kpi-label">Supervisores</div>
-            <div class="resumen-kpi-value">${formatNumber(totalSupervisores)}</div>
-            <div class="resumen-kpi-sub">Con dato en ${PRIMARY_KEY}</div>
-        </div>
-        <div class="resumen-kpi-card">
-            <div class="resumen-kpi-label">Correrias asignadas</div>
-            <div class="resumen-kpi-value">${formatNumber(totalCantidad)}</div>
-            <div class="resumen-kpi-sub">Conteo de filas por supervisor</div>
-        </div>
-        <div class="resumen-kpi-card">
-            <div class="resumen-kpi-label">Controles (suma)</div>
-            <div class="resumen-kpi-value">${formatNumber(totalControles)}</div>
-            <div class="resumen-kpi-sub">Sumatoria de columna controles</div>
-        </div>
-        <div class="resumen-kpi-card">
-            <div class="resumen-kpi-label">Certificaciones (suma)</div>
-            <div class="resumen-kpi-value">${formatNumber(totalCertificaciones)}</div>
-            <div class="resumen-kpi-sub">Sumatoria de columna certificaciones</div>
-        </div>
-        <div class="resumen-kpi-card">
-            <div class="resumen-kpi-label">Entrega (suma)</div>
-            <div class="resumen-kpi-value">${formatNumber(totalEntrega)}</div>
-            <div class="resumen-kpi-sub">Sumatoria de columna entrega</div>
-        </div>
-        <div class="resumen-kpi-card">
-            <div class="resumen-kpi-label">Entrega promedio por correria</div>
-            <div class="resumen-kpi-value">${formatNumber(promedioEntregaGlobal, 2)}</div>
-            <div class="resumen-kpi-sub">Total entrega / total correrias</div>
-        </div>
-    `;
-
-    renderAsignacionChart(data);
-    renderEntregaChart(data);
-    dashboard.style.display = 'block';
-}
-
-function getSummaryChartOptions(titleText) {
+function emptyTypeCounts() {
     return {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: {
-            mode: 'index',
-            intersect: false
-        },
-        plugins: {
-            legend: {
-                labels: { color: '#e2e8f0' }
-            },
-            title: {
-                display: true,
-                text: titleText,
-                color: '#e2e8f0'
-            }
-        },
-        scales: {
-            x: {
-                ticks: { color: '#cbd5e1' },
-                grid: { color: 'rgba(148, 163, 184, 0.12)' }
-            },
-            y: {
-                beginAtZero: true,
-                ticks: { color: '#cbd5e1' },
-                grid: { color: 'rgba(148, 163, 184, 0.12)' },
-                title: {
-                    display: true,
-                    text: 'Valor',
-                    color: '#cbd5e1'
-                }
-            }
-        }
+        CERTIFICACION: { total: 0, real: 0 },
+        'CONTROL ENTREGA': { total: 0, real: 0 },
+        'PAQUETE ENTREGA': { total: 0, real: 0 }
     };
 }
 
-function renderAsignacionChart(data) {
-    const chartId = 'chart-registro-supervisores';
-    const canvas = document.getElementById(chartId);
-    if (!canvas) return;
+async function fetchCertificationRows(ids) {
+    if (!ids || ids.length === 0) return [];
 
-    const labels = data.map(item => item.supervisor);
+    const PAGE = 1000;
+    let allCert = [];
+    let pg = 0;
 
-    destroySummaryChart(chartId);
-    summaryChartInstances[chartId] = new Chart(canvas, {
-        type: 'bar',
-        data: {
-            labels,
-            datasets: [
-                {
-                    label: 'Correrias asignadas',
-                    data: data.map(item => item.cantidad),
-                    backgroundColor: 'rgba(59, 130, 246, 0.72)',
-                    borderColor: 'rgba(59, 130, 246, 1)',
-                    borderWidth: 1
-                },
-                {
-                    label: 'Controles',
-                    data: data.map(item => item.controles),
-                    backgroundColor: 'rgba(34, 197, 94, 0.72)',
-                    borderColor: 'rgba(34, 197, 94, 1)',
-                    borderWidth: 1
-                },
-                {
-                    label: 'Certificaciones',
-                    data: data.map(item => item.certificaciones),
-                    backgroundColor: 'rgba(234, 179, 8, 0.72)',
-                    borderColor: 'rgba(234, 179, 8, 1)',
-                    borderWidth: 1
-                }
-            ]
-        },
-        options: getSummaryChartOptions('Correrias, controles y certificaciones por supervisor')
-    });
-}
+    while (true) {
+        const { data: certPage, error: certErr } = await supabase
+            .from('certificaciones_reparto')
+            .select('numero_correria, nombre_correria, certificacion_nombre_del_cliente')
+            .in('numero_correria', ids)
+            .range(pg * PAGE, (pg + 1) * PAGE - 1);
 
-function renderEntregaChart(data) {
-    const chartId = 'chart-descargas-supervisores';
-    const canvas = document.getElementById(chartId);
-    if (!canvas) return;
+        if (certErr) throw certErr;
+        if (!certPage || certPage.length === 0) break;
 
-    const labels = data.map(item => item.supervisor);
-
-    destroySummaryChart(chartId);
-    summaryChartInstances[chartId] = new Chart(canvas, {
-        type: 'bar',
-        data: {
-            labels,
-            datasets: [
-                {
-                    label: 'Entrega (suma)',
-                    data: data.map(item => item.entrega),
-                    backgroundColor: 'rgba(236, 72, 153, 0.72)',
-                    borderColor: 'rgba(236, 72, 153, 1)',
-                    borderWidth: 1
-                },
-                {
-                    type: 'line',
-                    label: 'Entrega promedio por correria',
-                    data: data.map(item => item.promedioEntrega),
-                    borderColor: 'rgba(56, 189, 248, 1)',
-                    backgroundColor: 'rgba(56, 189, 248, 0.2)',
-                    tension: 0.25,
-                    fill: false
-                }
-            ]
-        },
-        options: getSummaryChartOptions('Entrega total y promedio por supervisor')
-    });
-}
-
-function renderTable() {
-    const tableContainer = document.getElementById('tableContainer');
-
-    if (supervisoresData.length === 0) {
-        clearSummaryDashboard();
-        detalleRepartidaData = [];
-        tableContainer.innerHTML = `
-            <div class="empty-state" style="text-align: center; padding: 3rem;">
-                <h3>No hay datos</h3>
-                <p>No se encontraron supervisores con valor en ${PRIMARY_KEY}</p>
-                <button onclick="loadData()" class="btn btn-primary">Actualizar</button>
-            </div>
-        `;
-        return;
+        allCert = allCert.concat(certPage);
+        if (certPage.length < PAGE) break;
+        pg++;
     }
 
-    const totalCantidad = supervisoresData.reduce((sum, item) => sum + item.cantidad, 0);
-    const totalControles = supervisoresData.reduce((sum, item) => sum + item.controles, 0);
-    const totalCertificaciones = supervisoresData.reduce((sum, item) => sum + item.certificaciones, 0);
-    const totalEntrega = supervisoresData.reduce((sum, item) => sum + item.entrega, 0);
-    const promedioEntregaGlobal = totalCantidad > 0 ? totalEntrega / totalCantidad : 0;
-
-    renderSummaryDashboard(supervisoresData);
-
-    let tableHTML = `
-        <div class="table-info" style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
-            <span class="record-count">Supervisores: ${formatNumber(supervisoresData.length)}</span>
-            <span class="record-count">Correrias: ${formatNumber(totalCantidad)}</span>
-        </div>
-        <div style="overflow-x: auto;">
-            <table class="data-table" style="width: 100%; border-collapse: collapse;">
-                <thead>
-                    <tr style="background-color: #475569;">
-                        <th style="padding: 0.75rem; border: 1px solid #475569; text-align: left; color: #f1f5f9; font-weight: bold;">Supervisor</th>
-                        <th style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #f1f5f9; font-weight: bold;">Correrias asignadas</th>
-                        <th style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #f1f5f9; font-weight: bold;">Controles (suma)</th>
-                        <th style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #f1f5f9; font-weight: bold;">Certificaciones (suma)</th>
-                        <th style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #f1f5f9; font-weight: bold;">Entrega (suma)</th>
-                        <th style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #f1f5f9; font-weight: bold;">Entrega promedio</th>
-                    </tr>
-                </thead>
-                <tbody>
-    `;
-
-    supervisoresData.forEach((item, index) => {
-        tableHTML += `
-            <tr style="background: ${index % 2 === 0 ? '#1e293b' : '#334155'};">
-                <td style="padding: 0.75rem; border: 1px solid #475569; font-weight: bold; color: #e2e8f0;">${item.supervisor}</td>
-                <td style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #cbd5e1; font-weight: bold;">${formatNumber(item.cantidad)}</td>
-                <td style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #22c55e; font-weight: bold;">${formatNumber(item.controles)}</td>
-                <td style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #f59e0b; font-weight: bold;">${formatNumber(item.certificaciones)}</td>
-                <td style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #ec4899; font-weight: bold;">${formatNumber(item.entrega)}</td>
-                <td style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #38bdf8; font-weight: bold;">${formatNumber(item.promedioEntrega, 2)}</td>
-            </tr>
-        `;
-    });
-
-    tableHTML += `
-                </tbody>
-            </table>
-        </div>
-
-        <div style="margin-top: 2rem; padding: 1rem; background: #334155; border-radius: 0.5rem; border-left: 4px solid #3b82f6;">
-            <h5 style="margin: 0 0 1rem 0; color: #f1f5f9;">Resumen estadistico</h5>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; color: #e2e8f0;">
-                <div><strong style="color: #f1f5f9;">Supervisores:</strong> ${formatNumber(supervisoresData.length)}</div>
-                <div><strong style="color: #f1f5f9;">Correrias:</strong> ${formatNumber(totalCantidad)}</div>
-                <div><strong style="color: #f1f5f9;">Controles:</strong> ${formatNumber(totalControles)}</div>
-                <div><strong style="color: #f1f5f9;">Certificaciones:</strong> ${formatNumber(totalCertificaciones)}</div>
-                <div><strong style="color: #f1f5f9;">Entrega:</strong> ${formatNumber(totalEntrega)}</div>
-                <div><strong style="color: #f1f5f9;">Entrega promedio:</strong> ${formatNumber(promedioEntregaGlobal, 2)}</div>
-            </div>
-        </div>
-    `;
-
-    if (detalleRepartidaData.length > 0) {
-        const detalleOrdenado = [...detalleRepartidaData].sort((a, b) => {
-            const bySup = a.sup.localeCompare(b.sup);
-            if (bySup !== 0) return bySup;
-            const byCodigo = String(a.codigo).localeCompare(String(b.codigo));
-            if (byCodigo !== 0) return byCodigo;
-            return String(a.id_correria).localeCompare(String(b.id_correria));
-        });
-
-        const filtro = detalleSearchTerm.trim().toLowerCase();
-        const detalleFiltrado = filtro
-            ? detalleOrdenado.filter(item => {
-                return [item.sup, item.codigo, item.id_correria]
-                    .map(v => String(v || '').toLowerCase())
-                    .some(v => v.includes(filtro));
-            })
-            : detalleOrdenado;
-
-        tableHTML += `
-            <div style="margin-top: 2rem;">
-                <div class="table-info" style="margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
-                    <span class="record-count">Detalle Repartida</span>
-                    <span class="record-count">Filas: ${formatNumber(detalleFiltrado.length)} / ${formatNumber(detalleOrdenado.length)}</span>
-                </div>
-                <div style="margin-bottom: 0.75rem; display: flex; gap: 0.5rem; align-items: center;">
-                    <input
-                        type="text"
-                        value="${detalleSearchTerm.replace(/"/g, '&quot;')}"
-                        oninput="actualizarFiltroDetalle(this)"
-                        placeholder="Buscar por SUP, CODIGO o ID_CORRERIA"
-                        style="width: 100%; max-width: 420px; padding: 0.5rem 0.65rem; border-radius: 8px; border: 1px solid #475569; background: #0f172a; color: #e2e8f0;"
-                    />
-                    ${detalleSearchTerm ? '<button class="btn btn-secondary" onclick="actualizarFiltroDetalle(\'\')">Limpiar</button>' : ''}
-                </div>
-                <div style="overflow-x: auto;">
-                    <table class="data-table" style="width: 100%; border-collapse: collapse;">
-                        <thead>
-                            <tr style="background-color: #475569;">
-                                <th style="padding: 0.75rem; border: 1px solid #475569; text-align: left; color: #f1f5f9; font-weight: bold;">SUP</th>
-                                <th style="padding: 0.75rem; border: 1px solid #475569; text-align: left; color: #f1f5f9; font-weight: bold;">CODIGO</th>
-                                <th style="padding: 0.75rem; border: 1px solid #475569; text-align: left; color: #f1f5f9; font-weight: bold;">ID_CORRERIA</th>
-                                <th style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #f1f5f9; font-weight: bold;">REALIZADOS CONTROL ENTREGA</th>
-                                <th style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #f1f5f9; font-weight: bold;">CONTROLES</th>
-                                <th style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #f1f5f9; font-weight: bold;">PEND. CONTROLES</th>
-                                <th style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #f1f5f9; font-weight: bold;">CERTIFICACIONES</th>
-                                <th style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #f1f5f9; font-weight: bold;">REALIZADOS CERTIFICACIONES</th>
-                                <th style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #f1f5f9; font-weight: bold;">PEND. CERTIFICACIONES</th>
-                                <th style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #f1f5f9; font-weight: bold;">ENTREGA</th>
-                                <th style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #f1f5f9; font-weight: bold;">REALIZADOS ENTREGA</th>
-                                <th style="padding: 0.75rem; border: 1px solid #475569; text-align: center; color: #f1f5f9; font-weight: bold;">PEND. ENTREGA</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-        `;
-
-        detalleFiltrado.forEach((item, index) => {
-            tableHTML += `
-                <tr style="background: ${index % 2 === 0 ? '#1e293b' : '#334155'};">
-                    <td style="padding: 0.65rem; border: 1px solid #475569; color: #e2e8f0; font-weight: 600;">${item.sup}</td>
-                    <td style="padding: 0.65rem; border: 1px solid #475569; color: #cbd5e1;">${item.codigo}</td>
-                    <td style="padding: 0.65rem; border: 1px solid #475569; color: #cbd5e1;">${item.id_correria}</td>
-                    <td style="padding: 0.65rem; border: 1px solid #475569; text-align: center; color: #38bdf8; font-weight: 700;">${formatNumber(item.realizados_control_entrega)}</td>
-                    <td style="padding: 0.65rem; border: 1px solid #475569; text-align: center; color: #22c55e; font-weight: 700;">${formatNumber(item.controles)}</td>
-                    <td style="padding: 0.65rem; border: 1px solid #475569; text-align: center; color: #f87171; font-weight: 700;">${formatNumber(item.pendientes_controles)}</td>
-                    <td style="padding: 0.65rem; border: 1px solid #475569; text-align: center; color: #f59e0b; font-weight: 700;">${formatNumber(item.certificaciones)}</td>
-                    <td style="padding: 0.65rem; border: 1px solid #475569; text-align: center; color: #38bdf8; font-weight: 700;">${formatNumber(item.realizados_certificaciones)}</td>
-                    <td style="padding: 0.65rem; border: 1px solid #475569; text-align: center; color: #f87171; font-weight: 700;">${formatNumber(item.pendientes_certificaciones)}</td>
-                    <td style="padding: 0.65rem; border: 1px solid #475569; text-align: center; color: #ec4899; font-weight: 700;">${formatNumber(item.entrega)}</td>
-                    <td style="padding: 0.65rem; border: 1px solid #475569; text-align: center; color: #38bdf8; font-weight: 700;">${formatNumber(item.realizados_entrega)}</td>
-                    <td style="padding: 0.65rem; border: 1px solid #475569; text-align: center; color: #f87171; font-weight: 700;">${formatNumber(item.pendientes_entrega)}</td>
-                </tr>
-            `;
-        });
-
-        tableHTML += `
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        `;
-    }
-
-    tableContainer.innerHTML = tableHTML;
+    return allCert;
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Inicializando aplicacion de Resumen Repartida');
+function buildCountsByCorreria(ids, certRows) {
+    const counts = {};
 
-    if (!window.supabase) {
-        const tableContainer = document.getElementById('tableContainer');
-        if (tableContainer) {
-            tableContainer.innerHTML = '<div style="color: red; text-align: center; padding: 2rem;">Error: Supabase no esta disponible</div>';
+    ids.forEach(id => {
+        counts[id] = emptyTypeCounts();
+    });
+
+    (certRows || []).forEach(row => {
+        const id = row.numero_correria;
+        const tipo = String(row.nombre_correria || '').trim().toUpperCase();
+        if (!counts[id] || !DETAIL_TYPES.includes(tipo)) return;
+
+        counts[id][tipo].total++;
+
+        const nombre = row.certificacion_nombre_del_cliente;
+        if (nombre !== null && nombre !== undefined && String(nombre).trim() !== '') {
+            counts[id][tipo].real++;
         }
+    });
+
+    return counts;
+}
+
+function fmtDetailValue(obj) {
+    const txt = obj.real + '/' + obj.total;
+    if (obj.total > 0 && obj.real < obj.total) {
+        return '<span style="color:#ef4444;font-weight:700;">' + txt + '</span>';
+    }
+    return txt;
+}
+
+function renderDetailedTable(containerId, countId, rows) {
+    const container = document.getElementById(containerId);
+    const count = document.getElementById(countId);
+
+    if (!rows || rows.length === 0) {
+        container.innerHTML = '<div class="rr-empty">Sin registros.</div>';
+        count.textContent = '';
         return;
     }
 
-    setTimeout(() => {
-        loadData();
-    }, 100);
-});
+    count.textContent = rows.length + ' registros';
 
-async function exportarTablas() {
+    const pendingTotals = {
+        CERTIFICACION: 0,
+        'CONTROL ENTREGA': 0,
+        'PAQUETE ENTREGA': 0
+    };
+
+    const hdrs = ['ID Correria','Codigo','Totales','CERTIFICACION','CONTROL ENTREGA','PAQUETE ENTREGA'];
+    let html = '<table class="rr-table"><thead><tr>';
+    hdrs.forEach(h => { html += '<th>' + h + '</th>'; });
+    html += '</tr></thead><tbody>';
+
+    rows.forEach(row => {
+        const c = row.counts || emptyTypeCounts();
+
+        pendingTotals.CERTIFICACION += Math.max(0, c['CERTIFICACION'].total - c['CERTIFICACION'].real);
+        pendingTotals['CONTROL ENTREGA'] += Math.max(0, c['CONTROL ENTREGA'].total - c['CONTROL ENTREGA'].real);
+        pendingTotals['PAQUETE ENTREGA'] += Math.max(0, c['PAQUETE ENTREGA'].total - c['PAQUETE ENTREGA'].real);
+
+        html += '<tr>';
+        html += '<td>' + (row.id_correria ?? '-') + '</td>';
+        html += '<td>' + (row.codigo ?? '-') + '</td>';
+        html += '<td>' + (row.totales ?? '-') + '</td>';
+        html += '<td class="c-cert">' + fmtDetailValue(c['CERTIFICACION']) + '</td>';
+        html += '<td class="c-ctrl">' + fmtDetailValue(c['CONTROL ENTREGA']) + '</td>';
+        html += '<td class="c-paq">' + fmtDetailValue(c['PAQUETE ENTREGA']) + '</td>';
+        html += '</tr>';
+    });
+
+    html += '</tbody><tfoot><tr>';
+    html += '<td colspan="3" style="font-weight:700;color:#f1f5f9;background:#0f172a;border-top:1px solid #334155;">Pendiente total</td>';
+    html += '<td style="font-weight:700;color:#ef4444;background:#0f172a;border-top:1px solid #334155;">' + pendingTotals.CERTIFICACION + '</td>';
+    html += '<td style="font-weight:700;color:#ef4444;background:#0f172a;border-top:1px solid #334155;">' + pendingTotals['CONTROL ENTREGA'] + '</td>';
+    html += '<td style="font-weight:700;color:#ef4444;background:#0f172a;border-top:1px solid #334155;">' + pendingTotals['PAQUETE ENTREGA'] + '</td>';
+    html += '</tr></tfoot></table>';
+
+    container.innerHTML = html;
+}
+
+function buildSupervisorSummaryRows(rows) {
+    const grouped = {};
+
+    (rows || []).forEach((row) => {
+        const sup = row.sup || '-';
+        if (!grouped[sup]) {
+            grouped[sup] = {
+                sup,
+                correrias: 0,
+                totales: 0,
+                counts: emptyTypeCounts()
+            };
+        }
+
+        grouped[sup].correrias += 1;
+        grouped[sup].totales += Number(row.totales || 0);
+
+        DETAIL_TYPES.forEach((tipo) => {
+            grouped[sup].counts[tipo].total += row.counts?.[tipo]?.total || 0;
+            grouped[sup].counts[tipo].real += row.counts?.[tipo]?.real || 0;
+        });
+    });
+
+    return Object.values(grouped).sort((a, b) => String(a.sup).localeCompare(String(b.sup), 'es'));
+}
+
+function renderSupervisorSummaryTable(rows) {
+    const container = document.getElementById('table0Container');
+    const count = document.getElementById('countT0');
+
+    if (!rows || rows.length === 0) {
+        container.innerHTML = '<div class="rr-empty">Sin registros.</div>';
+        count.textContent = '';
+        return;
+    }
+
+    count.textContent = rows.length + ' supervisores';
+
+    const pendingTotals = {
+        CERTIFICACION: 0,
+        'CONTROL ENTREGA': 0,
+        'PAQUETE ENTREGA': 0
+    };
+
+    const hdrs = ['Supervisor','Correrias','Totales','CERTIFICACION','CONTROL ENTREGA','PAQUETE ENTREGA'];
+    let html = '<table class="rr-table"><thead><tr>';
+    hdrs.forEach((h) => { html += '<th>' + h + '</th>'; });
+    html += '</tr></thead><tbody>';
+
+    rows.forEach((row) => {
+        const c = row.counts || emptyTypeCounts();
+
+        pendingTotals.CERTIFICACION += Math.max(0, c['CERTIFICACION'].total - c['CERTIFICACION'].real);
+        pendingTotals['CONTROL ENTREGA'] += Math.max(0, c['CONTROL ENTREGA'].total - c['CONTROL ENTREGA'].real);
+        pendingTotals['PAQUETE ENTREGA'] += Math.max(0, c['PAQUETE ENTREGA'].total - c['PAQUETE ENTREGA'].real);
+
+        html += '<tr>';
+        html += '<td>' + (row.sup ?? '-') + '</td>';
+        html += '<td>' + (row.correrias ?? 0) + '</td>';
+        html += '<td>' + (row.totales ?? 0) + '</td>';
+        html += '<td class="c-cert">' + fmtDetailValue(c['CERTIFICACION']) + '</td>';
+        html += '<td class="c-ctrl">' + fmtDetailValue(c['CONTROL ENTREGA']) + '</td>';
+        html += '<td class="c-paq">' + fmtDetailValue(c['PAQUETE ENTREGA']) + '</td>';
+        html += '</tr>';
+    });
+
+    html += '</tbody><tfoot><tr>';
+    html += '<td colspan="3" style="font-weight:700;color:#f1f5f9;background:#0f172a;border-top:1px solid #334155;">Pendiente total</td>';
+    html += '<td style="font-weight:700;color:#ef4444;background:#0f172a;border-top:1px solid #334155;">' + pendingTotals.CERTIFICACION + '</td>';
+    html += '<td style="font-weight:700;color:#ef4444;background:#0f172a;border-top:1px solid #334155;">' + pendingTotals['CONTROL ENTREGA'] + '</td>';
+    html += '<td style="font-weight:700;color:#ef4444;background:#0f172a;border-top:1px solid #334155;">' + pendingTotals['PAQUETE ENTREGA'] + '</td>';
+    html += '</tr></tfoot></table>';
+
+    container.innerHTML = html;
+}
+
+async function loadTable1() {
+    const container = document.getElementById('table1Container');
+    const summaryContainer = document.getElementById('table0Container');
+    if (summaryContainer) {
+        summaryContainer.innerHTML = '<div class="rr-loading">Cargando...</div>';
+    }
+    container.innerHTML = '<div class="rr-loading">Cargando...</div>';
     try {
-        const loadingMsg = document.createElement('div');
-        loadingMsg.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 20px 40px; border-radius: 10px; z-index: 10000; font-size: 1.1rem;';
-        loadingMsg.innerHTML = 'Generando archivo Excel...';
-        document.body.appendChild(loadingMsg);
-
-        const wb = XLSX.utils.book_new();
-
         const { data, error } = await supabase
             .from('programacion_reparto')
-            .select('*');
+            .select('sup, id_correria, codigo, totales')
+            .order('codigo', { ascending: true });
+        if (error) throw error;
 
-        if (error) {
-            throw error;
+        const baseRows = data || [];
+        const ids = baseRows.map(row => row.id_correria);
+        const certRows = await fetchCertificationRows(ids);
+        const countsByCorreria = buildCountsByCorreria(ids, certRows);
+
+        allT1Data = baseRows.map(row => ({
+            ...row,
+            counts: countsByCorreria[row.id_correria] || emptyTypeCounts()
+        }));
+        allT0Data = buildSupervisorSummaryRows(allT1Data);
+
+        renderSupervisorSummaryTable(allT0Data);
+        renderTable1(allT1Data);
+    } catch (err) {
+        console.error(err);
+        if (summaryContainer) {
+            summaryContainer.innerHTML = '<div class="rr-empty" style="color:#ef4444;">Error: ' + err.message + '</div>';
         }
-
-        if (data && data.length > 0) {
-            const ws = XLSX.utils.json_to_sheet(data);
-            XLSX.utils.book_append_sheet(wb, ws, 'Programacion Reparto');
-        }
-
-        if (supervisoresData && supervisoresData.length > 0) {
-            const wsResumen = XLSX.utils.json_to_sheet(supervisoresData);
-            XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen Repartida');
-        }
-
-        const fecha = new Date();
-        const fechaStr = `${fecha.getFullYear()}${String(fecha.getMonth() + 1).padStart(2, '0')}${String(fecha.getDate()).padStart(2, '0')}`;
-        XLSX.writeFile(wb, `Resumen_Repartida_INMEL_${fechaStr}.xlsx`);
-
-        document.body.removeChild(loadingMsg);
-    } catch (error) {
-        console.error('Error al exportar tablas:', error);
-        const loadingMsg = document.querySelector('div[style*="Generando archivo"]');
-        if (loadingMsg && loadingMsg.parentNode) {
-            document.body.removeChild(loadingMsg);
-        }
-        alert('Error al exportar tablas: ' + (error?.message || 'Error desconocido'));
+        container.innerHTML = '<div class="rr-empty" style="color:#ef4444;">Error: ' + err.message + '</div>';
     }
 }
 
-function abrirModalCompacto() {
-    const modal = document.getElementById('modalCompacto');
-    const modalBody = document.getElementById('modalCompactoBody');
+function renderTable1(data) {
+    renderDetailedTable('table1Container', 'countT1', data);
+}
 
-    if (detalleRepartidaData.length === 0) {
-        alert('No hay datos para mostrar. Actualiza primero.');
-        return;
-    }
-
-    const detalleOrdenado = [...detalleRepartidaData].sort((a, b) => {
-        const bySup = a.sup.localeCompare(b.sup);
-        if (bySup !== 0) return bySup;
-        const byCodigo = String(a.codigo).localeCompare(String(b.codigo));
-        if (byCodigo !== 0) return byCodigo;
-        return String(a.id_correria).localeCompare(String(b.id_correria));
-    });
-
-    const filtro = detalleSearchTerm.trim().toLowerCase();
-    const detalleFiltrado = filtro
-        ? detalleOrdenado.filter(item => {
-            return [item.sup, item.codigo, item.id_correria]
-                .map(v => String(v || '').toLowerCase())
-                .some(v => v.includes(filtro));
+function filterTable1(q) {
+    const t = q.trim().toLowerCase();
+    if (!t) { renderTable1(allT1Data); return; }
+    renderTable1(allT1Data.filter(row =>
+        ['id_correria', 'codigo'].some(c => {
+            const v = row[c];
+            return v !== null && v !== undefined && String(v).toLowerCase().includes(t);
         })
-        : detalleOrdenado;
-
-    const totalControles = detalleFiltrado.reduce((sum, item) => sum + item.controles, 0);
-    const totalPendControles = detalleFiltrado.reduce((sum, item) => sum + item.pendientes_controles, 0);
-    const totalCertificaciones = detalleFiltrado.reduce((sum, item) => sum + item.certificaciones, 0);
-    const totalPendCertificaciones = detalleFiltrado.reduce((sum, item) => sum + item.pendientes_certificaciones, 0);
-    const totalEntrega = detalleFiltrado.reduce((sum, item) => sum + item.entrega, 0);
-    const totalPendEntrega = detalleFiltrado.reduce((sum, item) => sum + item.pendientes_entrega, 0);
-
-    let html = `
-        <div id="compactShareCard" style="font-size: 0.62rem; background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 0.6rem; width: fit-content; margin: 0 auto;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; color: #e2e8f0;">
-                <strong style="font-size: 0.75rem;">Resumen Repartida - Detalle</strong>
-                <span style="font-size: 0.65rem; color: #94a3b8;">Filas: ${formatNumber(detalleFiltrado.length)} / ${formatNumber(detalleOrdenado.length)}</span>
-            </div>
-            <table style="width: auto; border-collapse: collapse; border: 2px solid #475569; margin: 0 auto; background: #1e293b;">
-                <thead>
-                    <tr style="background: #475569; color: white;">
-                        <th style="padding: 0.2rem; border: 1px solid #475569; text-align: center; width: 50px;">SUP</th>
-                        <th style="padding: 0.2rem; border: 1px solid #475569; text-align: center; width: 60px;">CODIGO</th>
-                        <th style="padding: 0.2rem; border: 1px solid #475569; text-align: center; width: 70px;">ID_CORRERIA</th>
-                        <th style="padding: 0.2rem; border: 1px solid #475569; text-align: center; width: 35px;">CTRL</th>
-                        <th style="padding: 0.2rem; border: 1px solid #475569; text-align: center; width: 40px;">P_CTRL</th>
-                        <th style="padding: 0.2rem; border: 1px solid #475569; text-align: center; width: 40px;">CERT</th>
-                        <th style="padding: 0.2rem; border: 1px solid #475569; text-align: center; width: 40px;">P_CERT</th>
-                        <th style="padding: 0.2rem; border: 1px solid #475569; text-align: center; width: 40px;">ENT</th>
-                        <th style="padding: 0.2rem; border: 1px solid #475569; text-align: center; width: 40px;">P_ENT</th>
-                    </tr>
-                </thead>
-                <tbody>
-    `;
-
-    detalleFiltrado.slice(0, 120).forEach((item, index) => {
-        html += `
-            <tr style="background: ${index % 2 === 0 ? '#1e293b' : '#334155'}; color: #e2e8f0;">
-                <td style="padding: 0.15rem 0.2rem; border: 1px solid #475569; font-weight: bold;">${item.sup}</td>
-                <td style="padding: 0.15rem 0.2rem; border: 1px solid #475569;">${item.codigo}</td>
-                <td style="padding: 0.15rem 0.2rem; border: 1px solid #475569;">${item.id_correria}</td>
-                <td style="padding: 0.15rem 0.2rem; border: 1px solid #475569; text-align: center;">${formatNumber(item.controles)}</td>
-                <td style="padding: 0.15rem 0.2rem; border: 1px solid #475569; text-align: center; color: #f87171;">${formatNumber(item.pendientes_controles)}</td>
-                <td style="padding: 0.15rem 0.2rem; border: 1px solid #475569; text-align: center;">${formatNumber(item.certificaciones)}</td>
-                <td style="padding: 0.15rem 0.2rem; border: 1px solid #475569; text-align: center; color: #f87171;">${formatNumber(item.pendientes_certificaciones)}</td>
-                <td style="padding: 0.15rem 0.2rem; border: 1px solid #475569; text-align: center;">${formatNumber(item.entrega)}</td>
-                <td style="padding: 0.15rem 0.2rem; border: 1px solid #475569; text-align: center; color: #f87171;">${formatNumber(item.pendientes_entrega)}</td>
-            </tr>
-        `;
-    });
-
-    html += `
-                <tr style="background: #475569; color: white; font-weight: bold;">
-                    <td style="padding: 0.2rem; border: 2px solid #475569; text-align: center;" colspan="3">TOTALES</td>
-                    <td style="padding: 0.2rem; border: 2px solid #475569; text-align: center;">${formatNumber(totalControles)}</td>
-                    <td style="padding: 0.2rem; border: 2px solid #475569; text-align: center;">${formatNumber(totalPendControles)}</td>
-                    <td style="padding: 0.2rem; border: 2px solid #475569; text-align: center;">${formatNumber(totalCertificaciones)}</td>
-                    <td style="padding: 0.2rem; border: 2px solid #475569; text-align: center;">${formatNumber(totalPendCertificaciones)}</td>
-                    <td style="padding: 0.2rem; border: 2px solid #475569; text-align: center;">${formatNumber(totalEntrega)}</td>
-                    <td style="padding: 0.2rem; border: 2px solid #475569; text-align: center;">${formatNumber(totalPendEntrega)}</td>
-                </tr>
-            </tbody>
-        </table>
-            <div style="margin-top: 0.35rem; text-align: right; color: #94a3b8; font-size: 0.62rem;">* Compacto muestra maximo 120 filas para compartir</div>
-        </div>
-        <div style="margin-top: 0.8rem; display: flex; gap: 0.5rem; justify-content: center;">
-            <button class="btn btn-success" onclick="descargarCompactoImagen()">Descargar PNG</button>
-        </div>
-    </div>
-    `;
-
-    modalBody.innerHTML = html;
-    modal.style.display = 'flex';
+    ));
 }
 
-function actualizarFiltroDetalle(inputOrValue) {
-    const value = typeof inputOrValue === 'string' ? inputOrValue : (inputOrValue?.value || '');
-    const cursorPos = typeof inputOrValue === 'object' && inputOrValue ? inputOrValue.selectionStart : null;
+async function exportSummaryAsImage() {
+    const section = document.getElementById('summaryExportSection');
+    const tableContainer = document.getElementById('table0Container');
 
-    detalleSearchTerm = value;
-    renderTable();
-
-    if (cursorPos !== null) {
-        requestAnimationFrame(() => {
-            const input = document.querySelector('input[placeholder="Buscar por SUP, CODIGO o ID_CORRERIA"]');
-            if (!input) return;
-            input.focus();
-            const safePos = Math.min(cursorPos, input.value.length);
-            input.setSelectionRange(safePos, safePos);
-        });
-    }
-}
-
-function cerrarModalCompacto() {
-    const modal = document.getElementById('modalCompacto');
-    modal.style.display = 'none';
-}
-
-async function descargarCompactoImagen() {
-    const target = document.getElementById('compactShareCard');
-    if (!target) {
-        alert('No se encontro la tabla compacta para exportar.');
-        return;
-    }
-
-    if (!window.html2canvas) {
-        alert('No se pudo cargar la libreria para exportar imagen.');
+    if (!section || !tableContainer || !tableContainer.querySelector('table')) {
+        alert('No hay resumen cargado para exportar.');
         return;
     }
 
     try {
-        const canvas = await window.html2canvas(target, {
-            backgroundColor: '#0f172a',
-            scale: 2,
-            useCORS: true
+        const exportWrapper = document.createElement('div');
+        exportWrapper.style.position = 'fixed';
+        exportWrapper.style.left = '-100000px';
+        exportWrapper.style.top = '0';
+        exportWrapper.style.padding = '12px';
+        exportWrapper.style.background = '#0f172a';
+        exportWrapper.style.zIndex = '-1';
+
+        const clone = section.cloneNode(true);
+        clone.style.width = '1080px';
+        clone.style.margin = '0';
+        clone.style.padding = '14px';
+        clone.style.borderRadius = '10px';
+
+        const cloneButton = clone.querySelector('#exportSummaryImageBtn');
+        if (cloneButton) cloneButton.remove();
+
+        const cloneTitle = clone.querySelector('h2');
+        if (cloneTitle) {
+            cloneTitle.style.fontSize = '18px';
+            cloneTitle.style.marginBottom = '10px';
+        }
+
+        const cloneToolbar = clone.querySelector('.rr-toolbar');
+        if (cloneToolbar) {
+            cloneToolbar.remove();
+        }
+
+        const cloneCount = clone.querySelector('#countT0');
+        if (cloneCount) {
+            cloneCount.style.fontSize = '11px';
+            cloneCount.style.marginBottom = '6px';
+        }
+
+        const cloneScroll = clone.querySelector('.rr-scroll');
+        if (cloneScroll) {
+            cloneScroll.style.maxHeight = 'none';
+            cloneScroll.style.height = 'auto';
+            cloneScroll.style.overflow = 'visible';
+            cloneScroll.style.borderRadius = '6px';
+        }
+
+        clone.querySelectorAll('.rr-table th').forEach((th) => {
+            th.style.position = 'static';
+            th.style.fontSize = '11px';
+            th.style.padding = '7px 8px';
         });
 
+        clone.querySelectorAll('.rr-table td').forEach((td) => {
+            td.style.fontSize = '11px';
+            td.style.padding = '6px 8px';
+        });
+
+        clone.querySelectorAll('.rr-table').forEach((table) => {
+            table.style.fontSize = '11px';
+        });
+
+        exportWrapper.appendChild(clone);
+        document.body.appendChild(exportWrapper);
+
+        const canvas = await html2canvas(clone, {
+            backgroundColor: '#1e293b',
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            windowWidth: 1080,
+            windowHeight: clone.scrollHeight
+        });
+
+        document.body.removeChild(exportWrapper);
+
         const link = document.createElement('a');
-        const fecha = new Date();
-        const fechaStr = `${fecha.getFullYear()}${String(fecha.getMonth() + 1).padStart(2, '0')}${String(fecha.getDate()).padStart(2, '0')}`;
-        link.download = `detalle_repartida_compacto_${fechaStr}.png`;
         link.href = canvas.toDataURL('image/png');
+        link.download = 'resumen_supervisores.png';
+        document.body.appendChild(link);
         link.click();
-    } catch (error) {
-        console.error('Error al exportar imagen compacta:', error);
-        alert('No se pudo exportar la imagen.');
+        document.body.removeChild(link);
+    } catch (err) {
+        console.error('Error exportando resumen:', err);
+        alert('No fue posible exportar la imagen del resumen.');
     }
 }
+
+async function exportDetailAsImage() {
+    const sup = document.getElementById('supSelect')?.value || '';
+    const section = document.getElementById('detailExportSection');
+    const tableContainer = document.getElementById('table2Container');
+
+    if (!sup) {
+        alert('Seleccione un supervisor antes de exportar.');
+        return;
+    }
+
+    if (!section || !tableContainer || !tableContainer.querySelector('table')) {
+        alert('No hay detalle cargado para exportar.');
+        return;
+    }
+
+    try {
+        const exportWrapper = document.createElement('div');
+        exportWrapper.style.position = 'fixed';
+        exportWrapper.style.left = '-100000px';
+        exportWrapper.style.top = '0';
+        exportWrapper.style.padding = '12px';
+        exportWrapper.style.background = '#0f172a';
+        exportWrapper.style.zIndex = '-1';
+
+        const clone = section.cloneNode(true);
+        clone.style.width = '1080px';
+        clone.style.margin = '0';
+        clone.style.padding = '14px';
+        clone.style.borderRadius = '10px';
+
+        const cloneButton = clone.querySelector('#exportDetailImageBtn');
+        if (cloneButton) cloneButton.remove();
+
+        const cloneTitle = clone.querySelector('h2');
+        if (cloneTitle) {
+            cloneTitle.style.fontSize = '18px';
+            cloneTitle.style.marginBottom = '10px';
+        }
+
+        const cloneToolbar = clone.querySelector('.rr-toolbar');
+        if (cloneToolbar) {
+            cloneToolbar.style.marginBottom = '6px';
+            cloneToolbar.style.gap = '8px';
+        }
+
+        const cloneSelect = clone.querySelector('#supSelect');
+        if (cloneSelect) {
+            const supBadge = document.createElement('div');
+            supBadge.textContent = 'Supervisor: ' + sup;
+            supBadge.style.display = 'inline-block';
+            supBadge.style.padding = '6px 10px';
+            supBadge.style.fontSize = '12px';
+            supBadge.style.fontWeight = '700';
+            supBadge.style.color = '#f1f5f9';
+            supBadge.style.background = '#0f172a';
+            supBadge.style.border = '1px solid #334155';
+            supBadge.style.borderRadius = '6px';
+            supBadge.style.minWidth = '170px';
+            cloneSelect.parentNode.insertBefore(supBadge, cloneSelect);
+            cloneSelect.remove();
+        }
+
+        const cloneCount = clone.querySelector('#countT2');
+        if (cloneCount) {
+            cloneCount.style.fontSize = '11px';
+            cloneCount.style.marginBottom = '6px';
+        }
+
+        const cloneScroll = clone.querySelector('.rr-scroll');
+        if (cloneScroll) {
+            cloneScroll.style.maxHeight = 'none';
+            cloneScroll.style.height = 'auto';
+            cloneScroll.style.overflow = 'visible';
+            cloneScroll.style.borderRadius = '6px';
+        }
+
+        clone.querySelectorAll('.rr-table th').forEach((th) => {
+            th.style.position = 'static';
+            th.style.fontSize = '11px';
+            th.style.padding = '7px 8px';
+        });
+
+        clone.querySelectorAll('.rr-table td').forEach((td) => {
+            td.style.fontSize = '11px';
+            td.style.padding = '6px 8px';
+        });
+
+        clone.querySelectorAll('.rr-table').forEach((table) => {
+            table.style.fontSize = '11px';
+        });
+
+        exportWrapper.appendChild(clone);
+        document.body.appendChild(exportWrapper);
+
+        const canvas = await html2canvas(clone, {
+            backgroundColor: '#1e293b',
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            windowWidth: 1080,
+            windowHeight: clone.scrollHeight
+        });
+
+        document.body.removeChild(exportWrapper);
+
+        const link = document.createElement('a');
+        link.href = canvas.toDataURL('image/png');
+        link.download = 'detalle_repartida_' + sup + '.png';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    } catch (err) {
+        console.error('Error exportando imagen:', err);
+        alert('No fue posible exportar la imagen.');
+    }
+}
+
+// ─── TABLA 2 ──────────────────────────────────────────────────────────────────
+// Filtro: supervisor unico.
+// Cruz: programacion_reparto (id_correria) <-> certificaciones_reparto (numero_correria)
+// Conteos de nombre_correria: CERTIFICACION | CONTROL ENTREGA | PAQUETE ENTREGA
+
+async function loadSupOptions() {
+    const sel = document.getElementById('supSelect');
+    try {
+        const { data, error } = await supabase
+            .from('programacion_reparto')
+            .select('sup')
+            .order('sup', { ascending: true });
+        if (error) throw error;
+        const unique = [...new Set((data || []).map(r => r.sup).filter(v => v !== null && String(v).trim() !== ''))];
+        unique.forEach(sup => {
+            const opt = document.createElement('option');
+            opt.value = sup;
+            opt.textContent = sup;
+            sel.appendChild(opt);
+        });
+    } catch (err) { console.error('Error sup options:', err); }
+}
+
+async function loadTable2(sup) {
+    const container = document.getElementById('table2Container');
+    const count     = document.getElementById('countT2');
+    if (!sup) {
+        container.innerHTML = '<div class="rr-empty">Seleccione un supervisor para ver el detalle.</div>';
+        count.textContent = '';
+        return;
+    }
+    container.innerHTML = '<div class="rr-loading">Cargando...</div>';
+    count.textContent = '';
+
+    try {
+        // 1. Correrias del supervisor
+        const { data: prog, error: progErr } = await supabase
+            .from('programacion_reparto')
+            .select('id_correria, codigo, totales')
+            .eq('sup', sup)
+            .order('codigo', { ascending: true });
+        if (progErr) throw progErr;
+        if (!prog || prog.length === 0) {
+            container.innerHTML = '<div class="rr-empty">No hay correrias para este supervisor.</div>';
+            return;
+        }
+
+        const ids = prog.map(r => r.id_correria);
+        const certRows = await fetchCertificationRows(ids);
+        const countsByCorreria = buildCountsByCorreria(ids, certRows);
+        const detailRows = prog.map(row => ({
+            ...row,
+            counts: countsByCorreria[row.id_correria] || emptyTypeCounts()
+        }));
+
+        renderDetailedTable('table2Container', 'countT2', detailRows);
+
+    } catch (err) {
+        console.error(err);
+        container.innerHTML = '<div class="rr-empty" style="color:#ef4444;">Error: ' + err.message + '</div>';
+    }
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function () {
+    loadTable1();
+    loadSupOptions();
+
+    document.getElementById('searchT1').addEventListener('input', function () {
+        filterTable1(this.value);
+    });
+
+    document.getElementById('supSelect').addEventListener('change', function () {
+        loadTable2(this.value);
+    });
+});
