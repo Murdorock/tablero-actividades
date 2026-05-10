@@ -777,7 +777,25 @@ async function importData() {
     btnImport.textContent = 'Importando...';
 
     try {
-        const chunks = chunkArray(importedData, 200);
+        // Obtener el máximo ID actual
+        const { data: maxIdData, error: maxError } = await supabase
+            .from(TABLE_NAME)
+            .select('id_cert_reparto')
+            .order('id_cert_reparto', { ascending: false })
+            .limit(1);
+
+        let nextId = 1n;
+        if (!maxError && maxIdData && maxIdData.length > 0) {
+            nextId = BigInt(String(maxIdData[0].id_cert_reparto)) + 1n;
+        }
+
+        // Asignar IDs a los registros
+        const dataWithIds = importedData.map((row, index) => ({
+            ...row,
+            id_cert_reparto: Number(nextId + BigInt(index))
+        }));
+
+        const chunks = chunkArray(dataWithIds, 200);
         let insertedCount = 0;
         const failedRows = [];
 
