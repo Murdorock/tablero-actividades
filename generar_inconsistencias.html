@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generar Inconsistencias - Sistema</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="config.js"></script>
+    <script src="table-logic-generar_inconsistencias.js"></script>
+</head>
+<body>
+    <div class="table-container">
+        <div class="table-header">
+            <h2>🔍 Generar Inconsistencias</h2>
+            <div class="table-actions">
+                <button class="btn btn-info" onclick="abrirSelectorArchivos()" style="background: #17a2b8; color: white;">📁 Cargar Archivos Excel</button>
+                <button class="btn btn-success" onclick="generarInconsistencias()" style="background: #28a745; color: white;">⚡ Generar Análisis</button>
+                <button class="btn btn-warning" onclick="exportarResultados()" style="background: #ffc107; color: black;">📊 Exportar Resultados</button>
+                <button class="btn btn-primary" onclick="limpiarResultados()">🗑️ Limpiar</button>
+            </div>
+        </div>
+
+        <!-- Área de carga de archivos -->
+        <div class="data-table-wrapper" style="padding: 1.5rem; background: #f8f9fa; border-radius: 0.5rem; margin-bottom: 1.5rem;">
+            <div id="uploadArea" style="border: 2px dashed #dee2e6; border-radius: 0.5rem; padding: 2rem; text-align: center; background: white; display: block;">
+                <div style="font-size: 3rem; color: #6c757d; margin-bottom: 1rem;">📊</div>
+                <h4 style="color: #495057; margin-bottom: 0.5rem;">Cargar Archivos Excel</h4>
+                <p style="color: #6c757d; margin-bottom: 1.5rem;">Se requieren archivos de 6 meses: Mes Actual, Anterior, Tres Meses, Cuatro Meses, Cinco Meses, Seis Meses</p>
+                <button type="button" onclick="abrirSelectorArchivos()" class="btn btn-primary">📂 Seleccionar Archivos</button>
+                <input type="file" id="excelFileInput" accept=".xlsx,.xls" multiple style="display: none;" onchange="procesarArchivosExcel(event)">
+                <div id="filesInfo" style="margin-top: 1rem; display: none; background: #e3f2fd; padding: 1rem; border-radius: 0.25rem;">
+                    <h5 style="margin: 0 0 0.5rem 0; color: #1976d2;">📋 Archivos Cargados:</h5>
+                    <div id="filesList"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Barra de progreso -->
+        <div id="progressArea" style="display: none; margin-bottom: 1.5rem;">
+            <h5 style="color: #495057; margin-bottom: 0.5rem;">⏳ Procesando análisis...</h5>
+            <div style="background: #e9ecef; border-radius: 0.25rem; overflow: hidden; margin-bottom: 0.5rem;">
+                <div id="progressBar" style="background: linear-gradient(90deg, #28a745, #20c997); height: 1.5rem; width: 0%; transition: width 0.3s ease; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.75rem; font-weight: bold;"></div>
+            </div>
+            <div id="progressText" style="font-size: 0.875rem; color: #6c757d;">Iniciando...</div>
+        </div>
+
+        <!-- Información de análisis -->
+        <div id="analysisInfo" style="display: none; margin-bottom: 1.5rem; background: #e8f5e9; padding: 1rem; border-radius: 0.5rem; border-left: 4px solid #4caf50;">
+            <h5 style="margin: 0 0 0.5rem 0; color: #2e7d32;">✅ Análisis Completado</h5>
+            <div id="analysisDetails"></div>
+        </div>
+
+        <!-- Tabla de resultados -->
+        <div id="loadingIndicator" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Procesando análisis...</p>
+        </div>
+        
+        <div id="tableInfoContainer" class="table-info sticky-table-info" style="display: none; margin-bottom: 0;"></div>
+        
+        <div id="tableContainer"></div>
+
+        <!-- Paginación -->
+        <div id="paginationContainer" style="display: none; margin-top: 1.5rem; text-align: center;">
+            <div style="display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
+                <button onclick="window.goToPage(1)" class="btn btn-sm">Primera</button>
+                <button onclick="window.goToPage(Math.max(1, window.currentPage - 1))" class="btn btn-sm">← Anterior</button>
+                <span id="pageInfo" style="padding: 0.5rem; min-width: 100px; text-align: center; border-radius: 0.25rem; background: #f0f0f0;">Página 1</span>
+                <button onclick="window.goToPage(Math.min(window.getTotalPages(), window.currentPage + 1))" class="btn btn-sm">Siguiente →</button>
+                <button onclick="window.goToPage(window.getTotalPages())" class="btn btn-sm">Última</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
