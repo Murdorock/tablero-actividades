@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
     <script src="config.js"></script>
     <script src="table-logic-generar_inconsistencias.js"></script>
 </head>
@@ -17,6 +18,7 @@
             <div class="table-actions">
                 <button class="btn btn-info" onclick="abrirSelectorArchivos()" style="background: #17a2b8; color: white;">📁 Cargar Archivos Excel</button>
                 <button class="btn btn-success" onclick="generarInconsistencias()" style="background: #28a745; color: white;">⚡ Generar Análisis</button>
+                <button class="btn btn-secondary" onclick="exportarParcialResultados()" style="background: #0ea5e9; color: white;">📦 Exportar Parcial</button>
                 <button class="btn btn-warning" onclick="exportarResultados()" style="background: #ffc107; color: black;">📊 Exportar Resultados</button>
                 <button class="btn btn-primary" onclick="limpiarResultados()">🗑️ Limpiar</button>
             </div>
@@ -27,9 +29,9 @@
             <div id="uploadArea" style="border: 2px dashed #dee2e6; border-radius: 0.5rem; padding: 2rem; text-align: center; background: white; display: block;">
                 <div style="font-size: 3rem; color: #6c757d; margin-bottom: 1rem;">📊</div>
                 <h4 style="color: #495057; margin-bottom: 0.5rem;">Cargar Archivos Excel</h4>
-                <p style="color: #6c757d; margin-bottom: 1.5rem;">Se requieren archivos de 6 meses: Mes Actual, Anterior, Tres Meses, Cuatro Meses, Cinco Meses, Seis Meses</p>
+                <p style="color: #6c757d; margin-bottom: 1.5rem;">Se requieren archivos de 6 meses: Mes Actual, Anterior, Tres Meses, Cuatro Meses, Cinco Meses, Seis Meses. Para mejor velocidad usa CSV.</p>
                 <button type="button" onclick="abrirSelectorArchivos()" class="btn btn-primary">📂 Seleccionar Archivos</button>
-                <input type="file" id="excelFileInput" accept=".xlsx,.xls" multiple style="display: none;" onchange="procesarArchivosExcel(event)">
+                <input type="file" id="excelFileInput" accept=".xlsx,.xls,.csv" multiple style="display: none;" onchange="procesarArchivosExcel(event)">
                 <div id="filesInfo" style="margin-top: 1rem; display: none; background: #e3f2fd; padding: 1rem; border-radius: 0.25rem;">
                     <h5 style="margin: 0 0 0.5rem 0; color: #1976d2;">📋 Archivos Cargados:</h5>
                     <div id="filesList"></div>

@@ -2,24 +2,175 @@
 const TABLE_NAME = 'generar_inconsistencias';
 const TABLE_TITLE = '🔍 Generar Inconsistencias';
 const PRIMARY_KEY = 'id';
+const VIEW_LIMIT = 20;
+const CHUNK_SIZE = 10000;
+const PREVIEW_LIMIT = 3000;
+
+const MONTH_KEYS = ['mes_actual', 'mes_anterior', 'tres_meses', 'cuatro_meses', 'cinco_meses', 'seis_meses'];
+const BASE_COLUMNS = ['DIRECCION', 'NRO_INSTALACION', 'RUTA_LECTURA', 'COD_CICLO', 'TIPO_CONSUMO', 'COD_TIPO_CONSUMO'];
+const LECTURAS_COLUMNS = ['LECTURA_TOMADA', 'LECTURA_ANTERIOR', 'CAUSANL_OBS'];
+const EXTRA_CURRENT_COLUMNS = [
+    'OBS_ADIC', 'OBSERV_ALFANUM', 'PERIODO_FACTURACION', 'CATEGORIA_SERVICIO',
+    'ORDEN_LECTURA', 'SERVICIO_SUSCRITO', 'MUNICIPIO', 'COD_LECTOR', 'SERIE_MEDIDOR',
+    'CALIFICACION_CONSUMO', 'FECHA_LECTURA_ACTUAL', 'FECHA_LECTURA_ANTERIOR', 'CONSUMO_PROMEDIO'
+];
+const REQUIRED_COLUMNS = new Set([...BASE_COLUMNS, ...LECTURAS_COLUMNS, ...EXTRA_CURRENT_COLUMNS]);
 
 // Variables globales
 let fullData = [];
 let tableData = [];
 let currentPage = 1;
 let currentDataSource = [];
-const VIEW_LIMIT = 20;
 let archivosCargados = {};
 let dataframes = {};
+let isProcessingChunks = false;
+let processingState = {
+    processedRows: 0,
+    totalRows: 0,
+    counts: {
+        menores: 0,
+        causas: 0,
+        vacias: 0,
+        probables: 0
+    }
+};
+let partialExportStore = {
+    columns: [
+        'NRO_INSTALACION', 'DIRECCION', 'TIPO_CONSUMO', 'RUTA_LECTURA',
+        'LECTURA_ANTERIOR_Mes_Actual', 'LECTURA_TOMADA_Mes_Actual',
+        'LECTURA_ANTERIOR_Mes_Anterior', 'LECTURA_ANTERIOR_Tres_Meses',
+        'CAUSANL_OBS_Mes_Actual', 'CAUSANL_OBS_Mes_Anterior',
+        'DIFERENCIA_LECTURAS', 'DIG_CAMBIADOS', 'POSICION_ERROR',
+        'SCORE', 'MOTIVO', 'categoria'
+    ],
+    rowsByCategory: {
+        menores: [],
+        causas: [],
+        vacias: [],
+        probables: []
+    }
+};
+
+syncPaginationState();
 
 // Función para abrir selector de archivos
 function abrirSelectorArchivos() {
     document.getElementById('excelFileInput').click();
 }
 
-// Procesar archivos Excel cargados
+function syncPaginationState() {
+    window.currentPage = currentPage;
+    window.getTotalPages = getTotalPages;
+}
+
+function sleepFrame() {
+    return new Promise(resolve => setTimeout(resolve, 0));
+}
+
+function extraerFechaArchivo(fileName) {
+    const match = fileName.match(/(\d{2})(\d{2})(\d{4})/);
+    if (!match) return null;
+    const month = parseInt(match[1], 10);
+    const day = parseInt(match[2], 10);
+    const year = parseInt(match[3], 10);
+    if (Number.isNaN(month) || Number.isNaN(day) || Number.isNaN(year)) return null;
+    return new Date(year, month - 1, day);
+}
+
+function asignarMesesPorFecha(filesArray) {
+    const enriched = filesArray.map(file => ({ file, date: extraerFechaArchivo(file.name) }));
+    enriched.sort((a, b) => {
+        if (a.date && b.date) return b.date - a.date;
+        if (a.date) return -1;
+        if (b.date) return 1;
+        return a.file.name.localeCompare(b.file.name);
+    });
+
+    return enriched.slice(0, MONTH_KEYS.length).map((item, index) => ({
+        file: item.file,
+        monthKey: MONTH_KEYS[index]
+    }));
+}
+
+function proyectarFila(row) {
+    const projected = {};
+    REQUIRED_COLUMNS.forEach(col => {
+        if (row[col] !== undefined) {
+            projected[col] = row[col];
+        }
+    });
+    return projected;
+}
+
+async function parseCsvFile(file) {
+    if (typeof Papa === 'undefined') {
+        throw new Error('PapaParse no está disponible para leer CSV grandes.');
+    }
+
+    return new Promise((resolve, reject) => {
+        const rows = [];
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            worker: true,
+            chunkSize: 1024 * 1024,
+            chunk(results) {
+                const chunkRows = results.data || [];
+                for (const row of chunkRows) {
+                    rows.push(proyectarFila(row));
+                }
+            },
+            complete() {
+                resolve(rows);
+            },
+            error(err) {
+                reject(err);
+            }
+        });
+    });
+}
+
+async function parseExcelFile(file) {
+    const arrayBuffer = await file.arrayBuffer();
+    const workbook = XLSX.read(arrayBuffer, {
+        type: 'array',
+        dense: true,
+        raw: true,
+        cellFormula: false,
+        cellHTML: false,
+        cellStyles: false
+    });
+
+    const firstSheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[firstSheetName];
+    const rows = XLSX.utils.sheet_to_json(worksheet, { raw: true, defval: null });
+    return rows.map(proyectarFila);
+}
+
+async function parseArchivo(file) {
+    const ext = file.name.toLowerCase().split('.').pop();
+    if (ext === 'csv') {
+        return parseCsvFile(file);
+    }
+    if (ext === 'xlsx' || ext === 'xls') {
+        return parseExcelFile(file);
+    }
+    throw new Error(`Formato no soportado: ${file.name}`);
+}
+
+function renderArchivoCargado(filesList, tipoArchivo, fileName, rowCount) {
+    const li = document.createElement('div');
+    li.style.cssText = 'padding: 0.5rem; background: white; margin: 0.5rem 0; border-radius: 0.25rem; border-left: 3px solid #4caf50;';
+    li.innerHTML = `
+        <strong>${tipoArchivo.toUpperCase().replace(/_/g, ' ')}</strong>: ${fileName}
+        <span style="color: #28a745; margin-left: 0.5rem;">✓ ${rowCount.toLocaleString('es-CO')} registros</span>
+    `;
+    filesList.appendChild(li);
+}
+
+// Procesar archivos cargados con estrategia secuencial para no bloquear el navegador
 async function procesarArchivosExcel(event) {
-    const files = event.target.files;
+    const files = Array.from(event.target.files || []);
     if (!files.length) return;
 
     const filesList = document.getElementById('filesList');
@@ -27,67 +178,38 @@ async function procesarArchivosExcel(event) {
     archivosCargados = {};
     dataframes = {};
 
-    const mesNombres = {
-        'Mes Actual': 'mes_actual',
-        'Mes Anterior': 'mes_anterior',
-        'Tres Meses': 'tres_meses',
-        'Cuatro Meses': 'cuatro_meses',
-        'Cinco Meses': 'cinco_meses',
-        'Seis Meses': 'seis_meses'
-    };
-
-    for (let file of files) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            try {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: 'array' });
-                const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-                const jsonData = XLSX.utils.sheet_to_json(worksheet);
-
-                // Detectar tipo de archivo por nombre o contenido
-                let tipoArchivo = null;
-                const nombreLower = file.name.toLowerCase();
-                
-                if (nombreLower.includes('mayo') || nombreLower.includes('5') || nombreLower.includes('actual')) {
-                    tipoArchivo = 'mes_actual';
-                } else if (nombreLower.includes('abril') || nombreLower.includes('4') || nombreLower.includes('anterior')) {
-                    tipoArchivo = 'mes_anterior';
-                } else if (nombreLower.includes('marzo') || nombreLower.includes('3') || nombreLower.includes('tres')) {
-                    tipoArchivo = 'tres_meses';
-                } else if (nombreLower.includes('febrero') || nombreLower.includes('2') || nombreLower.includes('cuatro')) {
-                    tipoArchivo = 'cuatro_meses';
-                } else if (nombreLower.includes('enero') || nombreLower.includes('1') || nombreLower.includes('cinco')) {
-                    tipoArchivo = 'cinco_meses';
-                } else if (nombreLower.includes('diciembre') || nombreLower.includes('12') || nombreLower.includes('seis')) {
-                    tipoArchivo = 'seis_meses';
-                }
-
-                if (tipoArchivo) {
-                    archivosCargados[tipoArchivo] = file.name;
-                    dataframes[tipoArchivo] = jsonData;
-                    
-                    const li = document.createElement('div');
-                    li.style.cssText = 'padding: 0.5rem; background: white; margin: 0.5rem 0; border-radius: 0.25rem; border-left: 3px solid #4caf50;';
-                    li.innerHTML = `
-                        <strong>${tipoArchivo.toUpperCase().replace(/_/g, ' ')}</strong>: ${file.name}
-                        <span style="color: #28a745; margin-left: 0.5rem;">✓ ${jsonData.length} registros</span>
-                    `;
-                    filesList.appendChild(li);
-                } else {
-                    alert(`No se pudo detectar el tipo de archivo: ${file.name}\nUse nombres que contengan: Actual, Anterior, Tres, Cuatro, Cinco, o Seis`);
-                }
-
-            } catch (error) {
-                console.error('Error al procesar archivo:', error);
-                alert(`Error al procesar ${file.name}: ${error.message}`);
-            }
-        };
-        reader.readAsArrayBuffer(file);
+    const asignaciones = asignarMesesPorFecha(files);
+    if (!asignaciones.length) {
+        alert('No se pudieron identificar archivos válidos.');
+        return;
     }
 
-    const filesInfo = document.getElementById('filesInfo');
-    filesInfo.style.display = 'block';
+    mostrarProgreso(true);
+
+    try {
+        for (let i = 0; i < asignaciones.length; i++) {
+            const { file, monthKey } = asignaciones[i];
+            const porcentaje = Math.round(((i + 1) / asignaciones.length) * 100);
+            actualizarProgreso(
+                porcentaje,
+                `Leyendo ${i + 1}/${asignaciones.length}: ${file.name} (${monthKey.replace(/_/g, ' ')})`
+            );
+
+            const jsonData = await parseArchivo(file);
+            archivosCargados[monthKey] = file.name;
+            dataframes[monthKey] = jsonData;
+            renderArchivoCargado(filesList, monthKey, file.name, jsonData.length);
+            await sleepFrame();
+        }
+
+        document.getElementById('filesInfo').style.display = 'block';
+        actualizarProgreso(100, 'Carga completada');
+    } catch (error) {
+        console.error('Error al procesar archivos:', error);
+        alert(`Error al procesar archivos: ${error.message}`);
+    } finally {
+        setTimeout(() => mostrarProgreso(false), 600);
+    }
 }
 
 // Función principal de análisis
@@ -97,50 +219,93 @@ async function generarInconsistencias() {
         return;
     }
 
+    if (!Array.isArray(dataframes.mes_actual) || dataframes.mes_actual.length === 0) {
+        alert('Falta el archivo de Mes Actual para ejecutar el análisis.');
+        return;
+    }
+
     mostrarProgreso(true);
     actualizarProgreso(0, 'Iniciando análisis...');
+    isProcessingChunks = true;
+    resetPartialStores();
 
     try {
-        // Paso 1: Consolidación de datos
-        actualizarProgreso(10, 'Consolidando datos de múltiples meses...');
-        const dfConsolidado = consolidarDatos();
+        const mesActualRows = dataframes.mes_actual || [];
+        const totalRows = mesActualRows.length;
+        processingState.totalRows = totalRows;
 
-        // Paso 2: Filtrado inicial
-        actualizarProgreso(30, 'Filtrando datos...');
-        const dfFiltrado = filtrarDatos(dfConsolidado);
+        actualizarProgreso(5, 'Indexando meses históricos...');
+        const monthIndexes = {
+            Mes_Anterior: buildMonthIndex(dataframes.mes_anterior || []),
+            Tres_Meses: buildMonthIndex(dataframes.tres_meses || []),
+            Cuatro_Meses: buildMonthIndex(dataframes.cuatro_meses || []),
+            Cinco_Meses: buildMonthIndex(dataframes.cinco_meses || []),
+            Seis_Meses: buildMonthIndex(dataframes.seis_meses || [])
+        };
 
-        // Paso 3: Análisis de Lecturas Menores
-        actualizarProgreso(50, 'Analizando lecturas menores...');
-        const lecturasMenuores = analizarLecturasMenuores(dfFiltrado);
+        const previewRows = [];
+        let topCandidates = [];
 
-        // Paso 4: Análisis de Causas Históricas
-        actualizarProgreso(65, 'Analizando causas históricas...');
-        const causasHistoricas = analizarCausasHistoricas(dfFiltrado);
+        for (let start = 0; start < totalRows; start += CHUNK_SIZE) {
+            const end = Math.min(start + CHUNK_SIZE, totalRows);
+            const avance = 10 + Math.round((end / totalRows) * 80);
 
-        // Paso 5: Análisis de Lecturas Vacías
-        actualizarProgreso(80, 'Analizando lecturas vacías...');
-        const lecturasVacias = analizarLecturasVacias(dfFiltrado);
+            actualizarProgreso(avance, `Procesando lote ${start + 1}-${end} de ${totalRows}...`);
 
-        // Paso 6: TOP 150 Errores Avanzado
-        actualizarProgreso(90, 'Generando TOP 150 errores...');
-        const top150 = generarTOP150Errores(dfConsolidado);
+            const chunkBase = mesActualRows.slice(start, end);
+            const chunkConsolidado = prepararMesActual(chunkBase);
 
-        // Paso 7: Consolidar resultados
-        actualizarProgreso(95, 'Consolidando resultados...');
-        fullData = [
-            ...lecturasMenuores.map(r => ({ ...r, categoria: 'ERROR LECTURA MENOR' })),
-            ...causasHistoricas.map(r => ({ ...r, categoria: 'ERROR LEIDA' })),
-            ...lecturasVacias.map(r => ({ ...r, categoria: 'ERROR CAUSA' })),
-            ...top150.map(r => ({ ...r, categoria: 'ERROR PROBABLE' }))
-        ];
+            anexarMesConIndex(chunkConsolidado, monthIndexes.Mes_Anterior, 'Mes_Anterior');
+            anexarMesConIndex(chunkConsolidado, monthIndexes.Tres_Meses, 'Tres_Meses');
+            anexarMesConIndex(chunkConsolidado, monthIndexes.Cuatro_Meses, 'Cuatro_Meses');
+            anexarMesConIndex(chunkConsolidado, monthIndexes.Cinco_Meses, 'Cinco_Meses');
+            anexarMesConIndex(chunkConsolidado, monthIndexes.Seis_Meses, 'Seis_Meses');
+
+            const chunkFiltrado = filtrarDatos(chunkConsolidado);
+
+            const lecturasMenores = analizarLecturasMenuores(chunkFiltrado).map(r => ({ ...r, categoria: 'ERROR LECTURA MENOR' }));
+            const causasHistoricas = analizarCausasHistoricas(chunkFiltrado).map(r => ({ ...r, categoria: 'ERROR LEIDA' }));
+            const lecturasVacias = analizarLecturasVacias(chunkFiltrado).map(r => ({ ...r, categoria: 'ERROR CAUSA' }));
+            const candidatosProbables = generarCandidatosErrores(chunkConsolidado).map(r => ({ ...r, categoria: 'ERROR PROBABLE' }));
+
+            topCandidates = mergeTopCandidates(topCandidates, candidatosProbables, 150);
+
+            processingState.processedRows = end;
+            processingState.counts.menores += lecturasMenores.length;
+            processingState.counts.causas += causasHistoricas.length;
+            processingState.counts.vacias += lecturasVacias.length;
+
+            // Guardar incrementalmente para exportaciones parciales.
+            appendPartialRows('menores', lecturasMenores);
+            appendPartialRows('causas', causasHistoricas);
+            appendPartialRows('vacias', lecturasVacias);
+            updatePartialTopProbables(candidatosProbables);
+
+            // Mantener solo una muestra para la UI y no crecer en memoria.
+            pushPreviewRows(previewRows, lecturasMenores);
+            pushPreviewRows(previewRows, causasHistoricas);
+            pushPreviewRows(previewRows, lecturasVacias);
+            pushPreviewRows(previewRows, candidatosProbables);
+
+            await sleepFrame();
+        }
+
+        processingState.counts.probables = topCandidates.length;
+        fullData = previewRows.slice(0, PREVIEW_LIMIT);
 
         currentDataSource = fullData;
         currentPage = 1;
         updateTableSlice();
         renderTable();
 
-        // Mostrar información de análisis
-        mostrarInfoAnalisis(lecturasMenuores, causasHistoricas, lecturasVacias, top150);
+        mostrarInfoAnalisis(
+            processingState.counts.menores,
+            processingState.counts.causas,
+            processingState.counts.vacias,
+            processingState.counts.probables,
+            processingState.processedRows,
+            processingState.totalRows
+        );
 
         actualizarProgreso(100, '✅ Análisis completado');
 
@@ -148,74 +313,139 @@ async function generarInconsistencias() {
         console.error('Error en análisis:', error);
         alert('Error durante el análisis: ' + error.message);
     } finally {
+        isProcessingChunks = false;
         setTimeout(() => mostrarProgreso(false), 1000);
+    }
+}
+
+function buildJoinKey(row) {
+    return BASE_COLUMNS.map(col => String(row[col] ?? '').trim().toUpperCase()).join('|');
+}
+
+function buildMonthIndex(rows) {
+    const index = new Map();
+    for (const row of rows || []) {
+        const key = buildJoinKey(row);
+        if (!index.has(key)) {
+            index.set(key, row);
+        }
+    }
+    return index;
+}
+
+function anexarMesConIndex(mainRows, monthIndex, suffix) {
+    if (!Array.isArray(mainRows) || !monthIndex || monthIndex.size === 0) return;
+
+    for (const row of mainRows) {
+        const key = buildJoinKey(row);
+        const source = monthIndex.get(key);
+        if (!source) continue;
+
+        LECTURAS_COLUMNS.forEach(col => {
+            row[`${col}_${suffix}`] = source[col] ?? null;
+        });
+    }
+}
+
+function resetPartialStores() {
+    fullData = [];
+    tableData = [];
+    currentDataSource = [];
+    currentPage = 1;
+    processingState = {
+        processedRows: 0,
+        totalRows: 0,
+        counts: {
+            menores: 0,
+            causas: 0,
+            vacias: 0,
+            probables: 0
+        }
+    };
+
+    partialExportStore.rowsByCategory = {
+        menores: [],
+        causas: [],
+        vacias: [],
+        probables: []
+    };
+}
+
+function appendPartialRows(categoryKey, rows) {
+    if (!Array.isArray(rows) || rows.length === 0) return;
+    partialExportStore.rowsByCategory[categoryKey].push(...rows);
+}
+
+function updatePartialTopProbables(rows) {
+    if (!Array.isArray(rows) || rows.length === 0) return;
+    partialExportStore.rowsByCategory.probables = mergeTopCandidates(
+        partialExportStore.rowsByCategory.probables,
+        rows,
+        150
+    );
+}
+
+function pushPreviewRows(previewRows, incomingRows) {
+    if (!Array.isArray(incomingRows) || incomingRows.length === 0) return;
+    if (previewRows.length >= PREVIEW_LIMIT) return;
+    const remaining = PREVIEW_LIMIT - previewRows.length;
+    previewRows.push(...incomingRows.slice(0, remaining));
+}
+
+function prepararMesActual(rows) {
+    return (rows || []).map(row => {
+        const normalized = {};
+
+        BASE_COLUMNS.forEach(col => {
+            normalized[col] = row[col] ?? null;
+        });
+
+        LECTURAS_COLUMNS.forEach(col => {
+            normalized[`${col}_Mes_Actual`] = row[col] ?? null;
+        });
+
+        EXTRA_CURRENT_COLUMNS.forEach(col => {
+            normalized[col] = row[col] ?? null;
+        });
+
+        normalized.NRO_INSTALACION = String(normalized.NRO_INSTALACION ?? '');
+        return normalized;
+    });
+}
+
+function anexarMes(mainRows, otherRows, suffix) {
+    if (!Array.isArray(mainRows) || !Array.isArray(otherRows) || !otherRows.length) return;
+
+    const index = new Map();
+    for (const row of otherRows) {
+        const key = buildJoinKey(row);
+        if (!index.has(key)) {
+            index.set(key, row);
+        }
+    }
+
+    for (const row of mainRows) {
+        const key = buildJoinKey(row);
+        const source = index.get(key);
+        if (!source) continue;
+
+        LECTURAS_COLUMNS.forEach(col => {
+            row[`${col}_${suffix}`] = source[col] ?? null;
+        });
     }
 }
 
 // Consolidar datos de múltiples meses
 function consolidarDatos() {
-    const columnasBase = ["DIRECCION", "NRO_INSTALACION", "RUTA_LECTURA", "COD_CICLO", "TIPO_CONSUMO", "COD_TIPO_CONSUMO"];
-    const columnasLecturas = ["LECTURA_TOMADA", "LECTURA_ANTERIOR", "CAUSANL_OBS"];
+    const dfFinal = prepararMesActual(dataframes.mes_actual || []);
 
-    let dfFinal = dataframes.mes_actual || [];
-    dfFinal = dfFinal.map(row => ({ ...row })); // Copiar
-
-    // Función auxiliar para renombrar columnas de cada mes
-    const renombrarMes = (data, prefijo) => {
-        if (!data || !data.length) return data;
-        const renamed = {};
-        data.forEach((row, idx) => {
-            const newRow = {};
-            columnasBase.forEach(col => {
-                if (row[col] !== undefined) newRow[col] = row[col];
-            });
-            columnasLecturas.forEach(col => {
-                if (row[col] !== undefined) {
-                    newRow[col + '_' + prefijo] = row[col];
-                }
-            });
-            Object.keys(row).forEach(col => {
-                if (!columnasBase.includes(col) && !columnasLecturas.includes(col)) {
-                    newRow[col] = row[col];
-                }
-            });
-            dfFinal[idx] = newRow;
-        });
-    };
-
-    // Procesar cada mes
-    if (dataframes.mes_anterior) mergeDataFrames(dfFinal, dataframes.mes_anterior, columnasBase, 'Mes_Anterior');
-    if (dataframes.tres_meses) mergeDataFrames(dfFinal, dataframes.tres_meses, columnasBase, 'Tres_Meses');
-    if (dataframes.cuatro_meses) mergeDataFrames(dfFinal, dataframes.cuatro_meses, columnasBase, 'Cuatro_Meses');
-    if (dataframes.cinco_meses) mergeDataFrames(dfFinal, dataframes.cinco_meses, columnasBase, 'Cinco_Meses');
-    if (dataframes.seis_meses) mergeDataFrames(dfFinal, dataframes.seis_meses, columnasBase, 'Seis_Meses');
-
-    // Asegurar NRO_INSTALACION como string
-    dfFinal.forEach(row => {
-        row.NRO_INSTALACION = String(row.NRO_INSTALACION || '');
-    });
+    anexarMes(dfFinal, dataframes.mes_anterior || [], 'Mes_Anterior');
+    anexarMes(dfFinal, dataframes.tres_meses || [], 'Tres_Meses');
+    anexarMes(dfFinal, dataframes.cuatro_meses || [], 'Cuatro_Meses');
+    anexarMes(dfFinal, dataframes.cinco_meses || [], 'Cinco_Meses');
+    anexarMes(dfFinal, dataframes.seis_meses || [], 'Seis_Meses');
 
     return dfFinal;
-}
-
-// Merge de DataFrames
-function mergeDataFrames(dfMain, dfOther, columnasBase, prefijo) {
-    const columnasLecturas = ["LECTURA_TOMADA", "LECTURA_ANTERIOR", "CAUSANL_OBS"];
-    
-    dfOther.forEach(rowOther => {
-        const matchRow = dfMain.find(row => 
-            columnasBase.every(col => row[col] == rowOther[col])
-        );
-        
-        if (matchRow) {
-            columnasLecturas.forEach(col => {
-                const newColName = col + '_' + prefijo;
-                if (rowOther[col] !== undefined) {
-                    matchRow[newColName] = rowOther[col];
-                }
-            });
-        }
-    });
 }
 
 // Filtrar datos (eliminar causas/observaciones específicas)
@@ -378,8 +608,8 @@ function analizarLecturasVacias(df) {
     return resultado;
 }
 
-// Generar TOP 150 Errores Avanzado
-function generarTOP150Errores(df) {
+// Generar candidatos de errores probables (sin cortar para poder usar por lotes)
+function generarCandidatosErrores(df) {
     let resultado = df.map(r => ({ ...r })); // Copiar
 
     // Convertir columnas a numéricas
@@ -435,14 +665,22 @@ function generarTOP150Errores(df) {
         row.SCORE = calcularScore(row);
     });
 
-    // TOP 150
-    resultado = resultado.sort((a, b) => b.SCORE - a.SCORE).slice(0, 150);
-
     resultado.forEach(row => {
         row.MOTIVO = 'Venía quieto y cambió dígito(s) sospechoso(s)';
     });
 
     return resultado;
+}
+
+function mergeTopCandidates(currentTop, newCandidates, maxItems) {
+    const merged = [...(currentTop || []), ...(newCandidates || [])];
+    merged.sort((a, b) => (b.SCORE || 0) - (a.SCORE || 0));
+    return merged.slice(0, maxItems);
+}
+
+// Generar TOP 150 Errores Avanzado
+function generarTOP150Errores(df) {
+    return mergeTopCandidates([], generarCandidatosErrores(df), 150);
 }
 
 // Analizar cambio de dígitos
@@ -510,26 +748,31 @@ function actualizarProgreso(porcentaje, texto) {
     if (progressText) progressText.textContent = texto;
 }
 
-function mostrarInfoAnalisis(menores, causas, vacias, top150) {
+function mostrarInfoAnalisis(menores, causas, vacias, top150, processedRows, totalRows) {
     const info = document.getElementById('analysisInfo');
     const details = document.getElementById('analysisDetails');
+    const total = menores + causas + vacias + top150;
+    const progresoTexto = totalRows > 0
+        ? `Registros procesados: ${processedRows.toLocaleString('es-CO')} / ${totalRows.toLocaleString('es-CO')}`
+        : '';
     
     const html = `
+        <p style="margin: 0 0 1rem 0; color: #2e7d32;"><strong>${progresoTexto}</strong></p>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
             <div style="background: white; padding: 1rem; border-radius: 0.25rem;">
-                <strong>🔴 Lecturas Menores</strong><br><span style="font-size: 1.5rem; color: #d32f2f;">${menores.length}</span>
+                <strong>🔴 Lecturas Menores</strong><br><span style="font-size: 1.5rem; color: #d32f2f;">${menores}</span>
             </div>
             <div style="background: white; padding: 1rem; border-radius: 0.25rem;">
-                <strong>🟡 Causas Históricas</strong><br><span style="font-size: 1.5rem; color: #f57c00;">${causas.length}</span>
+                <strong>🟡 Causas Históricas</strong><br><span style="font-size: 1.5rem; color: #f57c00;">${causas}</span>
             </div>
             <div style="background: white; padding: 1rem; border-radius: 0.25rem;">
-                <strong>🔵 Lecturas Vacías</strong><br><span style="font-size: 1.5rem; color: #1565c0;">${vacias.length}</span>
+                <strong>🔵 Lecturas Vacías</strong><br><span style="font-size: 1.5rem; color: #1565c0;">${vacias}</span>
             </div>
             <div style="background: white; padding: 1rem; border-radius: 0.25rem;">
-                <strong>⚡ TOP 150 Errores</strong><br><span style="font-size: 1.5rem; color: #6a1b9a;">${top150.length}</span>
+                <strong>⚡ TOP 150 Errores</strong><br><span style="font-size: 1.5rem; color: #6a1b9a;">${top150}</span>
             </div>
             <div style="background: white; padding: 1rem; border-radius: 0.25rem;">
-                <strong>📊 Total de Inconsistencias</strong><br><span style="font-size: 1.5rem; color: #388e3c;">${menores.length + causas.length + vacias.length + top150.length}</span>
+                <strong>📊 Total de Inconsistencias</strong><br><span style="font-size: 1.5rem; color: #388e3c;">${total}</span>
             </div>
         </div>
     `;
@@ -539,21 +782,23 @@ function mostrarInfoAnalisis(menores, causas, vacias, top150) {
 }
 
 function exportarResultados() {
-    if (!fullData || fullData.length === 0) {
+    const categories = partialExportStore.rowsByCategory;
+    const top150 = mergeTopCandidates([], categories.probables, 150);
+    const allRows = [
+        ...categories.menores,
+        ...categories.causas,
+        ...categories.vacias,
+        ...top150
+    ];
+
+    if (!allRows.length) {
         alert('No hay resultados para exportar. Genera un análisis primero.');
         return;
     }
 
-    const columnasExportar = [
-        'NRO_INSTALACION', 'DIRECCION', 'TIPO_CONSUMO', 'RUTA_LECTURA',
-        'LECTURA_ANTERIOR_Mes_Actual', 'LECTURA_TOMADA_Mes_Actual',
-        'LECTURA_ANTERIOR_Mes_Anterior', 'LECTURA_ANTERIOR_Tres_Meses',
-        'CAUSANL_OBS_Mes_Actual', 'CAUSANL_OBS_Mes_Anterior',
-        'DIFERENCIA_LECTURAS', 'DIG_CAMBIADOS', 'POSICION_ERROR',
-        'SCORE', 'MOTIVO', 'categoria'
-    ];
+    const columnasExportar = partialExportStore.columns;
 
-    const dataExportar = fullData.map(row => {
+    const dataExportar = allRows.map(row => {
         const newRow = {};
         columnasExportar.forEach(col => {
             if (row[col] !== undefined) newRow[col] = row[col];
@@ -567,8 +812,65 @@ function exportarResultados() {
     XLSX.writeFile(wb, 'Inconsistencias_' + new Date().toISOString().split('T')[0] + '.xlsx');
 }
 
+function toCsvValue(value) {
+    if (value === null || value === undefined) return '';
+    const str = String(value);
+    if (str.includes('"') || str.includes(',') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+}
+
+function descargarCsv(nombre, rows) {
+    const cols = partialExportStore.columns;
+    const header = cols.join(',');
+    const body = rows.map(row => cols.map(c => toCsvValue(row[c])).join(',')).join('\n');
+    const csv = `${header}\n${body}`;
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = nombre;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function exportarParcialResultados() {
+    const hoy = new Date().toISOString().split('T')[0];
+    const categories = partialExportStore.rowsByCategory;
+    let exported = 0;
+
+    if (categories.menores.length) {
+        descargarCsv(`inconsistencias_parcial_lectura_menor_${hoy}.csv`, categories.menores);
+        exported++;
+    }
+    if (categories.causas.length) {
+        descargarCsv(`inconsistencias_parcial_error_leida_${hoy}.csv`, categories.causas);
+        exported++;
+    }
+    if (categories.vacias.length) {
+        descargarCsv(`inconsistencias_parcial_error_causa_${hoy}.csv`, categories.vacias);
+        exported++;
+    }
+    if (categories.probables.length) {
+        const top = mergeTopCandidates([], categories.probables, 150);
+        descargarCsv(`inconsistencias_parcial_top150_${hoy}.csv`, top);
+        exported++;
+    }
+
+    if (!exported) {
+        alert('Aún no hay resultados parciales para exportar.');
+        return;
+    }
+
+    if (isProcessingChunks) {
+        alert('Se exportaron los parciales disponibles hasta este momento.');
+    }
+}
+
 function limpiarResultados() {
     if (confirm('¿Estás seguro de que deseas limpiar todos los resultados?')) {
+        resetPartialStores();
         fullData = [];
         tableData = [];
         currentPage = 1;
@@ -592,6 +894,7 @@ function getTotalPages() {
 function updateTableSlice() {
     const start = (currentPage - 1) * VIEW_LIMIT;
     tableData = (currentDataSource || []).slice(start, start + VIEW_LIMIT);
+    syncPaginationState();
 }
 
 window.goToPage = function(page) {
@@ -639,7 +942,7 @@ function renderTable() {
 
     tableData.forEach((row, idx) => {
         const bgColor = idx % 2 === 0 ? '#ffffff' : '#f8f9fa';
-        html += `<tr style="border-bottom: 1px solid #dee2e6; background: ${bgColor};"><td style="padding: 0.75rem;">`;
+        html += `<tr style="border-bottom: 1px solid #dee2e6; background: ${bgColor};">`;
         
         columns.forEach(col => {
             const valor = row[col];
