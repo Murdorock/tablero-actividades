@@ -289,7 +289,7 @@ function syncCurrentFormFromMeta() {
 
 async function fetchFormsFromSupabase() {
   const { data, error } = await client
-    .from('formularios')
+    .from('formulario')
     .select('id,codigo,titulo,descripcion,estructura,activo,version')
     .order('updated_at', { ascending: false });
 
@@ -337,7 +337,7 @@ async function saveFormToSupabase() {
   };
 
   const { error } = await client
-    .from('formularios')
+    .from('formulario')
     .upsert(payload, { onConflict: 'codigo' });
 
   if (error) {
@@ -351,7 +351,7 @@ async function saveFormToSupabase() {
 
 async function deleteActiveForm() {
   if (!forms.length) {
-    alert('No hay formularios para eliminar.');
+    alert('No hay formulario para eliminar.');
     return;
   }
 
@@ -387,7 +387,7 @@ async function deleteActiveForm() {
 
     if (form.id && !String(form.id).startsWith('form_')) {
       const { data, error } = await client
-        .from('formularios')
+        .from('formulario')
         .delete()
         .eq('id', form.id)
         .select('id,codigo');
@@ -402,7 +402,7 @@ async function deleteActiveForm() {
 
     if (!deletedRows.length && form.codigo) {
       const { data, error } = await client
-        .from('formularios')
+        .from('formulario')
         .delete()
         .eq('codigo', form.codigo)
         .select('id,codigo');
