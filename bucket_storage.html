@@ -80,6 +80,15 @@
             background: rgba(59, 130, 246, 0.2);
         }
 
+        .path-btn.danger {
+            color: #fda4af;
+            border-color: #e11d48;
+        }
+
+        .path-btn.danger:hover {
+            background: rgba(225, 29, 72, 0.2);
+        }
+
         .file-name {
             word-break: break-word;
         }
@@ -694,6 +703,7 @@
                     : '<div class="action-group">'
                         + '<button class="path-btn" data-action="view" data-index="' + index + '">Ver</button>'
                         + '<button class="path-btn" data-action="download" data-index="' + index + '">Descargar</button>'
+                        + '<button class="path-btn danger" data-action="delete" data-index="' + index + '">Eliminar</button>'
                         + '</div>';
 
                 return '<tr>'
@@ -1215,6 +1225,43 @@
             });
         }
 
+        async function deleteFile(item) {
+            const bucket = bucketInput.value.trim();
+            const objectPath = getObjectPathFromItem(item);
+
+            if (!bucket) {
+                setStatus('Debes indicar el bucket.', 'error');
+                return;
+            }
+
+            if (!objectPath) {
+                setStatus('No se pudo determinar la ruta del archivo a eliminar.', 'error');
+                return;
+            }
+
+            const confirmed = window.confirm('Se eliminará el archivo "' + item.name + '". ¿Continuar?');
+            if (!confirmed) {
+                setStatus('Eliminación cancelada por el usuario.', 'error');
+                return;
+            }
+
+            setStatus('Eliminando ' + item.name + '...', null);
+
+            const { error } = await supabase
+                .storage
+                .from(bucket)
+                .remove([objectPath]);
+
+            if (error) {
+                setStatus('No se pudo eliminar: ' + error.message, 'error');
+                return;
+            }
+
+            selectedEntries.delete(objectPath);
+            setStatus('Archivo eliminado correctamente.', 'success');
+            await refreshCurrentView();
+        }
+
         function goToFolder(item) {
             folderInput.value = joinPath(folderInput.value, item.name);
             refreshCurrentView();
@@ -1285,6 +1332,11 @@
 
             if (action === 'download') {
                 await openFile(item, true);
+                return;
+            }
+
+            if (action === 'delete') {
+                await deleteFile(item);
             }
         });
 
