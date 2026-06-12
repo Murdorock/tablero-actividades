@@ -310,19 +310,12 @@ function exportCsv() {
     return;
   }
 
-  const headers = ['id', 'formulario_id', 'formulario', 'usuario_id', 'estado', 'fecha', ...dynamicColumns, 'respuesta_json'];
+  const headers = [...dynamicColumns];
 
   const lines = filteredRows.map((row) => {
     const answerMap = getRowAnswerMap(row);
     const values = [
-      row.id || '',
-      row.formulario_id || '',
-      getFormularioLabel(row),
-      row.usuario_id || '',
-      row.estado || '',
-      formatDate(getDateValue(row)),
       ...dynamicColumns.map((col) => answerMap[col] || ''),
-      JSON.stringify(safeJsonParse(row.respuesta, {})),
     ];
 
     return values

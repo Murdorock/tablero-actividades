@@ -858,7 +858,7 @@ Atentamente.`;
         
         // Abrir cliente de email con datos prellenados (codificar el body y subject)
         const mailto = 'yonathan.zambrano@epm.com.co,juan.castaneda.garcia@epm.com.co,wilmar.agudelo@epm.com.co,juan.jaramillo.valencia@epm.com.co';
-        const cc = 'jonathan.ledesma@epm.com.co,john.hincapie@icintegral.co,miguel.escobar@icintegral.co,santiago.florez@inmel.co,yoneison.pineda@epm.com.co,daniel.sotelo@epm.com.co';
+        const cc = 'jonathan.ledesma@epm.com.co,john.hincapie@icintegral.co,miguel.escobar@icintegral.co,santiago.florez@inmel.co,yoneison.pineda@epm.com.co,daniel.sotelo@epm.com.co,erik.bustamante@epm.com.co';
         const mailtoLink = `mailto:${mailto}?cc=${cc}&subject=${encodeURIComponent(asuntoEmail)}&body=${encodeURIComponent(mensajeTexto)}`;
         window.location.href = mailtoLink;
         
