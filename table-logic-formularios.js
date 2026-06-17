@@ -147,7 +147,7 @@ function renderFieldsBuilder() {
 function setFieldControlsByType() {
   const type = elements.fieldType.value;
   const usesOptions = type === 'select' || type === 'multi_select';
-  const usesMulti = type === 'photo';
+  const usesMulti = type === 'photo' || type === 'file';
 
   elements.fieldOptions.disabled = !usesOptions;
   elements.fieldMulti.disabled = !usesMulti;
@@ -205,9 +205,9 @@ function buildFieldFromInputs() {
     field.options = options;
   }
 
-  if (type === 'photo' && allowMultiple) {
-    field.allowMultiple = true;
-  }
+    if ((type === 'photo' || type === 'file') && allowMultiple) {
+      field.allowMultiple = true;
+    }
 
   return field;
 }

@@ -735,6 +735,7 @@
                 if (checked) {
                     selectedEntries.set(objectPath, {
                         path: objectPath,
+                        fullPath: item.fullPath || objectPath,
                         name: item.name,
                         isFolder: isFolderItem(item)
                     });
@@ -746,9 +747,10 @@
             renderItems(filteredItems);
         }
 
-        async function loadFiles() {
+        async function loadFiles(opciones = {}) {
             const bucket = bucketInput.value.trim();
             const path = normalizePath(folderInput.value);
+            const incluirArchivos = opciones.includeFiles === true;
             hideSearchProgress();
 
             if (!bucket) {
@@ -756,35 +758,95 @@
                 return;
             }
 
-            setStatus('Cargando ultimos archivos...', null);
+            setStatus(incluirArchivos ? 'Cargando contenido...' : 'Cargando carpetas...', null);
             updateCurrentPathLabel(bucket, path);
 
             try {
-                let recentItems = [];
+                if (incluirArchivos) {
+                    // Usar RPC buscar_archivos_en_bucket con query vacío para obtener TODO
+                    const maxItems = Math.max(100, Number(pageSizeInput.value) || 500);
+                    const { data, error } = await supabase.rpc('buscar_archivos_en_bucket', {
+                        p_bucket_id: bucket,
+                        p_base_path: path || '',
+                        p_query: '',
+                        p_limite: maxItems
+                    });
 
-                try {
-                    recentItems = await listStorageEntries(bucket, path, {
-                        limit: DEFAULT_RECENT_LIMIT,
-                        offset: 0,
-                        sortBy: { column: 'updated_at', order: 'desc' }
+                if (error) throw error;
+
+                    const items = (data || []).map((item) => ({
+                        name: item.name.split('/').pop() || item.name,
+                        id: item.id,
+                        fullPath: item.name,
+                        updated_at: item.updated_at,
+                        created_at: item.created_at,
+                        metadata: item.metadata,
+                        objectPath: item.name
+                    }));
+
+                    const folders = items.filter((item) => item.metadata === null);
+                    const files = items.filter((item) => item.metadata !== null);
+                    const sortedItems = [...folders, ...files];
+
+                    updateVisibleItems(sortedItems);
+                    setStatus('Cargados: ' + folders.length + ' carpeta(s), ' + files.length + ' archivo(s).', 'success');
+                } else {
+                    // Usar RPC listar_carpetas_en_ruta para obtener solo subcarpetas de forma rápida
+                    const { data, error } = await supabase.rpc('listar_carpetas_en_ruta', {
+                        p_bucket_id: bucket,
+                        p_base_path: path || '',
+                        p_limite: Math.max(100, Number(pageSizeInput.value) || 1000)
                     });
-                } catch (sortError) {
-                    console.warn('No se pudo ordenar por fecha directamente en Storage. Se aplicara fallback local.', sortError);
-                    const fallbackItems = await listStorageEntries(bucket, path, {
-                        limit: Math.max(DEFAULT_RECENT_LIMIT, Math.min(100, Number(pageSizeInput.value) || 100)),
-                        offset: 0,
-                        sortBy: { column: 'name', order: 'asc' }
-                    });
-                    recentItems = sortItemsByRecent(fallbackItems).slice(0, DEFAULT_RECENT_LIMIT);
+
+                    if (error) throw error;
+
+                    const items = (data || []).map((item) => ({
+                        name: item.name,
+                        id: item.id,
+                        updated_at: item.updated_at,
+                        created_at: item.created_at,
+                        metadata: null,
+                        objectPath: resolveObjectPath(path, item.name)
+                    }));
+
+                    updateVisibleItems(items);
+                    setStatus('Carpeta cargada: ' + items.length + ' subcarpeta(s). Usa el buscador para encontrar archivos.', 'success');
                 }
-
-                updateVisibleItems(recentItems);
-                setStatus('Mostrando los ' + recentItems.length + ' archivo(s) mas recientes de esta carpeta.', 'success');
             } catch (error) {
-                setStatus('No se pudo listar: ' + error.message, 'error');
-                filesTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#fecaca;padding:24px;">Error al listar archivos.</td></tr>';
-                selectedEntries.clear();
-                updateSelectionUI();
+                console.error('Error con RPC, usando fallback:', error);
+                // Fallback: método anterior de list()
+                try {
+                    const pageSize = Math.max(100, Number(pageSizeInput.value) || 500);
+                    let allItems = [];
+                    let offset = 0;
+
+                    while (true) {
+                        const batch = await listStorageEntries(bucket, path, {
+                            limit: pageSize,
+                            offset,
+                            sortBy: { column: 'name', order: 'asc' }
+                        });
+                        allItems.push(...batch);
+                        if (batch.length < pageSize) break;
+                        offset += pageSize;
+                    }
+
+                    if (incluirArchivos) {
+                        updateVisibleItems(allItems);
+                        const folderCount = allItems.filter(isFolderItem).length;
+                        const fileCount = allItems.length - folderCount;
+                        setStatus('Cargados: ' + folderCount + ' carpeta(s), ' + fileCount + ' archivo(s). (fallback)', 'success');
+                    } else {
+                        const soloCarpetas = allItems.filter(isFolderItem);
+                        updateVisibleItems(soloCarpetas);
+                        setStatus('Carpeta cargada: ' + soloCarpetas.length + ' subcarpeta(s). (fallback)', 'success');
+                    }
+                } catch (fallbackError) {
+                    setStatus('No se pudo listar: ' + fallbackError.message, 'error');
+                    filesTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#fecaca;padding:24px;">Error al listar archivos.</td></tr>';
+                    selectedEntries.clear();
+                    updateSelectionUI();
+                }
             }
         }
 
@@ -792,9 +854,9 @@
             const bucket = bucketInput.value.trim();
             const path = normalizePath(folderInput.value);
             const query = getSearchQuery();
-            const pageSize = Math.max(1, Number(pageSizeInput.value) || 100);
+            const pageSize = Math.max(1, Number(pageSizeInput.value) || 500);
             const loadAllMatches = !!loadAllItemsInput.checked;
-            const maxMatches = loadAllMatches ? Number.POSITIVE_INFINITY : pageSize;
+            const maxMatches = loadAllMatches ? 10000 : pageSize;
 
             if (!bucket) {
                 setStatus('Debes indicar el nombre del bucket.', 'error');
@@ -807,49 +869,82 @@
                 return;
             }
 
-            setStatus('Buscando en la ruta actual del bucket...', null);
+            setStatus('Buscando...', null);
             showSearchProgress({
-                indeterminate: loadAllMatches,
-                current: 0,
-                total: loadAllMatches ? 0 : maxMatches,
-                label: loadAllMatches
-                    ? 'Analizando archivos en la ruta actual...'
-                    : '0/' + maxMatches + ' coincidencias encontradas'
+                indeterminate: true,
+                label: 'Consultando en el bucket...'
             });
             updateCurrentPathLabel(bucket, path);
 
             try {
-                const matches = await collectScopedSearchMatches(bucket, path, query, pageSize, maxMatches, (progress) => {
-                    if (loadAllMatches) {
-                        showSearchProgress({
-                            indeterminate: true,
-                            label: 'Analizados: ' + progress.scannedCount + ' | Coincidencias: ' + progress.matchesCount
-                        });
-                        return;
-                    }
-
-                    showSearchProgress({
-                        indeterminate: false,
-                        current: Math.min(progress.matchesCount, maxMatches),
-                        total: maxMatches,
-                        label: progress.matchesCount + '/' + maxMatches + ' coincidencias encontradas | Analizados: ' + progress.scannedCount
-                    });
+                // Usar RPC buscar_archivos_en_bucket para búsqueda ultrarrápida en Postgres
+                const { data, error } = await supabase.rpc('buscar_archivos_en_bucket', {
+                    p_bucket_id: bucket,
+                    p_base_path: path || '',
+                    p_query: query,
+                    p_limite: maxMatches
                 });
 
-                updateVisibleItems(matches);
-                hideSearchProgress();
+                if (error) throw error;
 
-                if (matches.length) {
-                    setStatus('Busqueda completada en la ruta actual: ' + matches.length + ' coincidencia(s).', 'success');
+                // Convertir al formato esperado: name = solo el nombre base, objectPath = ruta completa
+                const items = (data || []).map((item) => ({
+                    name: item.name.split('/').pop() || item.name,
+                    id: item.id,
+                    fullPath: item.name, // guardar la ruta completa
+                    updated_at: item.updated_at,
+                    created_at: item.created_at,
+                    metadata: item.metadata,
+                    objectPath: item.name // ruta completa para operaciones
+                }));
+
+                // Separar carpetas de archivos para mostrarlos correctamente
+                const folders = items.filter((item) => item.metadata === null);
+                const files = items.filter((item) => item.metadata !== null);
+                // Unir: carpetas primero, luego archivos
+                const sortedItems = [...folders, ...files];
+
+                hideSearchProgress();
+                updateVisibleItems(sortedItems);
+
+                if (sortedItems.length) {
+                    setStatus('Busqueda completada: ' + sortedItems.length + ' resultado(s).', 'success');
                 } else {
-                    setStatus('No se encontraron coincidencias en la ruta actual del bucket.', 'success');
+                    setStatus('No se encontraron coincidencias para "' + query + '" en la ruta actual.', 'success');
                 }
             } catch (error) {
-                hideSearchProgress();
-                setStatus('No se pudo buscar en el bucket: ' + error.message, 'error');
-                filesTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#fecaca;padding:24px;">Error al buscar archivos.</td></tr>';
-                selectedEntries.clear();
-                updateSelectionUI();
+                console.error('Error en búsqueda con RPC, usando fallback:', error);
+                // Fallback: búsqueda manual paginada
+                try {
+                    setStatus('Usando modo de búsqueda alternativo...', null);
+                    const matches = await collectScopedSearchMatches(bucket, path, query, pageSize, maxMatches, (progress) => {
+                        if (loadAllMatches) {
+                            showSearchProgress({
+                                indeterminate: true,
+                                label: 'Analizados: ' + progress.scannedCount + ' | Coincidencias: ' + progress.matchesCount
+                            });
+                            return;
+                        }
+
+                        showSearchProgress({
+                            indeterminate: false,
+                            current: Math.min(progress.matchesCount, maxMatches),
+                            total: maxMatches,
+                            label: progress.matchesCount + '/' + maxMatches + ' coincidencias encontradas | Analizados: ' + progress.scannedCount
+                        });
+                    });
+
+                    hideSearchProgress();
+                    updateVisibleItems(matches);
+
+                    if (matches.length) {
+                        setStatus('Busqueda completada: ' + matches.length + ' coincidencia(s). (fallback)', 'success');
+                    } else {
+                        setStatus('No se encontraron coincidencias para "' + query + '" en la ruta actual.', 'success');
+                    }
+                } catch (fallbackError) {
+                    throw fallbackError;
+                }
             }
         }
 
@@ -867,6 +962,17 @@
             }
 
             await loadFiles();
+        }
+
+        // Carga inicial: muestra todas las carpetas de la raíz del bucket cold
+        async function loadInitialView() {
+            const bucket = bucketInput.value.trim();
+            if (!bucket) {
+                setStatus('Esperando configuración del bucket...', null);
+                return;
+            }
+            folderInput.value = '';
+            await loadFiles(); // solo carpetas por defecto
         }
 
         async function getFileUrl(bucket, objectPath) {
@@ -894,10 +1000,12 @@
         async function openFile(item, downloadMode) {
             const bucket = bucketInput.value.trim();
             const objectPath = getObjectPathFromItem(item);
-            const candidates = buildPathCandidates(folderInput.value, item.name, bucket);
-            if (objectPath) {
-                candidates.unshift(objectPath);
-            }
+
+            // Si el item tiene fullPath (viene de RPC), usarlo directamente
+            const rutaEfectiva = item.fullPath || objectPath;
+
+            // También considerar candidatos si viene de navegación (carpetas)
+            const candidates = [rutaEfectiva, ...buildPathCandidates(folderInput.value, item.name, bucket)];
             const uniqueCandidates = [...new Set(candidates.map((value) => normalizePath(value)).filter(Boolean))];
 
             try {
@@ -1166,11 +1274,12 @@
             const filesToDownload = [];
 
             for (const entry of selectedEntries.values()) {
+                const rutaDescarga = entry.fullPath || entry.path;
                 if (entry.isFolder) {
-                    const nested = await listFilesRecursive(bucket, entry.path);
+                    const nested = await listFilesRecursive(bucket, rutaDescarga);
                     filesToDownload.push(...nested);
                 } else {
-                    filesToDownload.push(entry.path);
+                    filesToDownload.push(rutaDescarga);
                 }
             }
 
@@ -1228,13 +1337,14 @@
         async function deleteFile(item) {
             const bucket = bucketInput.value.trim();
             const objectPath = getObjectPathFromItem(item);
+            const rutaEfectiva = item.fullPath || objectPath;
 
             if (!bucket) {
                 setStatus('Debes indicar el bucket.', 'error');
                 return;
             }
 
-            if (!objectPath) {
+            if (!rutaEfectiva) {
                 setStatus('No se pudo determinar la ruta del archivo a eliminar.', 'error');
                 return;
             }
@@ -1250,7 +1360,7 @@
             const { error } = await supabase
                 .storage
                 .from(bucket)
-                .remove([objectPath]);
+                .remove([rutaEfectiva]);
 
             if (error) {
                 setStatus('No se pudo eliminar: ' + error.message, 'error');
@@ -1258,12 +1368,17 @@
             }
 
             selectedEntries.delete(objectPath);
+            selectedEntries.delete(rutaEfectiva);
             setStatus('Archivo eliminado correctamente.', 'success');
-            await refreshCurrentView();
+            // Refrescar mostrando solo carpetas (rápido)
+            await loadFiles();
         }
 
         function goToFolder(item) {
-            folderInput.value = joinPath(folderInput.value, item.name);
+            // Si viene de RPC (fullPath), usar la ruta completa; si no, concatenar el nombre
+            const rutaDestino = item.fullPath || joinPath(folderInput.value, item.name);
+            folderInput.value = rutaDestino;
+            // Al navegar a una carpeta, mostrar solo subcarpetas (rápido)
             refreshCurrentView();
         }
 
@@ -1307,7 +1422,8 @@
 
             uploadFileInput.value = '';
             setStatus('Archivo subido correctamente a ' + targetPath, 'success');
-            await refreshCurrentView();
+            // Refrescar mostrando solo carpetas (rápido)
+            await loadFiles();
         }
 
         filesTableBody.addEventListener('click', async (event) => {
@@ -1353,6 +1469,7 @@
             if (target.checked) {
                 selectedEntries.set(objectPath, {
                     path: objectPath,
+                    fullPath: item.fullPath || objectPath,
                     name: item.name,
                     isFolder: isFolderItem(item)
                 });
@@ -1369,7 +1486,10 @@
             setSelectAllVisible(target.checked);
         });
 
-        document.getElementById('btnLoadFiles').addEventListener('click', refreshCurrentView);
+        document.getElementById('btnLoadFiles').addEventListener('click', function() {
+            // Forzar recarga completa (archivos + carpetas) de la ruta actual
+            loadFiles({ includeFiles: true });
+        });
         document.getElementById('btnRefresh').addEventListener('click', refreshCurrentView);
         document.getElementById('btnGoRoot').addEventListener('click', goToRoot);
         document.getElementById('btnUploadFile').addEventListener('click', uploadFile);
@@ -1379,6 +1499,9 @@
 
         updateCurrentPathLabel(bucketInput.value.trim() || '-', '');
         updateSelectionUI();
+
+        // Cargar la vista inicial automáticamente (todo el contenido de la raíz del bucket)
+        loadInitialView();
     </script>
 </body>
 </html>
