@@ -6,6 +6,8 @@ const COLUMNA_RASTREO = 'codigo_utic'; // Columna que identifica a cada disposit
 let currentData = [];
 let tableColumns = [];
 let currentCodigoUtic = null; // Código actualmente consultado
+let currentSearchMode = null; // 'utic' (hoja de vida) o 'global'
+let globalColumns = []; // Columnas de la tabla para búsqueda global
 
 function isPhotoColumn(columnName = '') {
     const normalized = columnName.toLowerCase();
@@ -116,11 +118,18 @@ function getGridColumns() {
         'fecha', 'codigo_utic', 'codigo_soti', 'codigo_funcionario', 'estado',
         'marca', 'modelo', 'serie', 'responsable', 'soti', 'temis'
     ];
-    const noMostrarGrid = ['id', 'firma', 'evidencias', 'evidencia2', 'evidencia3',
-        'observaciones', 'condicion', 'accesorios', 'cedula_funcionario',
-        'nombre_funcionario', 'cargo_funcionario', 'imei_1', 'imei_2', 'simcard_tpl'];
+    const noMostrarGrid = ['id', 'id_inventario'];
+    const evidencias = ['evidencias', 'evidencia2', 'evidencia3'];
     const columnas = tableColumns.filter(c => !noMostrarGrid.includes(c));
     columnas.sort((a, b) => {
+        // Las columnas de evidencia se muestran al final
+        const esEvidenciaA = evidencias.includes(a);
+        const esEvidenciaB = evidencias.includes(b);
+        if (esEvidenciaA && esEvidenciaB) {
+            return evidencias.indexOf(a) - evidencias.indexOf(b);
+        }
+        if (esEvidenciaA) return 1;
+        if (esEvidenciaB) return -1;
         const ia = prioridad.indexOf(a);
         const ib = prioridad.indexOf(b);
         if (ia !== -1 && ib !== -1) return ia - ib;
@@ -176,6 +185,7 @@ async function buscarHojaDeVida() {
     }
 
     currentCodigoUtic = codigo;
+    currentSearchMode = 'utic';
     const loadingIndicator = document.getElementById('loadingIndicator');
     const tableContainer = document.getElementById('tableContainer');
     const btnExportar = document.getElementById('btnExportar');
@@ -210,10 +220,116 @@ async function buscarHojaDeVida() {
     }
 }
 
-// "Consultar" recarga la búsqueda actual (comodidad). Carga inicial no muestra todos.
+// "Consultar" recarga la búsqueda activa (hoja de vida o global).
 function loadData() {
-    if (currentCodigoUtic) {
+    if (currentSearchMode === 'global') {
+        buscarGlobal();
+    } else if (currentSearchMode === 'utic' || currentCodigoUtic) {
         buscarHojaDeVida();
+    }
+}
+
+// Cargar las columnas disponibles de la tabla y llenar el select de búsqueda global.
+async function cargarColumnasGlobal() {
+    try {
+        const { data, error } = await supabase
+            .from(TABLE_NAME)
+            .select('*')
+            .limit(1);
+        if (error) throw error;
+
+        let columnas = [];
+        if (data && data.length > 0) {
+            columnas = Object.keys(data[0]);
+        }
+        globalColumns = columnas;
+
+        const select = document.getElementById('columnaGlobal');
+        if (!select) return;
+        select.innerHTML = '<option value="">Todas las columnas</option>';
+        columnas.forEach(col => {
+            const option = document.createElement('option');
+            option.value = col;
+            option.textContent = getDisplayName(col);
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error cargando columnas:', error);
+    }
+}
+
+// Búsqueda global en toda la tabla dispositivos por una columna seleccionada.
+async function buscarGlobal() {
+    const valor = document.getElementById('busquedaGlobal').value.trim();
+    const columna = document.getElementById('columnaGlobal').value;
+
+    if (!valor) {
+        alert('Ingresa un dato para buscar.');
+        return;
+    }
+
+    currentCodigoUtic = null;
+    currentSearchMode = 'global';
+
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    const tableContainer = document.getElementById('tableContainer');
+    const btnExportar = document.getElementById('btnExportar');
+
+    loadingIndicator.style.display = 'block';
+    tableContainer.innerHTML = '';
+    btnExportar.style.display = 'none';
+
+    // Ocultar el resumen de hoja de vida (no aplica a búsqueda global)
+    const resumenEl = document.getElementById('resumenDispositivo');
+    if (resumenEl) resumenEl.style.display = 'none';
+
+    try {
+        let data;
+        let error;
+
+        if (columna) {
+            // Búsqueda por columna específica en el servidor
+            const res = await supabase
+                .from(TABLE_NAME)
+                .select('*')
+                .ilike(columna, `%${valor}%`)
+                .order('fecha', { ascending: false });
+            data = res.data;
+            error = res.error;
+        } else {
+            // "Todas las columnas": se filtran en cliente
+            const res = await supabase
+                .from(TABLE_NAME)
+                .select('*')
+                .order('fecha', { ascending: false });
+            data = res.data;
+            error = res.error;
+            if (!error && Array.isArray(data)) {
+                const term = valor.toLowerCase();
+                data = data.filter(row => {
+                    return (globalColumns.length > 0 ? globalColumns : Object.keys(row)).some(col => {
+                        const v = row[col];
+                        return v != null && String(v).toLowerCase().includes(term);
+                    });
+                });
+            }
+        }
+
+        if (error) throw error;
+
+        currentData = data || [];
+        if (currentData.length > 0) {
+            tableColumns = Object.keys(currentData[0]);
+            renderTable(currentData);
+            btnExportar.style.display = 'inline-block';
+        } else {
+            tableContainer.innerHTML = `<div class="no-data">No se encontraron resultados para "${escapeHtmlAttr(valor)}".</div>`;
+        }
+    } catch (error) {
+        console.error('Error en búsqueda global:', error);
+        tableContainer.innerHTML = '<div class="error">Error en la búsqueda global: ' + error.message + '</div>';
+    } finally {
+        loadingIndicator.style.display = 'none';
     }
 }
 
@@ -241,6 +357,16 @@ function renderTable(data) {
         gridColumns.forEach(column => {
             let value = row[column];
 
+            // Columnas de evidencia: mostrar un enlace "Ver" que abre la URL
+            if (['evidencias', 'evidencia2', 'evidencia3'].includes(column)) {
+                if (isImageUrl(value)) {
+                    html += `<td><a href="${escapeHtmlAttr(value.trim())}" target="_blank" rel="noopener" class="btn btn-link">Ver</a></td>`;
+                } else {
+                    html += `<td>-</td>`;
+                }
+                return;
+            }
+
             if (looksLikePhotoValue(column, value)) {
                 html += `<td>${getPhotoCellHtml(value, row['codigo_utic'] || 'Dispositivo')}</td>`;
                 return;
@@ -254,7 +380,7 @@ function renderTable(data) {
                 if (value) {
                     const date = new Date(value);
                     if (!isNaN(date.getTime())) {
-                        value = date.toLocaleString('es-ES');
+                        value = date.toLocaleString('es-ES', { timeZone: 'UTC' });
                     }
                 }
             }
@@ -344,7 +470,7 @@ async function viewDetails(id) {
             } else if (key.includes('fecha') && value) {
                 const date = new Date(value);
                 if (!isNaN(date.getTime())) {
-                    displayValue = date.toLocaleString('es-ES');
+                    displayValue = date.toLocaleString('es-ES', { timeZone: 'UTC' });
                 }
             }
             detailsHtml += `<p><strong>${displayName}:</strong> ${displayValue}</p>`;
@@ -428,7 +554,7 @@ function formatDate(value) {
     if (!value) return '';
     const date = new Date(value);
     if (isNaN(date.getTime())) return String(value);
-    return date.toLocaleString('es-ES');
+    return date.toLocaleString('es-ES', { timeZone: 'UTC' });
 }
 
 // Cargar al inicio: solo mostrar mensaje de búsqueda previa
@@ -436,9 +562,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const tableContainer = document.getElementById('tableContainer');
     const btnExportar = document.getElementById('btnExportar');
     if (btnExportar) btnExportar.style.display = 'none';
-    tableContainer.innerHTML = '<div class="no-data">Ingresa un código UTIC y presiona <strong>Buscar</strong> para ver la hoja de vida del dispositivo.</div>';
+    tableContainer.innerHTML = '<div class="no-data">Usa la <strong>búsqueda por código UTIC</strong> para ver la hoja de vida de un dispositivo, o la <strong>búsqueda global</strong> para consultar en toda la tabla.</div>';
 
-    // Permitir buscar con Enter
+    // Cargar columnas para la búsqueda global
+    cargarColumnasGlobal();
+
+    // Permitir buscar con Enter en el campo de código UTIC y forzar mayúsculas
     const codigoUtic = document.getElementById('codigoUtic');
     if (codigoUtic) {
         codigoUtic.addEventListener('keydown', function(e) {
@@ -446,6 +575,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 buscarHojaDeVida();
             }
         });
+        codigoUtic.addEventListener('input', function() {
+            this.value = this.value.toUpperCase();
+        });
         setTimeout(() => codigoUtic.focus(), 100);
+    }
+
+    // Permitir buscar con Enter en el campo de búsqueda global
+    const busquedaGlobal = document.getElementById('busquedaGlobal');
+    if (busquedaGlobal) {
+        busquedaGlobal.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                buscarGlobal();
+            }
+        });
     }
 });

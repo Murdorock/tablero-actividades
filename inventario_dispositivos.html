@@ -18,8 +18,16 @@
         <!-- Panel de búsqueda por código UTIC -->
         <div class="table-header" style="justify-content: flex-start; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;">
             <label for="codigoUtic" style="font-weight:bold; font-size:1.1em;">Código UTIC:</label>
-            <input type="text" id="codigoUtic" placeholder="Ej: KALLEY#1, TPL#001..." style="width: 280px; height: 38px; font-size: 1.1em; padding: 6px 10px; border-radius: 6px; border: 1px solid #ccc;" autocomplete="off">
+            <input type="text" id="codigoUtic" placeholder="Ej: KALLEY#1, TPL#001..." style="width: 280px; height: 38px; font-size: 1.1em; padding: 6px 10px; border-radius: 6px; border: 1px solid #ccc; text-transform: uppercase;" autocomplete="off">
             <button type="button" class="btn btn-primary" onclick="buscarHojaDeVida()">🔍 Buscar</button>
+        </div>
+
+        <!-- Panel de búsqueda global en toda la tabla -->
+        <div class="table-header" style="justify-content: flex-start; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;">
+            <label for="busquedaGlobal" style="font-weight:bold; font-size:1.1em;">Búsqueda global:</label>
+            <input type="text" id="busquedaGlobal" placeholder="Dato a buscar..." style="width: 230px; height: 38px; font-size: 1.1em; padding: 6px 10px; border-radius: 6px; border: 1px solid #ccc;" autocomplete="off">
+            <select id="columnaGlobal" style="min-width: 200px; height: 38px; font-size: 1.1em; border-radius: 6px; border: 1px solid #ccc; padding: 6px 10px;"></select>
+            <button type="button" class="btn btn-primary" onclick="buscarGlobal()">🔍 Buscar</button>
         </div>
 
         <div id="resumenDispositivo" style="display: none; margin-bottom: 12px;"></div>
