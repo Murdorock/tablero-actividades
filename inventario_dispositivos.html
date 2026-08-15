@@ -1,0 +1,42 @@
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <!-- SheetJS (xlsx 0.18.5 - Apache 2.0) para exportar a Excel -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="table-logic-inventario_dispositivos.js?v=20260312b"></script>
+</head>
+<body>
+    <div class="table-container">
+        <div class="table-header">
+            <h2>📱 Hoja de Vida de Dispositivos</h2>
+            <div class="table-actions">
+                <button class="btn btn-secondary" onclick="loadData()">🔄 Consultar</button>
+                <button class="btn btn-primary" onclick="exportarExcel()" id="btnExportar" style="display: none;">📥 Exportar XLSX</button>
+            </div>
+        </div>
+
+        <!-- Panel de búsqueda por código UTIC -->
+        <div class="table-header" style="justify-content: flex-start; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;">
+            <label for="codigoUtic" style="font-weight:bold; font-size:1.1em;">Código UTIC:</label>
+            <input type="text" id="codigoUtic" placeholder="Ej: KALLEY#1, TPL#001..." style="width: 280px; height: 38px; font-size: 1.1em; padding: 6px 10px; border-radius: 6px; border: 1px solid #ccc;" autocomplete="off">
+            <button type="button" class="btn btn-primary" onclick="buscarHojaDeVida()">🔍 Buscar</button>
+        </div>
+
+        <div id="resumenDispositivo" style="display: none; margin-bottom: 12px;"></div>
+
+        <div class="data-table-wrapper">
+            <div id="loadingIndicator" class="loading" style="display: none;"><div class="spinner"></div><p>Cargando...</p></div>
+            <div id="tableContainer"></div>
+        </div>
+    </div>
+    <div id="dataModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header"><h3 id="modalTitle">Detalles del Movimiento</h3></div>
+            <div id="modalBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
