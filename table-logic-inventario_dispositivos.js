@@ -189,10 +189,12 @@ async function buscarHojaDeVida() {
     const loadingIndicator = document.getElementById('loadingIndicator');
     const tableContainer = document.getElementById('tableContainer');
     const btnExportar = document.getElementById('btnExportar');
+    const btnExportarPdf = document.getElementById('btnExportarPdf');
 
     loadingIndicator.style.display = 'block';
     tableContainer.innerHTML = '';
     btnExportar.style.display = 'none';
+    btnExportarPdf.style.display = 'none';
 
     try {
         const { data, error } = await supabase
@@ -207,6 +209,7 @@ async function buscarHojaDeVida() {
             tableColumns = Object.keys(currentData[0]);
             renderTable(currentData);
             btnExportar.style.display = 'inline-block';
+            btnExportarPdf.style.display = 'inline-block';
         } else {
             tableContainer.innerHTML = `<div class="no-data">No se encontraron movimientos para el código UTIC "${escapeHtmlAttr(codigo)}".</div>`;
         }
@@ -274,10 +277,12 @@ async function buscarGlobal() {
     const loadingIndicator = document.getElementById('loadingIndicator');
     const tableContainer = document.getElementById('tableContainer');
     const btnExportar = document.getElementById('btnExportar');
+    const btnExportarPdf = document.getElementById('btnExportarPdf');
 
     loadingIndicator.style.display = 'block';
     tableContainer.innerHTML = '';
     btnExportar.style.display = 'none';
+    btnExportarPdf.style.display = 'none';
 
     // Ocultar el resumen de hoja de vida (no aplica a búsqueda global)
     const resumenEl = document.getElementById('resumenDispositivo');
@@ -322,6 +327,7 @@ async function buscarGlobal() {
             tableColumns = Object.keys(currentData[0]);
             renderTable(currentData);
             btnExportar.style.display = 'inline-block';
+            btnExportarPdf.style.display = 'inline-block';
         } else {
             tableContainer.innerHTML = `<div class="no-data">No se encontraron resultados para "${escapeHtmlAttr(valor)}".</div>`;
         }
@@ -550,6 +556,225 @@ function exportarExcel() {
     XLSX.writeFile(wb, nombreArchivo);
 }
 
+// Convierte un valor a texto plano para el PDF
+function _pv(value) {
+    if (value === null || value === undefined) return '';
+    return String(value);
+}
+
+// Formatea una fecha como se muestra en la vista (zona UTC)
+function _pdfFecha(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (isNaN(date.getTime())) return String(value);
+    return date.toLocaleString('es-ES', { timeZone: 'UTC' });
+}
+
+// Convierte una URL de imagen a un objeto con dataURL y sus dimensiones para
+// poder insertarla en el PDF. Devuelve null si no se puede cargar.
+function _urlAImagenBase64(url, timeout = 3000) {
+    return new Promise(resolve => {
+        let terminado = false;
+        function done(r) {
+            if (terminado) return;
+            terminado = true;
+            clearTimeout(timer);
+            resolve(r);
+        }
+        const timer = setTimeout(() => done(null), timeout);
+        try {
+            const cargarConCors = (conCors) => {
+                const img = new Image();
+                if (conCors) img.crossOrigin = 'anonymous';
+                img.onload = function () {
+                    try {
+                        let width = img.naturalWidth;
+                        let height = img.naturalHeight;
+                        // Reducir tamaño para evitar dataURL gigantes
+                        const maxW = 400;
+                        if (width > maxW) {
+                            const s = maxW / width;
+                            width = Math.round(width * s);
+                            height = Math.round(height * s);
+                        }
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        done({ dataUrl: canvas.toDataURL('image/png'), width, height });
+                    } catch (e) {
+                        if (conCors) { cargarConCors(false); } else { done(null); }
+                    }
+                };
+                img.onerror = function () {
+                    if (conCors) { cargarConCors(false); } else { done(null); }
+                };
+                img.src = url;
+            };
+            cargarConCors(true);
+        } catch (e) {
+            done(null);
+        }
+    });
+}
+
+// Exporta la hoja de vida a PDF (horizontal) con diseño de cuadrícula técnica.
+async function exportarPDF() {
+    if (!currentData.length) {
+        alert('No hay datos para exportar. Primero busca un código UTIC.');
+        return;
+    }
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+        alert('jsPDF no está cargado.');
+        return;
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('landscape', 'pt', 'letter');
+
+    const pageW = doc.internal.pageSize.getWidth();
+
+    const ultimo = currentData[0];                              // más reciente (fecha desc)
+    const primero = currentData[currentData.length - 1];        // más antiguo
+
+    const margin = 20;
+    const colW = (pageW - margin * 2) / 6;
+    const tituloRowH = 32;
+    const rowH = 26;
+
+    // Cargar firmas de funcionario (se renderizan como imagen en el PDF).
+    // Se cargan ANTES de dibujar el bloque superior para evitar interrupciones.
+    // Si alguna falla, se usa null y se muestra "-" en la celda.
+    const firmasImg = await Promise.all(currentData.map(async (r) => {
+        const url = r['firma_funcionario'];
+        if (typeof url !== 'string' || !isImageUrl(url)) return null;
+        try {
+            return await _urlAImagenBase64(url, 5000);
+        } catch (e) {
+            return null;
+        }
+    }));
+
+    // ---------- SECCIÓN SUPERIOR: DATOS GENERALES ----------
+    // Fila de título (con logo)
+    doc.rect(margin, 24, colW * 6, tituloRowH);
+    if (typeof logoUTIC !== 'undefined' && logoUTIC) {
+        try {
+            doc.addImage(logoUTIC, 'JPEG', margin + 4, 24 + 4, 90, tituloRowH - 8);
+        } catch (e) {
+            console.error('Error agregando logo:', e);
+        }
+    }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text('HOJA DE VIDA TERMINAL PORTÁTIL LECTURA (TPL)', pageW / 2, 24 + tituloRowH / 2, { align: 'center', baseline: 'middle' });
+
+    // Filas de etiquetas y valores
+    const filasSuperior = [
+        ['CARGADOR', _pv(ultimo['cargador']), 'MARCA', _pv(ultimo['marca']), 'FECHA INICIO', _pdfFecha(primero && primero['fecha'])],
+        ['CABLE USB TIPO C', _pv(ultimo['cable_tipo_c']), 'MODELO', _pv(ultimo['modelo']), 'FECHA FIN', _pdfFecha(ultimo['fecha'])],
+        ['VIDRIO PROTECTOR', _pv(ultimo['vidrio']), 'SERIE', _pv(ultimo['serie']), 'SIM CARD', _pv(ultimo['celular'])],
+        ['ESTUCHE PORTATERM.', _pv(ultimo['portaterminal']), 'IMEI 1', _pv(ultimo['imei_1']), 'CÓDIGO TEMIS', _pv(ultimo['codigo_utic'])],
+        ['CORREA DE MANO', _pv(ultimo['correa_mano']), 'IMEI 2', _pv(ultimo['imei_2']), 'CÓDIGO EPM', _pv(ultimo['codigo_soti'])],
+    ];
+
+    let y = 24 + tituloRowH;
+    filasSuperior.forEach(fila => {
+        fila.forEach((texto, i) => {
+            const x = margin + i * colW;
+            doc.rect(x, y, colW, rowH);
+            const esEtiqueta = i % 2 === 0;
+            if (esEtiqueta) {
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(7.5);
+                doc.text(_pv(texto).toUpperCase(), x + 3, y + rowH / 2, { baseline: 'middle' });
+            } else {
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(8);
+                doc.text(_pv(texto), x + 40, y + rowH / 2, { baseline: 'middle' });
+            }
+        });
+        y += rowH;
+    });
+
+    // ---------- SECCIÓN INFERIOR: HISTORIAL / REGISTROS ----------
+    const historialBody = currentData.map((r, idx) => [
+        String(idx + 1),
+        _pdfFecha(r['fecha']),
+        _pv(r['codigo_funcionario']),
+        _pv(r['cedula_funcionario']),
+        _pv(r['nombre_funcionario']),
+        _pv(r['cargo_funcionario']),
+        _pv(r['observaciones']),
+        firmasImg[idx] ? '' : '-',
+        _pv(r['responsable']),
+    ]);
+
+    doc.autoTable({
+        startY: y + 14,
+        margin: { left: margin, right: margin },
+        theme: 'grid',
+        styles: { fontSize: 7, cellPadding: 3 },
+        headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold', halign: 'center' },
+        head: [[
+            '#', 'FECHA', 'CÓD. FUNCIONARIO', 'CÉDULA FUNCIONARIO',
+            'NOMBRE FUNCIONARIO', 'CARGO', 'OBSERVACIÓN', 'FIRMA FUNCIONARIO', 'FIRMA ENCARGADO'
+        ]],
+        body: historialBody,
+        columnStyles: {
+            0: { cellWidth: 30, halign: 'center' },
+            1: { cellWidth: 85 },
+            2: { cellWidth: 70 },
+            3: { cellWidth: 70 },
+            4: { cellWidth: 115 },
+            5: { cellWidth: 80 },
+            6: { cellWidth: 110 },
+            7: { cellWidth: 96, minCellHeight: 28, halign: 'center', valign: 'middle' },
+            8: { cellWidth: 96 },
+        },
+        willDrawCell: function (data) {
+            // Limpiar el texto residual de la celda de firma (la imagen se dibuja
+            // en didDrawCell), igual que en el patrón de registro_formacion.
+            if (data.column.index === 7 && data.section === 'body') {
+                data.cell.text = [];
+            }
+        },
+        didDrawCell: function (data) {
+            // Renderizar la firma del funcionario como imagen, no como URL
+            // Solo en filas del cuerpo, nunca en la fila de encabezado.
+            if (data.column.index === 7 && data.section === 'body') {
+                const img = firmasImg[data.row.index];
+                if (!img || !img.dataUrl || !img.width || !img.height) return;
+                try {
+                    const dispw = data.cell.width - 4;
+                    const disph = data.cell.height - 4;
+                    const ratio = img.width / img.height;
+                    let finalW = img.height * ratio;
+                    let finalH = img.height;
+                    if (finalW > dispw) { finalH = dispw / ratio; finalW = dispw; }
+                    if (finalH > disph) { finalW = disph * ratio; finalH = disph; }
+                    const cx = data.cell.x + (data.cell.width - finalW) / 2;
+                    const cy = data.cell.y + (data.cell.height - finalH) / 2;
+                    doc.addImage(img.dataUrl, 'PNG', cx, cy, finalW, finalH);
+                } catch (e) {
+                    console.error('Error dibujando firma:', e);
+                }
+            }
+        },
+        didDrawPage: function (data) {
+            // Pie de página
+            const pageNumber = doc.internal.getNumberOfPages();
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            doc.text('Página ' + pageNumber, doc.internal.pageSize.getWidth() - 20, doc.internal.pageSize.getHeight() - 10, { align: 'right' });
+        },
+    });
+
+    const nombreArchivo = `Hoja_de_vida_${(currentCodigoUtic || 'dispositivo').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+    doc.save(nombreArchivo);
+}
+
 function formatDate(value) {
     if (!value) return '';
     const date = new Date(value);
@@ -561,7 +786,9 @@ function formatDate(value) {
 document.addEventListener('DOMContentLoaded', function() {
     const tableContainer = document.getElementById('tableContainer');
     const btnExportar = document.getElementById('btnExportar');
+    const btnExportarPdf = document.getElementById('btnExportarPdf');
     if (btnExportar) btnExportar.style.display = 'none';
+    if (btnExportarPdf) btnExportarPdf.style.display = 'none';
     tableContainer.innerHTML = '<div class="no-data">Usa la <strong>búsqueda por código UTIC</strong> para ver la hoja de vida de un dispositivo, o la <strong>búsqueda global</strong> para consultar en toda la tabla.</div>';
 
     // Cargar columnas para la búsqueda global
