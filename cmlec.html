@@ -68,7 +68,7 @@
     // Usar supabase como supabaseClient (compatibilidad)
     const supabaseClient = window.supabase;
 
-    excelInput.addEventListener('change', async (e) => {
+        excelInput.addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
         contenido.innerHTML = '<p>Procesando Excel...</p>';
@@ -76,18 +76,76 @@
             const data = await file.arrayBuffer();
             const workbook = XLSX.read(data, { type: 'array' });
             const sheet = workbook.Sheets[workbook.SheetNames[0]];
-            let rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-            if (rows.length < 2) return alert('El archivo debe tener al menos dos filas.');
-            // Eliminar la primera fila (encabezados originales)
-            rows.shift();
-            // Definir los nombres de columnas deseados
-            const columnasDeseadas = ['id_llave','correria_sirius','correria_mp','periodo_consumo','ciclo_consumo','zona','terminal','ordenes_descargar','ordenes_legalizar','ordenes_no_lectura','padre_id'];
-            // Convertir todas las filas restantes (que son datos) a objetos
-            const objetos = rows.map(r => {
-                let obj = {};
-                columnasDeseadas.forEach((col, i) => obj[col] = r[i] ?? null);
-                return obj;
-            });
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, blankrows: true });
+            if (!rows.length) return alert('El archivo Excel está vacío.');
+            const normalizeHeader = (value) => (value || '')
+                .toString()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, ' ')
+                .trim();
+            const headerMap = {
+                'correria sirius': 'correria_sirius',
+                'correria mp': 'correria_mp',
+                'periodo de consumo': 'periodo_consumo',
+                'ciclo de consumo': 'ciclo_consumo',
+                'zona': 'zona',
+                'terminal': 'terminal',
+                'cantidad de ordenes por descargar': 'ordenes_descargar',
+                'cantidad de ordenes por legalizar': 'ordenes_legalizar',
+                'cantidad de ordenes descargadas sin lectura': 'ordenes_no_lectura',
+                'cantidad de ordenes descargadas': 'ordenes_no_lectura'
+            };
+            // Detectar automáticamente la fila de encabezados (priorizando la fila 8 esperada)
+            let headerRowIndex = -1;
+            let mappedColumns = [];
+            let bestMatchCount = -1;
+            const maxRowsToScan = Math.min(rows.length, 25);
+            for (let idx = 0; idx < maxRowsToScan; idx++) {
+                const currentRow = rows[idx] || [];
+                const currentMapped = currentRow.map((cell) => headerMap[normalizeHeader(cell)] || null);
+                const uniqueMatches = [...new Set(currentMapped.filter(Boolean))];
+                const matchCount = uniqueMatches.length;
+                if (matchCount > bestMatchCount) {
+                    bestMatchCount = matchCount;
+                    headerRowIndex = idx;
+                    mappedColumns = currentMapped;
+                }
+            }
+            if (headerRowIndex < 0 || bestMatchCount <= 0) {
+                return alert('No se pudo detectar la fila de encabezados en el Excel.');
+            }
+            const columnasEsperadas = ['correria_sirius', 'correria_mp', 'periodo_consumo', 'ciclo_consumo', 'zona', 'terminal', 'ordenes_descargar', 'ordenes_legalizar', 'ordenes_no_lectura'];
+            const columnasDetectadas = mappedColumns.filter(Boolean);
+            const faltantes = columnasEsperadas.filter((col) => !columnasDetectadas.includes(col));
+            if (faltantes.length) {
+                return alert('Faltan columnas en el Excel (fila detectada: ' + (headerRowIndex + 1) + '): ' + faltantes.join(', '));
+            }
+            const dataRows = rows.slice(headerRowIndex + 1);
+            const objetos = dataRows
+                .map((r, idx) => {
+                    const obj = {};
+                    mappedColumns.forEach((col, i) => {
+                        if (col) obj[col] = r[i] ?? null;
+                    });
+                    // La tabla cmlec mantiene id_llave como NOT NULL: se genera automáticamente.
+                    const toSafe = (value) => (value ?? '').toString().trim();
+                    const keyParts = [
+                        toSafe(obj.correria_sirius),
+                        toSafe(obj.correria_mp),
+                        toSafe(obj.periodo_consumo),
+                        toSafe(obj.terminal)
+                    ].filter(Boolean);
+                    const generatedKey = keyParts.length ? keyParts.join('|') : `cmlec_${Date.now()}_${idx}`;
+                    obj.id_llave = generatedKey;
+                    // Compatibilidad con estructuras antiguas donde padre_id también existe.
+                    if (obj.padre_id === undefined || obj.padre_id === null || obj.padre_id === '') {
+                        obj.padre_id = generatedKey;
+                    }
+                    return obj;
+                })
+                .filter((obj) => Object.values(obj).some((v) => v !== null && v !== ''));
             if (!objetos.length) return alert('No hay datos para cargar.');
             // Limpiar la tabla cmlec antes de insertar
             await supabaseClient.from('cmlec').delete().neq('id_llave', null);
