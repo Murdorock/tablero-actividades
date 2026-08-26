@@ -9,6 +9,10 @@ let currentCodigoUtic = null; // Código actualmente consultado
 let currentSearchMode = null; // 'utic' (hoja de vida) o 'global'
 let globalColumns = []; // Columnas de la tabla para búsqueda global
 
+// Datos para las tarjetas de estadísticas (indicador -> lista de dispositivos)
+let _estadoActualExpandido = null;      // estado/tarjeta actualmente desplegado
+let _dispositivosPorEstado = {};        // { estado: [{ codigo, fecha }] }
+
 function isPhotoColumn(columnName = '') {
     const normalized = columnName.toLowerCase();
     return normalized.includes('foto') || normalized.includes('imagen') || normalized.includes('avatar')
@@ -782,6 +786,230 @@ function formatDate(value) {
     return date.toLocaleString('es-ES', { timeZone: 'UTC' });
 }
 
+// ---------------------------------------------------------------------------
+// Tabla de estadísticas fija a nivel de la tabla completa 'dispositivos'
+// - Total de dispositivos: conteo de valores únicos de la columna codigo_utic.
+// - Resumen por estado: para cada codigo_utic se toma el registro más reciente
+//   (columna fecha) y se cuenta cuántos dispositivos hay en cada estado.
+// ---------------------------------------------------------------------------
+async function cargarEstadisticas() {
+    const statsEl = document.getElementById('statsTable');
+    if (!statsEl) return;
+    statsEl.innerHTML = '<div class="loading" style="padding:12px;"><div class="spinner"></div><p>Cargando estadísticas...</p></div>';
+
+    try {
+        // Obtener todas las filas necesarias de la tabla usando paginación,
+        // para que las estadísticas sean correctas aunque haya muchos registros.
+        const PAGE_SIZE = 1000;
+        let registros = [];
+        let from = 0;
+        let hasMore = true;
+
+        while (hasMore) {
+            const { data, error, count } = await supabase
+                .from(TABLE_NAME)
+                .select('codigo_utic, estado, fecha', { count: 'exact' })
+                .range(from, from + PAGE_SIZE - 1);
+
+            if (error) throw error;
+
+            if (data && data.length > 0) {
+                registros = registros.concat(data);
+                from += data.length;
+                // Si devolvimos menos que el tamaño de página, no hay más datos
+                hasMore = data.length === PAGE_SIZE;
+            } else {
+                hasMore = false;
+            }
+        }
+
+        // Paso 1: por cada codigo_utic, conservar únicamente el registro con la
+        // fecha más reciente (que define el estado actual del dispositivo).
+        const dispositivos = new Map(); // codigo_utic -> { estado, fecha }
+        registros.forEach(r => {
+            const codigo = r['codigo_utic'];
+            if (!codigo) return; // ignorar registros sin código
+            const estado = r['estado'];
+            const fecha = r['fecha'];
+
+            const actual = dispositivos.get(codigo);
+            if (!actual) {
+                dispositivos.set(codigo, { estado, fecha });
+            } else {
+                const fechaActual = actual.fecha ? new Date(actual.fecha) : null;
+                const fechaNueva = fecha ? new Date(fecha) : null;
+                if (fechaNueva && (!fechaActual || fechaNueva > fechaActual)) {
+                    dispositivos.set(codigo, { estado, fecha });
+                }
+            }
+        });
+
+        const totalDispositivos = dispositivos.size;
+
+        // Paso 2: contar cuántos dispositivos hay en cada estado (según su
+        // registro más reciente) y guardar la lista de dispositivos por estado.
+        const conteoEstados = new Map(); // estado -> cantidad
+        _dispositivosPorEstado = {};     // estado -> [{ codigo, fecha }]
+        dispositivos.forEach((info, codigo) => {
+            const estado = info.estado && String(info.estado).trim() !== ''
+                ? String(info.estado).trim()
+                : 'Sin estado';
+            conteoEstados.set(estado, (conteoEstados.get(estado) || 0) + 1);
+
+            if (!_dispositivosPorEstado[estado]) {
+                _dispositivosPorEstado[estado] = [];
+            }
+            _dispositivosPorEstado[estado].push({
+                codigo: codigo,
+                fecha: info.fecha
+            });
+        });
+
+        // Reiniciar la tarjeta expandida al recargar
+        _estadoActualExpandido = null;
+
+        statsEl.innerHTML = renderTablaEstadisticas(totalDispositivos, conteoEstados);
+    } catch (error) {
+        console.error('Error cargando estadísticas:', error);
+        statsEl.innerHTML = '<div class="error">Error cargando estadísticas: ' + error.message + '</div>';
+    }
+}
+
+function renderTablaEstadisticas(totalDispositivos, conteoEstados) {
+    const cardStyle = 'background:#fff; border:1px solid #1A237E; border-radius:8px; padding:14px; min-width:120px; text-align:center; box-shadow:0 2px 6px rgba(26,35,126,0.15); cursor:pointer; transition:background-color 0.1s;';
+    const cardHover = ' onmouseover="this.style.backgroundColor=\'#eef0fb\'" onmouseout="this.style.backgroundColor=\'#fff\'"';
+    const valueStyle = 'font-size:1.6em; font-weight:bold; color:#1A237E;';
+    const labelStyle = 'color:#555; font-size:0.85em; margin-top:4px;';
+    const subStyle = 'color:#999; font-size:0.75em; margin-top:2px;';
+    const clickHint = '<div style="color:#1A237E; font-size:0.7em; margin-top:4px; text-decoration:underline;">Ver detalle</div>';
+
+    let html = '<div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;">';
+
+    // Tarjeta del total de dispositivos (clic = listar todos)
+    html += `<div style="${cardStyle} flex:1 1 140px;" onclick="mostrarDetalleEstado('__TOTAL__')" ${cardHover}>
+                <div style="${valueStyle}">${totalDispositivos}</div>
+                <div style="${labelStyle}">Total dispositivos</div>
+                ${totalDispositivos > 0 ? clickHint : ''}
+              </div>`;
+
+    // Ordenar estados por cantidad descendente
+    const estadosOrdenados = Array.from(conteoEstados.entries()).sort((a, b) => b[1] - a[1]);
+    estadosOrdenados.forEach(([estado, cantidad]) => {
+        const pct = totalDispositivos > 0 ? (cantidad / totalDispositivos) * 100 : 0;
+        const estadoKey = 'S:' + encodeURIComponent(estado);
+        html += `<div style="${cardStyle} flex:1 1 120px;" onclick="mostrarDetalleEstado('${estadoKey}')" ${cardHover}>
+                    <div style="${valueStyle}">${cantidad}</div>
+                    <div style="${labelStyle}">${escapeHtmlAttr(estado)}</div>
+                    <div style="${subStyle}">${pct.toFixed(1)}%</div>
+                    ${clickHint}
+                  </div>`;
+    });
+
+    html += '</div>';
+
+    // Panel donde se despliegan los dispositivos del filtro seleccionado
+    html += '<div id="statsDetalle" style="margin-top:12px;"></div>';
+
+    // Tabla detallada (resumen por estado)
+    if (estadosOrdenados.length > 0) {
+        html += '<div style="overflow-x:auto; background:#fff; border-radius:8px; border:1px solid #ddd; margin-top:12px;">';
+        html += '<table class="data-table" style="width:100%; border-collapse:collapse;">';
+        html += '<thead><tr style="background:#1A237E; color:#fff;">';
+        html += '<th style="padding:10px; border:1px solid #ddd; text-align:left;">Estado</th>';
+        html += '<th style="padding:10px; border:1px solid #ddd; text-align:center;">Cantidad dispositivos</th>';
+        html += '<th style="padding:10px; border:1px solid #ddd; text-align:center;">Porcentaje</th>';
+        html += '</tr></thead><tbody>';
+        estadosOrdenados.forEach(([estado, cantidad]) => {
+            const pct = totalDispositivos > 0 ? (cantidad / totalDispositivos) * 100 : 0;
+            html += `<tr>
+                        <td style="padding:8px 10px; border:1px solid #ddd;">${escapeHtmlAttr(estado)}</td>
+                        <td style="padding:8px 10px; border:1px solid #ddd; text-align:center;">${cantidad}</td>
+                        <td style="padding:8px 10px; border:1px solid #ddd; text-align:center;">${pct.toFixed(1)}%</td>
+                      </tr>`;
+        });
+        html += '</tbody></table></div>';
+    }
+
+    return html;
+}
+
+// Muestra/oculta la lista de dispositivos de la tarjeta clicada.
+// key puede ser '__TOTAL__' (todos) o 'S:' + encodeURIComponent(estado).
+function mostrarDetalleEstado(key) {
+    const detalleEl = document.getElementById('statsDetalle');
+    if (!detalleEl) return;
+
+    // Determinar qué estado corresponde a la clave
+    let estadoFiltro;
+    let lista;
+
+    if (key === '__TOTAL__') {
+        estadoFiltro = 'Todos los estados';
+        lista = [];
+        Object.keys(_dispositivosPorEstado).forEach(estado => {
+            lista = lista.concat(_dispositivosPorEstado[estado]);
+        });
+    } else {
+        const estado = decodeURIComponent(key.substring(2)); // quitar 'S:'
+        estadoFiltro = estado;
+        lista = _dispositivosPorEstado[estado] || [];
+    }
+
+    // Toggle: si la tarjeta ya estaba expandida, se colapsa
+    if (_estadoActualExpandido === estadoFiltro) {
+        detalleEl.innerHTML = '';
+        _estadoActualExpandido = null;
+        return;
+    }
+
+    _estadoActualExpandido = estadoFiltro;
+
+    // Ordenar por fecha descendente
+    lista = lista.slice().sort((a, b) => {
+        const fa = a.fecha ? new Date(a.fecha) : null;
+        const fb = b.fecha ? new Date(b.fecha) : null;
+        if (fa && fb) return fb - fa;
+        if (fa) return -1;
+        if (fb) return 1;
+        return 0;
+    });
+
+    let html = `<div style="background:#fff; border:2px solid #1A237E; border-radius:8px; padding:14px;">`;
+    html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+                <strong style="color:#1A237E; font-size:1.1em;">${escapeHtmlAttr(estadoFiltro)} <span style="color:#555;">(${lista.length} dispositivos)</span></strong>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="cerrarDetalle()">✖ Cerrar</button>
+             </div>`;
+
+    if (lista.length === 0) {
+        html += '<div class="no-data">No hay dispositivos.</div>';
+    } else {
+        html += '<div style="max-height:300px; overflow-y:auto; border:1px solid #ddd;">';
+        html += '<table class="data-table" style="width:100%; border-collapse:collapse;">';
+        html += '<thead><tr style="background:#1A237E; color:#fff;">';
+        html += '<th style="padding:8px; border:1px solid #ddd; text-align:left;">Código UTIC</th>';
+        html += '<th style="padding:8px; border:1px solid #ddd; text-align:center;">Última fecha</th>';
+        html += '</tr></thead><tbody>';
+        lista.forEach(item => {
+            const fechaTxt = item.fecha ? formatDate(item.fecha) : '-';
+            html += `<tr>
+                        <td style="padding:7px 10px; border:1px solid #ddd;">${escapeHtmlAttr(item.codigo)}</td>
+                        <td style="padding:7px 10px; border:1px solid #ddd; text-align:center;">${escapeHtmlAttr(fechaTxt)}</td>
+                      </tr>`;
+        });
+        html += '</tbody></table></div>';
+    }
+    html += '</div>';
+
+    detalleEl.innerHTML = html;
+}
+
+// Cierra el panel de detalle.
+function cerrarDetalle() {
+    _estadoActualExpandido = null;
+    const detalleEl = document.getElementById('statsDetalle');
+    if (detalleEl) detalleEl.innerHTML = '';
+}
+
 // Cargar al inicio: solo mostrar mensaje de búsqueda previa
 document.addEventListener('DOMContentLoaded', function() {
     const tableContainer = document.getElementById('tableContainer');
@@ -790,6 +1018,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (btnExportar) btnExportar.style.display = 'none';
     if (btnExportarPdf) btnExportarPdf.style.display = 'none';
     tableContainer.innerHTML = '<div class="no-data">Usa la <strong>búsqueda por código UTIC</strong> para ver la hoja de vida de un dispositivo, o la <strong>búsqueda global</strong> para consultar en toda la tabla.</div>';
+
+    // Cargar la tabla de estadísticas fija a nivel de tabla completa
+    cargarEstadisticas();
 
     // Cargar columnas para la búsqueda global
     cargarColumnasGlobal();

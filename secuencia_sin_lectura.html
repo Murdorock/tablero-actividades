@@ -1223,7 +1223,7 @@
             const strY = (coordY || '').toString().trim();
             let coordYFormateada = strY;
             if (strY.length > 1) {
-                coordYFormateada = strY.substring(0, 1) + '.' + strY.substring(1);
+                coordYFormateada = strY.substring(0, 1) + strY.substring(1);
             }
             
             // coordX: ej -7552635 → -75.52635 (punto después del tercer dígito)
@@ -1232,11 +1232,11 @@
             if (strX.startsWith('-')) {
                 const numPart = strX.substring(1);
                 if (numPart.length > 2) {
-                    coordXFormateada = '-' + numPart.substring(0, 2) + '.' + numPart.substring(2);
+                    coordXFormateada = '-' + numPart.substring(0, 2) + numPart.substring(2);
                 }
             } else {
                 if (strX.length > 2) {
-                    coordXFormateada = strX.substring(0, 2) + '.' + strX.substring(2);
+                    coordXFormateada = strX.substring(0, 2) + strX.substring(2);
                 }
             }
             

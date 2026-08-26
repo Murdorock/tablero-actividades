@@ -7,7 +7,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     <script src="logoUTIC.js"></script>
-    <script src="table-logic-inventario_dispositivos.js?v=20260315a"></script>
+
+    <script src="table-logic-inventario_dispositivos.js?v=20260315b"></script>
 </head>
 <body>
     <div class="table-container">
@@ -36,6 +37,12 @@
         </div>
 
         <div id="resumenDispositivo" style="display: none; margin-bottom: 12px;"></div>
+
+        <!-- Tabla de estadísticas fija (resumen a nivel de tabla completa) -->
+        <div class="table-header">
+            <h2>📊 Estadísticas de Dispositivos</h2>
+        </div>
+        <div id="statsTable" style="margin-bottom: 16px;"></div>
 
         <div class="data-table-wrapper">
             <div id="loadingIndicator" class="loading" style="display: none;"><div class="spinner"></div><p>Cargando...</p></div>
