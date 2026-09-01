@@ -514,57 +514,7 @@ function closeAssignModal() {
     assignModal.classList.remove('show');
 }
 
-function fallbackUuid() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        const r = Math.random() * 16 | 0;
-        const v = c === 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-    });
-}
 
-function generateUuid() {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-        return crypto.randomUUID();
-    }
-    return fallbackUuid();
-}
-
-async function generateReplacementIds(rowsToAssign) {
-    const sampleRow = rowsToAssign.find((row) => row.id_cert_reparto !== null && row.id_cert_reparto !== undefined);
-    if (!sampleRow) return [];
-
-    const sampleId = sampleRow.id_cert_reparto;
-    const idType = typeof sampleId;
-    const isNumericString = idType === 'string' && /^\d+$/.test(sampleId);
-
-    if (idType === 'number' || isNumericString) {
-        const { data: maxIdData, error: maxIdError } = await supabase
-            .from(TABLE_NAME)
-            .select('id_cert_reparto')
-            .order('id_cert_reparto', { ascending: false })
-            .limit(1);
-
-        if (maxIdError) throw maxIdError;
-
-        let nextId = 1n;
-        if (maxIdData && maxIdData.length > 0 && maxIdData[0].id_cert_reparto !== null && maxIdData[0].id_cert_reparto !== undefined) {
-            nextId = BigInt(String(maxIdData[0].id_cert_reparto)) + 1n;
-        }
-
-        return rowsToAssign.map((row, index) => {
-            const generated = nextId + BigInt(index);
-            return {
-                oldId: row.id_cert_reparto,
-                newId: idType === 'number' ? Number(generated) : generated.toString()
-            };
-        });
-    }
-
-    return rowsToAssign.map((row) => ({
-        oldId: row.id_cert_reparto,
-        newId: generateUuid()
-    }));
-}
 
 async function assignOrdersByCorreria(numeroCorreria, nuevoFuncionario) {
     const btnAssign = document.getElementById('btnAssign');
@@ -629,25 +579,23 @@ async function assignOrdersByCorreria(numeroCorreria, nuevoFuncionario) {
             return;
         }
 
-        const replacements = await generateReplacementIds(rowsToAssign);
+                // Se actualiza solo el funcionario, manteniendo el mismo id_cert_reparto.
         let updatedCount = 0;
         const failedRows = [];
 
-        for (const replacement of replacements) {
+        for (const id of targetIds) {
             const { error: updateError } = await supabase
                 .from(TABLE_NAME)
                 .update({
-                    funcionario: nuevoFuncionarioSanitized,
-                    id_cert_reparto: replacement.newId
+                    funcionario: nuevoFuncionarioSanitized
                 })
-                .eq('id_cert_reparto', replacement.oldId)
+                .eq('id_cert_reparto', id)
                 .eq('numero_correria', numeroCorreriaSanitized)
                 .or('certificacion_nombre_del_cliente.is.null,certificacion_nombre_del_cliente.eq.');
 
             if (updateError) {
                 failedRows.push({
-                    oldId: replacement.oldId,
-                    attemptedNewId: replacement.newId,
+                    id: id,
                     error: updateError.message
                 });
             } else {
