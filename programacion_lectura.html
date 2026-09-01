@@ -29,10 +29,11 @@
             </div>
             <script>
             function descargarPlantillaCSV() {
-                const columnas = [
+                                const columnas = [
                     'correria', 'nombre_correria', 'zona', 'supervisor', 'transporte', 'grupo_vehicular',
                     'calificativo', 'terreno', 'historico2', 'historico1', 'codigo', 'dias', 'ok', 'novedad',
-                    'repite', 'totales', 'nombre_lector', 'telefono', 'realiza_zona', 'diferencia', 'funcionario', 'va_grupo'
+                    'repite', 'totales', 'nombre_lector', 'telefono', 'realiza_zona', 'diferencia', 'funcionario', 'va_grupo',
+                    'facturas_individuales', 'paquetes_entrega', 'cantidad_fact_paquetes', 'certificaciones', 'controles'
                 ];
                 // Usar punto y coma como separador para compatibilidad con Excel
                 const csv = columnas.join(';') + '\n';

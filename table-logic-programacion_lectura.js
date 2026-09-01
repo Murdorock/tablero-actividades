@@ -255,7 +255,7 @@ const ALLOWED_IMPORT_COLUMNS = [
     'historico1',
     'codigo',
     'dias',
-    'ok',
+        'ok',
     'novedad',
     'repite',
     'totales',
@@ -264,7 +264,12 @@ const ALLOWED_IMPORT_COLUMNS = [
     'realiza_zona',
     'diferencia',
     'funcionario',
-    'va_grupo'
+    'va_grupo',
+    'facturas_individuales',
+    'paquetes_entrega',
+    'cantidad_fact_paquetes',
+    'certificaciones',
+    'controles'
 ];
 
 const COLUMN_HEADER_MAP = {
@@ -296,10 +301,23 @@ const COLUMN_HEADER_MAP = {
     'telefono': 'telefono',
     'que_realiza_zona': 'realiza_zona',
     'realiza_zona': 'realiza_zona',
-    'diferencia': 'diferencia',
+        'diferencia': 'diferencia',
     'funcionario': 'funcionario',
     'vagrupo': 'va_grupo',
-    'va_grupo': 'va_grupo'
+    'va_grupo': 'va_grupo',
+    'facturas_individuales': 'facturas_individuales',
+    'facturas individuales': 'facturas_individuales',
+    'individuales': 'facturas_individuales',
+    'paquetes_entrega': 'paquetes_entrega',
+    'paquetes entrega': 'paquetes_entrega',
+    'entrega': 'paquetes_entrega',
+    'cantidad_fact_paquetes': 'cantidad_fact_paquetes',
+    'cantidad fact paquetes': 'cantidad_fact_paquetes',
+    'cantidad de facturas paquetes': 'cantidad_fact_paquetes',
+    'en_paquetes': 'cantidad_fact_paquetes',
+    'en paquetes': 'cantidad_fact_paquetes',
+    'certificaciones': 'certificaciones',
+    'controles': 'controles'
 };
 
 function normalizeHeaderName(header) {

@@ -1,67 +1,79 @@
-﻿// Resumen Repartida - logica limpia
+﻿// Resumen Repartida - logica (programacion_lectura + certificaciones_reparto)
 let allT0Data = [];
 let allT1Data = [];
+let allCertReales = {}; // funcionario -> { CERTIFICACION: n, 'CONTROL ENTREGA': n, 'PAQUETE ENTREGA': n }
 const DETAIL_TYPES = ['CERTIFICACION', 'CONTROL ENTREGA', 'PAQUETE ENTREGA'];
 
-function emptyTypeCounts() {
-    return {
-        CERTIFICACION: { total: 0, real: 0 },
-        'CONTROL ENTREGA': { total: 0, real: 0 },
-        'PAQUETE ENTREGA': { total: 0, real: 0 }
+// Mapea el tipo mostrado a la columna en programacion_lectura (cantidad esperada)
+function tipoToCol(tipo) {
+    const map = {
+        'CERTIFICACION': 'certificaciones',
+        'CONTROL ENTREGA': 'controles',
+        'PAQUETE ENTREGA': 'paquetes_entrega'
     };
+    return map[tipo] || null;
 }
 
-async function fetchCertificationRows(ids) {
-    if (!ids || ids.length === 0) return [];
+// Cantidad esperada de un tipo para una fila de programacion_lectura
+function getTipoCount(row, tipo) {
+    const col = tipoToCol(tipo);
+    const v = row ? row[col] : 0;
+    return Number(v) || 0;
+}
 
+function emptyRealCounts() {
+    return { CERTIFICACION: 0, 'CONTROL ENTREGA': 0, 'PAQUETE ENTREGA': 0 };
+}
+
+// Cantidad real (hecha) de un tipo para un codigo, según certificaciones_reparto
+function getTipoReal(codigo, tipo) {
+    const c = allCertReales[String(codigo ?? '')];
+    return c ? (c[tipo] || 0) : 0;
+}
+
+// Carga las filas de certificaciones_reparto y cuenta las "reales" (con
+// certificacion_nombre_del_cliente con dato) agrupadas por funcionario y tipo.
+async function fetchCertReales() {
     const PAGE = 1000;
-    let allCert = [];
+    const counts = {};
     let pg = 0;
 
     while (true) {
-        const { data: certPage, error: certErr } = await supabase
+        const { data: page, error } = await supabase
             .from('certificaciones_reparto')
-            .select('numero_correria, nombre_correria, certificacion_nombre_del_cliente')
-            .in('numero_correria', ids)
+            .select('funcionario, nombre_correria, certificacion_nombre_del_cliente')
             .range(pg * PAGE, (pg + 1) * PAGE - 1);
 
-        if (certErr) throw certErr;
-        if (!certPage || certPage.length === 0) break;
+        if (error) throw error;
+        if (!page || page.length === 0) break;
 
-        allCert = allCert.concat(certPage);
-        if (certPage.length < PAGE) break;
+        page.forEach(row => {
+            const func = String(row.funcionario ?? '');
+            const tipo = String(row.nombre_correria || '').trim().toUpperCase();
+            if (!DETAIL_TYPES.includes(tipo)) return;
+
+            if (!counts[func]) counts[func] = emptyRealCounts();
+
+            const nombre = row.certificacion_nombre_del_cliente;
+            if (nombre !== null && nombre !== undefined && String(nombre).trim() !== '') {
+                counts[func][tipo]++;
+            }
+        });
+
+        if (page.length < PAGE) break;
         pg++;
     }
-
-    return allCert;
-}
-
-function buildCountsByCorreria(ids, certRows) {
-    const counts = {};
-
-    ids.forEach(id => {
-        counts[id] = emptyTypeCounts();
-    });
-
-    (certRows || []).forEach(row => {
-        const id = row.numero_correria;
-        const tipo = String(row.nombre_correria || '').trim().toUpperCase();
-        if (!counts[id] || !DETAIL_TYPES.includes(tipo)) return;
-
-        counts[id][tipo].total++;
-
-        const nombre = row.certificacion_nombre_del_cliente;
-        if (nombre !== null && nombre !== undefined && String(nombre).trim() !== '') {
-            counts[id][tipo].real++;
-        }
-    });
 
     return counts;
 }
 
-function fmtDetailValue(obj) {
-    const txt = obj.real + '/' + obj.total;
-    if (obj.total > 0 && obj.real < obj.total) {
+// Muestra real/esperado; si hay pendiente (esperado > real), se resalta en rojo.
+function fmtDetailValue(real, total) {
+    const r = Number(real) || 0;
+    const t = Number(total) || 0;
+    const pend = Math.max(0, t - r);
+    const txt = r + '/' + t;
+    if (pend > 0) {
         return '<span style="color:#ef4444;font-weight:700;">' + txt + '</span>';
     }
     return txt;
@@ -91,19 +103,19 @@ function renderDetailedTable(containerId, countId, rows) {
     html += '</tr></thead><tbody>';
 
     rows.forEach(row => {
-        const c = row.counts || emptyTypeCounts();
-
-        pendingTotals.CERTIFICACION += Math.max(0, c['CERTIFICACION'].total - c['CERTIFICACION'].real);
-        pendingTotals['CONTROL ENTREGA'] += Math.max(0, c['CONTROL ENTREGA'].total - c['CONTROL ENTREGA'].real);
-        pendingTotals['PAQUETE ENTREGA'] += Math.max(0, c['PAQUETE ENTREGA'].total - c['PAQUETE ENTREGA'].real);
+        DETAIL_TYPES.forEach(tipo => {
+            const total = getTipoCount(row, tipo);
+            const real = getTipoReal(row.codigo, tipo);
+            pendingTotals[tipo] += Math.max(0, total - real);
+        });
 
         html += '<tr>';
-        html += '<td>' + (row.id_correria ?? '-') + '</td>';
+        html += '<td>' + (row.correria ?? '-') + '</td>';
         html += '<td>' + (row.codigo ?? '-') + '</td>';
-        html += '<td>' + (row.totales ?? '-') + '</td>';
-        html += '<td class="c-cert">' + fmtDetailValue(c['CERTIFICACION']) + '</td>';
-        html += '<td class="c-ctrl">' + fmtDetailValue(c['CONTROL ENTREGA']) + '</td>';
-        html += '<td class="c-paq">' + fmtDetailValue(c['PAQUETE ENTREGA']) + '</td>';
+        html += '<td>' + (row.facturas_individuales ?? '-') + '</td>';
+        html += '<td class="c-cert">' + fmtDetailValue(getTipoReal(row.codigo, 'CERTIFICACION'), getTipoCount(row, 'CERTIFICACION')) + '</td>';
+        html += '<td class="c-ctrl">' + fmtDetailValue(getTipoReal(row.codigo, 'CONTROL ENTREGA'), getTipoCount(row, 'CONTROL ENTREGA')) + '</td>';
+        html += '<td class="c-paq">' + fmtDetailValue(getTipoReal(row.codigo, 'PAQUETE ENTREGA'), getTipoCount(row, 'PAQUETE ENTREGA')) + '</td>';
         html += '</tr>';
     });
 
@@ -121,22 +133,27 @@ function buildSupervisorSummaryRows(rows) {
     const grouped = {};
 
     (rows || []).forEach((row) => {
-        const sup = row.sup || '-';
+        const sup = row.realiza_zona || '-';
         if (!grouped[sup]) {
             grouped[sup] = {
                 sup,
                 correrias: 0,
                 totales: 0,
-                counts: emptyTypeCounts()
+                counts: emptyRealCounts(),
+                esperados: emptyRealCounts(),
+                pendientes: emptyRealCounts()
             };
         }
 
         grouped[sup].correrias += 1;
-        grouped[sup].totales += Number(row.totales || 0);
+        grouped[sup].totales += Number(row.facturas_individuales || 0);
 
         DETAIL_TYPES.forEach((tipo) => {
-            grouped[sup].counts[tipo].total += row.counts?.[tipo]?.total || 0;
-            grouped[sup].counts[tipo].real += row.counts?.[tipo]?.real || 0;
+            const total = getTipoCount(row, tipo);
+            const real = getTipoReal(row.codigo, tipo);
+            grouped[sup].esperados[tipo] += total;
+            grouped[sup].counts[tipo] += real;
+            grouped[sup].pendientes[tipo] += Math.max(0, total - real);
         });
     });
 
@@ -167,19 +184,17 @@ function renderSupervisorSummaryTable(rows) {
     html += '</tr></thead><tbody>';
 
     rows.forEach((row) => {
-        const c = row.counts || emptyTypeCounts();
-
-        pendingTotals.CERTIFICACION += Math.max(0, c['CERTIFICACION'].total - c['CERTIFICACION'].real);
-        pendingTotals['CONTROL ENTREGA'] += Math.max(0, c['CONTROL ENTREGA'].total - c['CONTROL ENTREGA'].real);
-        pendingTotals['PAQUETE ENTREGA'] += Math.max(0, c['PAQUETE ENTREGA'].total - c['PAQUETE ENTREGA'].real);
+        DETAIL_TYPES.forEach(tipo => {
+            pendingTotals[tipo] += row.pendientes[tipo] || 0;
+        });
 
         html += '<tr>';
         html += '<td>' + (row.sup ?? '-') + '</td>';
         html += '<td>' + (row.correrias ?? 0) + '</td>';
         html += '<td>' + (row.totales ?? 0) + '</td>';
-        html += '<td class="c-cert">' + fmtDetailValue(c['CERTIFICACION']) + '</td>';
-        html += '<td class="c-ctrl">' + fmtDetailValue(c['CONTROL ENTREGA']) + '</td>';
-        html += '<td class="c-paq">' + fmtDetailValue(c['PAQUETE ENTREGA']) + '</td>';
+        html += '<td class="c-cert">' + fmtDetailValue(row.counts.CERTIFICACION || 0, row.esperados.CERTIFICACION || 0) + '</td>';
+        html += '<td class="c-ctrl">' + fmtDetailValue(row.counts['CONTROL ENTREGA'] || 0, row.esperados['CONTROL ENTREGA'] || 0) + '</td>';
+        html += '<td class="c-paq">' + fmtDetailValue(row.counts['PAQUETE ENTREGA'] || 0, row.esperados['PAQUETE ENTREGA'] || 0) + '</td>';
         html += '</tr>';
     });
 
@@ -201,21 +216,18 @@ async function loadTable1() {
     }
     container.innerHTML = '<div class="rr-loading">Cargando...</div>';
     try {
+        // Cargar conteos "reales" de certificaciones_reparto (agrupados por funcionario/tipo)
+        allCertReales = await fetchCertReales();
+
         const { data, error } = await supabase
-            .from('programacion_reparto')
-            .select('sup, id_correria, codigo, totales')
+            .from('programacion_lectura')
+            .select('correria, realiza_zona, codigo, facturas_individuales, certificaciones, controles, paquetes_entrega')
             .order('codigo', { ascending: true });
         if (error) throw error;
 
         const baseRows = data || [];
-        const ids = baseRows.map(row => row.id_correria);
-        const certRows = await fetchCertificationRows(ids);
-        const countsByCorreria = buildCountsByCorreria(ids, certRows);
 
-        allT1Data = baseRows.map(row => ({
-            ...row,
-            counts: countsByCorreria[row.id_correria] || emptyTypeCounts()
-        }));
+        allT1Data = baseRows.map(row => ({ ...row }));
         allT0Data = buildSupervisorSummaryRows(allT1Data);
 
         renderSupervisorSummaryTable(allT0Data);
@@ -237,7 +249,7 @@ function filterTable1(q) {
     const t = q.trim().toLowerCase();
     if (!t) { renderTable1(allT1Data); return; }
     renderTable1(allT1Data.filter(row =>
-        ['id_correria', 'codigo'].some(c => {
+        ['correria', 'codigo'].some(c => {
             const v = row[c];
             return v !== null && v !== undefined && String(v).toLowerCase().includes(t);
         })
@@ -455,19 +467,18 @@ async function exportDetailAsImage() {
 }
 
 // ─── TABLA 2 ──────────────────────────────────────────────────────────────────
-// Filtro: supervisor unico.
-// Cruz: programacion_reparto (id_correria) <-> certificaciones_reparto (numero_correria)
-// Conteos de nombre_correria: CERTIFICACION | CONTROL ENTREGA | PAQUETE ENTREGA
+// Filtro: supervisor unico (columna realiza_zona de programacion_lectura).
+// Conteos por tipo desde las columnas certificaciones | controles | paquetes_entrega
 
 async function loadSupOptions() {
     const sel = document.getElementById('supSelect');
     try {
         const { data, error } = await supabase
-            .from('programacion_reparto')
-            .select('sup')
-            .order('sup', { ascending: true });
+            .from('programacion_lectura')
+            .select('realiza_zona')
+            .order('realiza_zona', { ascending: true });
         if (error) throw error;
-        const unique = [...new Set((data || []).map(r => r.sup).filter(v => v !== null && String(v).trim() !== ''))];
+        const unique = [...new Set((data || []).map(r => r.realiza_zona).filter(v => v !== null && String(v).trim() !== ''))];
         unique.forEach(sup => {
             const opt = document.createElement('option');
             opt.value = sup;
@@ -489,11 +500,16 @@ async function loadTable2(sup) {
     count.textContent = '';
 
     try {
+        // Asegurar que los conteos reales de certificaciones_reparto estén cargados
+        if (Object.keys(allCertReales).length === 0) {
+            allCertReales = await fetchCertReales();
+        }
+
         // 1. Correrias del supervisor
         const { data: prog, error: progErr } = await supabase
-            .from('programacion_reparto')
-            .select('id_correria, codigo, totales')
-            .eq('sup', sup)
+            .from('programacion_lectura')
+            .select('correria, codigo, facturas_individuales, certificaciones, controles, paquetes_entrega')
+            .eq('realiza_zona', sup)
             .order('codigo', { ascending: true });
         if (progErr) throw progErr;
         if (!prog || prog.length === 0) {
@@ -501,13 +517,7 @@ async function loadTable2(sup) {
             return;
         }
 
-        const ids = prog.map(r => r.id_correria);
-        const certRows = await fetchCertificationRows(ids);
-        const countsByCorreria = buildCountsByCorreria(ids, certRows);
-        const detailRows = prog.map(row => ({
-            ...row,
-            counts: countsByCorreria[row.id_correria] || emptyTypeCounts()
-        }));
+        const detailRows = prog.map(row => ({ ...row }));
 
         renderDetailedTable('table2Container', 'countT2', detailRows);
 
