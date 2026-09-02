@@ -198,9 +198,9 @@
             
             modalTitle.textContent = '📤 Importar Datos';
             modalBody.innerHTML = `
-                <div class="form-group">
-                    <label for="fileInput">Selecciona un archivo CSV o TXT:</label>
-                    <input type="file" id="fileInput" accept=".csv,.txt" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; margin-top: 10px;">
+                                <div class="form-group">
+                    <label for="fileInput">Selecciona un archivo CSV, TXT o PARQUET (.parquet):</label>
+                    <input type="file" id="fileInput" accept=".csv,.txt,.parquet" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; margin-top: 10px;">
                 </div>
                 <div class="form-group" style="margin-top: 12px;">
                     <label for="importProcesoAgiFilter">Filtro de carga por proceso_agi:</label>
@@ -216,8 +216,8 @@
                         ${cicloOptionsHtml}
                     </select>
                 </div>
-                <div style="margin-top: 15px; color: #7f8c8d; font-size: 0.9em;">
-                    <p>Delimitadores soportados: barra vertical (|), punto y coma (;), tab y coma (,).</p>
+                                <div style="margin-top: 15px; color: #7f8c8d; font-size: 0.9em;">
+                    <p><strong>Formato:</strong> El delimitador del CSV/TXT se detecta automáticamente (barra vertical |, punto y coma ;, tab y coma ,). Para archivos <strong>.parquet</strong> se leen directamente las columnas.</p>
                     <p>Para archivos masivos se procesa por bloques para evitar bloqueo del navegador.</p>
                     <p>Los filtros se aplican durante la lectura para reducir inserciones innecesarias.</p>
                 </div>
