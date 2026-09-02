@@ -83,11 +83,11 @@ body {
     color: #f1f5f9;
     font-weight: 700;
 }
-    flex-wrap: wrap;
 
 .table-actions {
     display: flex;
     gap: 10px;
+    flex-wrap: wrap;
 }
 
 /* Estilos para filtros */

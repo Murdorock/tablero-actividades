@@ -4,9 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reporte Ordenes Pendientes - Sistema</title>
-    <link rel="stylesheet" href="styles.css">
+        <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hyparquet@0.x/dist/hyparquet.min.js"></script>
     <script src="config.js"></script>
     <script>
         const TABLE_NAME = 'reporte_ordenes_pendientes'; 
@@ -232,6 +233,195 @@
             modal.style.display = 'block';
         }
 
+                function isParquetFile(fileName) {
+            return String(fileName || '').toLowerCase().endsWith('.parquet');
+        }
+
+        async function importParquetFile(file, modalConfirm, procesoAgiFilter, cicloOperativoFilter, helpers) {
+            const { updateProgress } = helpers;
+
+            modalConfirm.disabled = true;
+            modalConfirm.textContent = 'Importando...';
+
+            const activeFilters = [];
+            if (procesoAgiFilter) activeFilters.push(`proceso_agi = ${procesoAgiFilter}`);
+            if (cicloOperativoFilter) activeFilters.push(`ciclo_operativo = ${cicloOperativoFilter}`);
+
+            let insertedRows = 0;
+            let processedRows = 0;
+            let skippedRows = 0;
+
+            try {
+                if (typeof hyparquet === 'undefined') {
+                    throw new Error('La librería para leer .parquet no está disponible. Verifica la conexión a Internet.');
+                }
+
+                updateProgress('Leyendo archivo .parquet con hyparquet...', 5);
+
+                                const arrayBuffer = await file.arrayBuffer();
+                // hyparquet recibe un ArrayBuffer y opcionalmente el nombre del archivo
+                let parsed;
+                try {
+                    if (typeof hyparquet === 'function') {
+                        parsed = await hyparquet({ file: arrayBuffer, filename: file.name });
+                    } else if (hyparquet && typeof hyparquet.default === 'function') {
+                        parsed = await hyparquet.default({ file: arrayBuffer, filename: file.name });
+                    } else {
+                        throw new Error('Librería hyparquet no detectada correctamente.');
+                    }
+                } catch (e) {
+                    throw new Error('Error al leer parquet: ' + e.message);
+                }
+
+                // Materializar filas de forma robusta (acepta varios formatos de hyparquet)
+                const rows = materializeParquetRows(parsed);
+
+                if (!Array.isArray(rows) || rows.length === 0) {
+                    updateProgress('El archivo .parquet no contiene filas.', 100);
+                    alert('El archivo .parquet no contiene filas para importar.');
+                    return;
+                }
+
+                processedRows = rows.length;
+
+                let batch = [];
+                for (let i = 0; i <= rows.length; i++) {
+                    if (i < rows.length) {
+                        const rawRow = rows[i];
+
+                        if (procesoAgiFilter) {
+                            const value = String(lookupColumnValue(rawRow, 'proceso_agi') != null ? lookupColumnValue(rawRow, 'proceso_agi') : '').trim().toUpperCase();
+                            if (value !== procesoAgiFilter) {
+                                skippedRows += 1;
+                                continue;
+                            }
+                        }
+
+                        if (cicloOperativoFilter) {
+                            const value = normalizeCicloOperativoValue(lookupColumnValue(rawRow, 'ciclo_operativo'));
+                            if (value !== cicloOperativoFilter) {
+                                skippedRows += 1;
+                                continue;
+                            }
+                        }
+
+                        batch.push(normalizeRow(rawRow, lookupColumnValue));
+                    }
+
+                    if (batch.length >= IMPORT_BATCH_SIZE || i === rows.length) {
+                        if (batch.length === 0) continue;
+                        const currentBatch = batch;
+                        batch = [];
+                        await insertBatchWithRetry(currentBatch);
+                        insertedRows += currentBatch.length;
+                        const pct = i >= rows.length ? 100 : Math.floor((i / rows.length) * 95) + 5;
+                        updateProgress(
+                            `Leidas: ${processedRows.toLocaleString('es-ES')} | Insertadas: ${insertedRows.toLocaleString('es-ES')} | Omitidas: ${skippedRows.toLocaleString('es-ES')}`,
+                            pct
+                        );
+                        await new Promise((resolve) => setTimeout(resolve, 0));
+                    }
+                }
+
+                if (insertedRows === 0) {
+                    const noDataMsg = activeFilters.length > 0
+                        ? `No se encontraron registros para importar con ${activeFilters.join(' y ')}.`
+                        : 'No se encontraron registros para importar';
+                    alert(noDataMsg);
+                    updateProgress(
+                        `${noDataMsg} Leidas: ${processedRows.toLocaleString('es-ES')} | Omitidas: ${skippedRows.toLocaleString('es-ES')}`,
+                        100
+                    );
+                    return;
+                }
+
+                updateProgress(
+                    `Importacion finalizada. Leidas ${processedRows.toLocaleString('es-ES')}, insertadas ${insertedRows.toLocaleString('es-ES')} y omitidas ${skippedRows.toLocaleString('es-ES')}.`,
+                    100
+                );
+                const alertMsg = activeFilters.length > 0
+                    ? `Importacion completada: ${insertedRows.toLocaleString('es-ES')} registros insertados con ${activeFilters.join(' y ')}.\nOmitidas: ${skippedRows.toLocaleString('es-ES')} filas.`
+                    : `Importacion completada: ${insertedRows.toLocaleString('es-ES')} registros insertados.`;
+                alert(alertMsg);
+                closeModal();
+                loadData();
+            } catch (error) {
+                console.error(error);
+                updateProgress(`Error: ${error.message}`, 0);
+                alert('Error al procesar el archivo .parquet: ' + error.message);
+            } finally {
+                modalConfirm.disabled = false;
+                modalConfirm.textContent = 'Importar';
+            }
+        }
+
+                function normalizeRow(rawRow, lookup) {
+            const row = {};
+            EXPECTED_COLUMNS.forEach((col) => {
+                const value = lookup(rawRow, col);
+                row[col] = value !== null && value !== undefined ? String(value).trim() : '';
+            });
+            return row;
+        }
+
+        function lookupColumnValue(rawRow, expectedColumn) {
+            if (!rawRow || typeof rawRow !== 'object') return null;
+            if (Object.prototype.hasOwnProperty.call(rawRow, expectedColumn)) {
+                return rawRow[expectedColumn];
+            }
+            // Fallback: buscar clave normalizada (minúsculas con guiones bajos)
+            const matchingKey = Object.keys(rawRow).find((key) => normalizeHeaderName(key) === expectedColumn);
+            return matchingKey !== undefined ? rawRow[matchingKey] : null;
+        }
+
+        // Convierte la salida de hyparquet en un array de filas (objetos con nombre de columna).
+        // Soporta dos formatos típicos:
+        //   - parsed.data ya es un array de objetos (clave = nombre de columna).
+        //   - parsed.data es un array de filas donde cada fila es un array indexado por columna,
+        //     y parsed.columns proporciona el nombre de cada columna en orden.
+        function materializeParquetRows(parsed) {
+            if (Array.isArray(parsed)) return parsed;
+
+            if (!parsed || !parsed.data) {
+                throw new Error('El lector de .parquet no devolvió datos utilizables.');
+            }
+
+            const rawData = parsed.data;
+            const columnsInfo = Array.isArray(parsed.columns) ? parsed.columns : [];
+
+            // Caso 1: data ya son objetos con claves reconocibles
+            if (rawData.length > 0 && typeof rawData[0] === 'object' && !Array.isArray(rawData[0])) {
+                const first = rawData[0];
+                const looksKeyed = Object.keys(first).length > 0 &&
+                    Object.keys(first).some((k) => normalizeHeaderName(k) === 'proceso_agi' || normalizeHeaderName(k) === 'orden_trabajo' || /[a-z_]/.test(k));
+                if (looksKeyed) {
+                    return rawData;
+                }
+            }
+
+            // Caso 2: formato columnar / filas indexadas por columna
+            const colNames = columnsInfo.map((c) => (c && typeof c.name !== 'undefined' ? normalizeHeaderName(c.name) : ''));
+            const objects = rawData.map((row) => {
+                const obj = {};
+                if (Array.isArray(row)) {
+                    row.forEach((value, idx) => {
+                        if (idx < colNames.length) {
+                            obj[colNames[idx]] = value;
+                        }
+                    });
+                } else if (row && typeof row === 'object') {
+                    // keys pueden ser índices numéricos (string)
+                    Object.keys(row).forEach((key) => {
+                        const idx = Number(key);
+                        const colName = Number.isFinite(idx) && colNames[idx] ? colNames[idx] : normalizeHeaderName(key);
+                        obj[colName] = row[key];
+                    });
+                }
+                return obj;
+            });
+            return objects;
+        }
+
         // Función para importar datos
         async function importData() {
             const fileInput = document.getElementById('fileInput');
@@ -257,7 +447,19 @@
                 '¿Deseas continuar?'
             );
 
-            if (!continueImport) return;
+                        if (!continueImport) return;
+
+            // Procesar archivos .parquet con la librería hyparquet
+            if (isParquetFile(file.name)) {
+                await importParquetFile(
+                    file,
+                    modalConfirm,
+                    procesoAgiFilter,
+                    cicloOperativoFilter,
+                    { updateProgress: updateImportProgress }
+                );
+                return;
+            }
 
             modalConfirm.disabled = true;
             modalConfirm.textContent = 'Importando...';
