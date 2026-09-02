@@ -7,8 +7,33 @@
         <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/hyparquet@0.x/dist/hyparquet.min.js"></script>
     <script src="config.js"></script>
+    <!-- Loader ES module para lectura de archivos .parquet (hyparquet + compresores) -->
+    <script type="module">
+        import { parquetReadObjects } from 'https://cdn.jsdelivr.net/npm/hyparquet@1.29.2/+esm';
+        import { compressors } from 'https://cdn.jsdelivr.net/npm/hyparquet-compressors@1.1.1/+esm';
+
+        // Función expuesta global: recibe un ArrayBuffer y devuelve las filas del .parquet como objetos.
+        window.parquetReadObjects = parquetReadObjects;
+        window.parquetCompressors = compressors;
+
+                // Expone un Helper listo para convertir un ArrayBuffer en el objeto 'file' que espera hyparquet.
+        // IMPORTANTE: hyparquet espera que 'slice' devuelva un ArrayBuffer (no un Uint8Array).
+        window.readParquetBufferToUri = function (arrayBuffer) {
+            const bytes = new Uint8Array(arrayBuffer);
+            return {
+                byteLength: bytes.length,
+                slice(start, end) {
+                    const s = Math.max(0, start || 0);
+                    const e = end === undefined ? bytes.length : end;
+                    if (e <= s) {
+                        return new ArrayBuffer(0);
+                    }
+                    return bytes.slice(s, Math.min(bytes.length, e)).buffer;
+                }
+            };
+        };
+    </script>
     <script>
         const TABLE_NAME = 'reporte_ordenes_pendientes'; 
         const TABLE_TITLE = '🧾 Reporte Ordenes Pendientes';
@@ -251,32 +276,28 @@
             let processedRows = 0;
             let skippedRows = 0;
 
-            try {
-                if (typeof hyparquet === 'undefined') {
-                    throw new Error('La librería para leer .parquet no está disponible. Verifica la conexión a Internet.');
+                        try {
+                const readObjects = window.parquetReadObjects;
+                if (typeof readObjects !== 'function') {
+                    throw new Error('La librería para leer .parquet (hyparquet) no está disponible. Verifica la conexión a Internet y recarga la página.');
                 }
 
-                updateProgress('Leyendo archivo .parquet con hyparquet...', 5);
+                updateProgress('Leyendo archivo .parquet (hyparquet)...', 10);
 
-                                const arrayBuffer = await file.arrayBuffer();
-                // hyparquet recibe un ArrayBuffer y opcionalmente el nombre del archivo
-                let parsed;
-                try {
-                    if (typeof hyparquet === 'function') {
-                        parsed = await hyparquet({ file: arrayBuffer, filename: file.name });
-                    } else if (hyparquet && typeof hyparquet.default === 'function') {
-                        parsed = await hyparquet.default({ file: arrayBuffer, filename: file.name });
-                    } else {
-                        throw new Error('Librería hyparquet no detectada correctamente.');
-                    }
-                } catch (e) {
-                    throw new Error('Error al leer parquet: ' + e.message);
+                const arrayBuffer = await file.arrayBuffer();
+                const parquetFileObj = window.readParquetBufferToUri(arrayBuffer);
+
+                // parquetReadObjects devuelve un array de filas como objetos (clave = nombre de columna del parquet)
+                let rows = await readObjects({
+                    file: parquetFileObj,
+                    compressors: window.parquetCompressors
+                });
+
+                if (!Array.isArray(rows)) {
+                    rows = materializeParquetRows({ data: rows, columns: null });
                 }
 
-                // Materializar filas de forma robusta (acepta varios formatos de hyparquet)
-                const rows = materializeParquetRows(parsed);
-
-                if (!Array.isArray(rows) || rows.length === 0) {
+                if (rows.length === 0) {
                     updateProgress('El archivo .parquet no contiene filas.', 100);
                     alert('El archivo .parquet no contiene filas para importar.');
                     return;
