@@ -14,6 +14,8 @@ const elements = {
 let allRows = [];
 let filteredRows = [];
 let dynamicColumns = [];
+let currentPage = 1;
+const PAGE_SIZE = 100;
 
 function safeJsonParse(value, fallback = {}) {
   if (value === null || value === undefined) return fallback;
@@ -255,18 +257,27 @@ function applyFilters() {
     return byForm && byState && bySearch;
   });
 
-  dynamicColumns = computeDynamicColumns(filteredRows);
+      dynamicColumns = computeDynamicColumns(filteredRows);
+  currentPage = 1;
 
   renderTable();
 }
 
 function renderTable() {
   if (!filteredRows.length) {
+    currentPage = 1;
     elements.tableContainer.innerHTML = '<div class="empty">No hay respuestas para mostrar con los filtros actuales.</div>';
     return;
   }
 
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  if (currentPage > totalPages) currentPage = totalPages;
+
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageRows = filteredRows.slice(start, start + PAGE_SIZE);
+
   let html = `
+    <div class="count-bar">Mostrando <strong>${start + 1}&ndash;${start + pageRows.length}</strong> de <strong>${filteredRows.length}</strong> respuestas</div>
     <table>
       <thead>
         <tr>
@@ -277,7 +288,7 @@ function renderTable() {
       <tbody>
   `;
 
-  filteredRows.forEach((row) => {
+  pageRows.forEach((row) => {
     const respuestaObj = safeJsonParse(row.respuesta, {});
     const prettyJson = escapeHtml(JSON.stringify(respuestaObj, null, 2));
     const answerMap = getRowAnswerMap(row);
@@ -301,40 +312,98 @@ function renderTable() {
   });
 
   html += '</tbody></table>';
+
   elements.tableContainer.innerHTML = html;
+
+  // Controles de paginación.
+  const pagCtl = document.createElement('div');
+  pagCtl.className = 'pagination';
+
+  pagCtl.innerHTML = `
+    <button class="secondary" data-page="${currentPage - 1}" ${currentPage <= 1 ? 'disabled' : ''}>◀ Anterior</button>
+    <span class="pg-info">Página ${currentPage} de ${totalPages}</span>
+    <button class="secondary" data-page="${currentPage + 1}" ${currentPage >= totalPages ? 'disabled' : ''}>Siguiente ▶</button>
+  `;
+
+  elements.tableContainer.appendChild(pagCtl);
+
+  pagCtl.querySelectorAll('button[data-page]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const p = parseInt(btn.dataset.page, 10);
+      if (p >= 1 && p <= totalPages) {
+        currentPage = p;
+        renderTable();
+      }
+    });
+  });
 }
 
-function exportCsv() {
+function exportExcel() {
   if (!filteredRows.length) {
     alert('No hay datos para exportar.');
     return;
   }
 
-  const headers = [...dynamicColumns];
+  const headers = [
+    'id',
+    'formulario',
+    'estado',
+    'fecha',
+    ...dynamicColumns,
+  ];
 
-  const lines = filteredRows.map((row) => {
+  const rows = filteredRows.map((row) => {
     const answerMap = getRowAnswerMap(row);
-    const values = [
-      ...dynamicColumns.map((col) => answerMap[col] || ''),
+    const dateValue = getDateValue(row);
+    return [
+      row.id ?? '',
+      getFormularioLabel(row),
+      row.estado ?? '',
+      dateValue ? formatDate(dateValue) : '',
+      ...dynamicColumns.map((col) => (answerMap[col] !== undefined ? answerMap[col] : '')),
     ];
-
-    return values
-      .map((value) => `"${String(value).replace(/"/g, '""')}"`)
-      .join(';');
   });
 
-  const csv = `${headers.join(';')}\n${lines.join('\n')}`;
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  ws['!cols'] = headers.map(() => ({ wch: 24 }));
 
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `formularios_respuestas_${new Date().toISOString().slice(0, 10)}.csv`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Respuestas');
 
-  URL.revokeObjectURL(url);
+  XLSX.writeFile(wb, `formularios_respuestas_${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+
+async function fetchAllRows() {
+  const rows = [];
+  const pageSize = 1000;
+  let from = 0;
+  let hasMore = true;
+
+  // Supabase limita cada consulta a una cantidad máxima de filas,
+  // por lo que se pagina con range() para traer TODAS las respuestas.
+  while (hasMore) {
+    const { data, error } = await client
+      .from(TABLE_NAME)
+      .select('*')
+      .order('id', { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (error) {
+      throw error;
+    }
+
+    const page = data || [];
+    rows.push(...page);
+
+    // Si devolvió menos filas de las solicitadas, ya no hay más páginas.
+    if (page.length < pageSize) {
+      hasMore = false;
+    } else {
+      from += pageSize;
+    }
+  }
+
+  return rows;
 }
 
 async function loadData() {
@@ -342,16 +411,7 @@ async function loadData() {
   elements.tableContainer.innerHTML = '';
 
   try {
-    const { data, error } = await client
-      .from(TABLE_NAME)
-      .select('*')
-      .limit(1000);
-
-    if (error) {
-      throw error;
-    }
-
-    allRows = sortRows(data || []);
+    allRows = sortRows(await fetchAllRows() || []);
     filteredRows = [...allRows];
 
     populateFilters();
@@ -368,6 +428,6 @@ elements.filterSearch.addEventListener('input', applyFilters);
 elements.filterForm.addEventListener('change', applyFilters);
 elements.filterState.addEventListener('change', applyFilters);
 elements.btnRefresh.addEventListener('click', loadData);
-elements.btnExport.addEventListener('click', exportCsv);
+elements.btnExport.addEventListener('click', exportExcel);
 
 loadData();
