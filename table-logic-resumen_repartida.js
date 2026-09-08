@@ -1,41 +1,41 @@
 ﻿// Resumen Repartida - logica (programacion_lectura + certificaciones_reparto)
 let allT0Data = [];
 let allT1Data = [];
-let allCertReales = {}; // funcionario -> { CERTIFICACION: n, 'CONTROL ENTREGA': n, 'PAQUETE ENTREGA': n }
+let allCertSum = {}; // funcionario -> { tipo -> { cargado:n, realizado:n } } desde certificaciones_reparto
 const DETAIL_TYPES = ['CERTIFICACION', 'CONTROL ENTREGA', 'PAQUETE ENTREGA'];
 
-// Mapea el tipo mostrado a la columna en programacion_lectura (cantidad esperada)
-function tipoToCol(tipo) {
-    const map = {
-        'CERTIFICACION': 'certificaciones',
-        'CONTROL ENTREGA': 'controles',
-        'PAQUETE ENTREGA': 'paquetes_entrega'
-    };
-    return map[tipo] || null;
+// Cantidad "debio cargar" (filas cargadas en cert_reparto) para un codigo/funcionario y tipo.
+function getTipoCargado(codigo, tipo) {
+    const c = allCertSum[String(codigo ?? '')];
+    return (c && c[tipo]) ? (Number(c[tipo].cargado) || 0) : 0;
 }
 
-// Cantidad esperada de un tipo para una fila de programacion_lectura
+// Cantidad esperada ("debio cargar") para una fila de programacion_lectura.
+// Los totales NO se toman de columnas de programacion_lectura, sino que se
+// calculan directamente en certificaciones_reparto para el funcionario de la
+// fila (row.codigo == certificaciones_reparto.funcionario).
 function getTipoCount(row, tipo) {
-    const col = tipoToCol(tipo);
-    const v = row ? row[col] : 0;
-    return Number(v) || 0;
+    return getTipoCargado(row && row.codigo, tipo);
 }
 
 function emptyRealCounts() {
     return { CERTIFICACION: 0, 'CONTROL ENTREGA': 0, 'PAQUETE ENTREGA': 0 };
 }
 
-// Cantidad real (hecha) de un tipo para un codigo, según certificaciones_reparto
+// Cantidad "realizada" (con dato en certificacion_nombre_del_cliente) para un
+// codigo/funcionario y tipo, según certificaciones_reparto
 function getTipoReal(codigo, tipo) {
-    const c = allCertReales[String(codigo ?? '')];
-    return c ? (c[tipo] || 0) : 0;
+    const c = allCertSum[String(codigo ?? '')];
+    return (c && c[tipo]) ? (Number(c[tipo].realizado) || 0) : 0;
 }
 
-// Carga las filas de certificaciones_reparto y cuenta las "reales" (con
-// certificacion_nombre_del_cliente con dato) agrupadas por funcionario y tipo.
-async function fetchCertReales() {
+// Recorre certificaciones_reparto por paginas. Para cada funcionario y tipo
+// calcula (SOLO CERTIFICACION / CONTROL ENTREGA / PAQUETE ENTREGA):
+//   - cargado   = filas cargadas (lo que "debió cargar" dicho funcionario/tipo)
+//   - realizado = de esas filas, las que tienen dato en certificacion_nombre_del_cliente
+async function fetchAllCertSum() {
     const PAGE = 1000;
-    const counts = {};
+    const sums = {};
     let pg = 0;
 
     while (true) {
@@ -52,11 +52,16 @@ async function fetchCertReales() {
             const tipo = String(row.nombre_correria || '').trim().toUpperCase();
             if (!DETAIL_TYPES.includes(tipo)) return;
 
-            if (!counts[func]) counts[func] = emptyRealCounts();
+            if (!sums[func]) {
+                sums[func] = {};
+                DETAIL_TYPES.forEach(t => { sums[func][t] = { cargado: 0, realizado: 0 }; });
+            }
+
+            sums[func][tipo].cargado++;
 
             const nombre = row.certificacion_nombre_del_cliente;
             if (nombre !== null && nombre !== undefined && String(nombre).trim() !== '') {
-                counts[func][tipo]++;
+                sums[func][tipo].realizado++;
             }
         });
 
@@ -64,7 +69,7 @@ async function fetchCertReales() {
         pg++;
     }
 
-    return counts;
+    return sums;
 }
 
 // Muestra real/esperado; si hay pendiente (esperado > real), se resalta en rojo.
@@ -217,7 +222,7 @@ async function loadTable1() {
     container.innerHTML = '<div class="rr-loading">Cargando...</div>';
     try {
         // Cargar conteos "reales" de certificaciones_reparto (agrupados por funcionario/tipo)
-        allCertReales = await fetchCertReales();
+        allCertSum = await fetchAllCertSum();
 
         const { data, error } = await supabase
             .from('programacion_lectura')
@@ -501,8 +506,8 @@ async function loadTable2(sup) {
 
     try {
         // Asegurar que los conteos reales de certificaciones_reparto estén cargados
-        if (Object.keys(allCertReales).length === 0) {
-            allCertReales = await fetchCertReales();
+        if (Object.keys(allCertSum).length === 0) {
+            allCertSum = await fetchAllCertSum();
         }
 
         // 1. Correrias del supervisor
