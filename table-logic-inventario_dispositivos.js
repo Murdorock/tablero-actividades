@@ -560,6 +560,87 @@ function exportarExcel() {
     XLSX.writeFile(wb, nombreArchivo);
 }
 
+// Exporta TODA la tabla 'dispositivos' a Excel (.xlsx) trayendo los datos
+// directamente desde Supabase con paginación, para no quedar limitados por el
+// máximo de filas que devuelve una sola consulta (por defecto 1000).
+async function exportarTablaCompletaExcel() {
+    const btn = document.getElementById('btnExportarTablaCompleta');
+    const textoOriginal = btn ? btn.innerHTML : '';
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Exportando...';
+    }
+
+    try {
+        const PAGE_SIZE = 1000;
+        let registros = [];
+        let from = 0;
+
+        // Traer todas las filas paginando hasta que no haya más datos.
+        while (true) {
+            const { data, error } = await supabase
+                .from(TABLE_NAME)
+                .select('*')
+                .range(from, from + PAGE_SIZE - 1);
+
+            if (error) throw error;
+
+            if (data && data.length > 0) {
+                registros = registros.concat(data);
+                from += data.length;
+                // Si se devolvieron menos filas que el tamaño de página, no hay más.
+                if (data.length < PAGE_SIZE) break;
+            } else {
+                break;
+            }
+        }
+
+        if (!registros.length) {
+            alert('No hay registros en la tabla para exportar.');
+            return;
+        }
+
+        if (typeof XLSX === 'undefined') {
+            alert('La librería de Excel no está disponible. Verifica la conexión a internet.');
+            return;
+        }
+
+        // Todas las columnas presentes en la tabla (sin importar el filtro actual).
+        const columnas = Object.keys(registros[0]);
+
+        const rowsData = registros.map(row => {
+            const obj = {};
+            columnas.forEach(col => {
+                let value = row[col];
+                if (value instanceof Date) value = value.toISOString();
+                if (value != null && typeof value === 'object') value = JSON.stringify(value);
+                obj[getDisplayName(col)] = value == null ? '' : String(value);
+            });
+            return obj;
+        });
+
+        const ws = XLSX.utils.json_to_sheet(rowsData, {
+            header: columnas.map(getDisplayName),
+        });
+        ws['!cols'] = columnas.map(col => ({ wch: Math.max(getDisplayName(col).length + 2, 14) }));
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Dispositivos');
+
+        const fecha = new Date().toISOString().slice(0, 10);
+        XLSX.writeFile(wb, `dispositivos_completo_${fecha}.xlsx`);
+    } catch (error) {
+        console.error('Error exportando la tabla completa:', error);
+        alert('Error al exportar la tabla completa: ' + error.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = textoOriginal;
+        }
+    }
+}
+
 // Convierte un valor a texto plano para el PDF
 function _pv(value) {
     if (value === null || value === undefined) return '';
