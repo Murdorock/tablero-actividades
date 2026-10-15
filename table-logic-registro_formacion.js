@@ -601,6 +601,15 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    // Búsqueda en vivo por Tema (con autocompletado): filtra mientras se escribe
+    // o al seleccionar una sugerencia del datalist.
+    const filterTema = document.getElementById('filterTema');
+    if (filterTema) {
+        filterTema.addEventListener('input', function() {
+            applyFilter();
+        });
+    }
+
     loadData();
 });
 
@@ -613,7 +622,7 @@ async function loadData() {
         
         if (error) throw error;
         
-        allData = data || [];
+                allData = data || [];
         currentData = allData;
         
         if (currentData.length > 0) {
@@ -635,6 +644,7 @@ async function loadData() {
                 ...allKeys.filter(k => !preferredOrder.includes(k) && k === 'id') // id al final si existe
             ];
             populateFilterColumns();
+            populateTemasDatalist();
             renderTable();
             renderPagination();
         } else {
@@ -658,6 +668,22 @@ function populateFilterColumns() {
     });
 }
 
+// Llena el datalist de autocompletado con los temas únicos disponibles.
+function populateTemasDatalist() {
+    const datalist = document.getElementById('temasDatalist');
+    if (!datalist) return;
+
+    const temasUnicos = Array.from(new Set(
+        (allData || [])
+            .map(r => (r && r.tema ? r.tema.toString().trim() : ''))
+            .filter(t => t !== '')
+    )).sort((a, b) => a.localeCompare(b));
+
+    datalist.innerHTML = temasUnicos
+        .map(tema => `<option value="${tema.replace(/"/g, '&quot;')}"></option>`)
+        .join('');
+}
+
 function formatColumnName(col) {
     return col
         .replace(/_/g, ' ')
@@ -667,36 +693,98 @@ function formatColumnName(col) {
 function renderTable() {
     const tableHead = document.getElementById('tableHead');
     const tableBody = document.getElementById('tableBody');
+
+        // Encabezados de la tabla de estadísticas
+    tableHead.innerHTML = '<tr>' +
+        '<th style="width: 120px;">Fecha</th>' +
+        '<th>Tema</th>' +
+        '<th style="width: 200px; text-align: center;">Funcionarios Registrados</th>' +
+        '</tr>';
+
+    // Agrupar por fecha (de más reciente a más antigua)
+    const grupos = agruparEstadisticasPorFecha(currentData);
+
+    if (grupos.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 40px; color: #7f8c8d;">No hay registros en esta tabla</td></tr>';
+        return;
+    }
+
     let bodyHTML = '';
-    // Renderizar encabezados
-    let headHTML = '<tr>';
-    tableColumns.forEach(col => {
-        if (col !== 'id' && !columnasOcultasVista.includes(col)) {
-            headHTML += `<th>${formatColumnName(col)}</th>`;
-        }
-    });
-    headHTML += '<th>Acciones</th></tr>';
-    tableHead.innerHTML = headHTML;
 
-    // Renderizar datos paginados
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    const paginatedData = currentData.slice(startIndex, endIndex);
+    grupos.forEach(grupo => {
+        const totalTemasFecha = grupo.temas.length;
+        // Fila cabecera de la fecha
+        bodyHTML += '<tr class="stat-date-row">' +
+            '<td colspan="3" style="background: #1e293b; color: #fff; font-weight: 700; padding: 10px 12px; font-size: 14px;">' +
+            '📅 ' + formatearFecha(grupo.fecha) +
+            ' <span style="font-weight: 400; opacity: 0.8;">(' + totalTemasFecha + ' tema' + (totalTemasFecha === 1 ? '' : 's') + ')</span>' +
+            '</td></tr>';
 
-    paginatedData.forEach((row, index) => {
-        bodyHTML += '<tr>';
-        tableColumns.forEach(col => {
-            if (col !== 'id' && !columnasOcultasVista.includes(col)) {
-                const cellValue = formatValue(row[col], col);
-                bodyHTML += `<td>${cellValue}</td>`;
-            }
+        grupo.temas.forEach(tema => {
+            bodyHTML += '<tr>' +
+                '<td style="color: #94a3b8; font-size: 12px;">' + formatearFecha(grupo.fecha) + '</td>' +
+                '<td style="font-weight: 600; color: #ffffff;">' + (tema.tema || '-') + '</td>' +
+                '<td style="text-align: center; font-weight: 700; color: ' + (tema.codigos.length > 0 ? '#4ade80' : '#94a3b8') + '; font-size: 16px;">' +
+                tema.codigos.length +
+                '</td>' +
+                '</tr>';
         });
-        bodyHTML += `<td class="actions">
-            <button class="btn btn-primary btn-sm" onclick='editRecord(${JSON.stringify(row).replace(/'/g, "&apos;")})'>✏️ Editar</button>
-        </td></tr>`;
     });
 
     tableBody.innerHTML = bodyHTML;
+}
+
+// Agrupa los registros por fecha (desc) y dentro de cada fecha por tema (valor único),
+// determinando cuántos codigo_lec únicos están asociados a cada tema.
+function agruparEstadisticasPorFecha(registros) {
+    const porFecha = new Map();
+
+    (registros || []).forEach(row => {
+        if (!row) return;
+        const fecha = (row.fecha || '').toString().split('T')[0];
+        const temaRaw = (row.tema || '').toString().trim();
+        const codigoLec = (row.codigo_lec || '').toString().trim();
+
+        if (!porFecha.has(fecha)) {
+            porFecha.set(fecha, new Map());
+        }
+        const porTema = porFecha.get(fecha);
+
+        if (!porTema.has(temaRaw)) {
+            porTema.set(temaRaw, new Set());
+        }
+        // Solo agregamos códigos lector válidos (no vacíos, no el literal "null")
+        if (codigoLec && codigoLec.toLowerCase() !== 'null') {
+            porTema.get(temaRaw).add(codigoLec);
+        }
+    });
+
+    // Convertir a array ordenado por fecha descendente
+    const grupos = [];
+    Array.from(porFecha.keys())
+        .sort((a, b) => (b || '').localeCompare(a || ''))
+        .forEach(fecha => {
+            const porTema = porFecha.get(fecha);
+            const temas = Array.from(porTema.keys())
+                .sort((a, b) => (a || '').localeCompare(b || ''))
+                .map(tema => ({
+                    tema: tema,
+                    codigos: Array.from(porTema.get(tema)).sort()
+                }));
+            grupos.push({ fecha: fecha, temas: temas });
+        });
+
+    return grupos;
+}
+
+// Formatea una fecha ISO (yyyy-mm-dd) a dd/mm/yyyy
+function formatearFecha(fecha) {
+    if (!fecha) return '-';
+    const partes = fecha.split('T')[0].split('-');
+    if (partes.length === 3) {
+        return partes[2] + '/' + partes[1] + '/' + partes[0];
+    }
+    return fecha;
 }
 
 
@@ -733,21 +821,10 @@ function formatValue(value, columnName) {
 }
 
 function renderPagination() {
+    // La vista de estadísticas muestra todos los temas agrupados por fecha,
+    // por lo que no requiere paginación de filas.
     const pagination = document.getElementById('pagination');
-    const totalPages = Math.ceil(currentData.length / itemsPerPage);
-    
-    if (totalPages <= 1) {
-        pagination.innerHTML = '';
-        return;
-    }
-    
-    let html = '<div class="pagination-container">';
-    html += `<button class="btn btn-secondary btn-sm" ${currentPage === 1 ? 'disabled' : ''} onclick="changePage(${currentPage - 1})">← Anterior</button>`;
-    html += `<span style="margin: 0 15px;">Página ${currentPage} de ${totalPages}</span>`;
-    html += `<button class="btn btn-secondary btn-sm" ${currentPage === totalPages ? 'disabled' : ''} onclick="changePage(${currentPage + 1})">Siguiente →</button>`;
-    html += '</div>';
-    
-    pagination.innerHTML = html;
+    if (pagination) pagination.innerHTML = '';
 }
 
 function changePage(page) {
@@ -780,311 +857,47 @@ function applyFilter() {
     renderPagination();
 }
 
+function applyFilter() {
+    const searchText = document.getElementById('filterSearch').value.toLowerCase();
+    const filterColumn = document.getElementById('filterColumn').value;
+    const temaFilter = (document.getElementById('filterTema')?.value || '').toLowerCase().trim();
+    
+    if (!searchText && !temaFilter) {
+        currentData = allData;
+    } else {
+        currentData = allData.filter(row => {
+            // Filtro por Tema (buscador con autocompletado)
+            if (temaFilter) {
+                const tema = (row.tema || '').toString().toLowerCase();
+                if (!tema.includes(temaFilter)) return false;
+            }
+
+            // Filtro general por texto
+            if (!searchText) return true;
+
+            if (filterColumn) {
+                const value = row[filterColumn];
+                return value && value.toString().toLowerCase().includes(searchText);
+            } else {
+                return Object.values(row).some(value => 
+                    value && value.toString().toLowerCase().includes(searchText)
+                );
+            }
+        });
+    }
+    
+    currentPage = 1;
+    renderTable();
+    renderPagination();
+}
+
 function clearFilter() {
     document.getElementById('filterSearch').value = '';
     document.getElementById('filterColumn').value = '';
+    const filterTema = document.getElementById('filterTema');
+    if (filterTema) filterTema.value = '';
     currentData = allData;
-            // ...aquí va el código de creación y despliegue del modal...
-    // Fila superior tipo tabla con 4 columnas (ajuste para no sobrepasar hoja)
-    let y = 12;
-    const pageWidth = doc.internal.pageSize.getWidth();
-    // Margen izquierdo y derecho de 14, área útil:
-    const usableWidth = pageWidth - 28;
-    // Proporciones aproximadas: logo 20%, título 40%, código 15%, paginación 25%
-    const colWidths = [usableWidth * 0.20, usableWidth * 0.40, usableWidth * 0.15, usableWidth * 0.25];
-    let x = 14;
-
-    // 1. Logo UTIC INTEGRAL (imagen)
-    doc.setDrawColor(0,0,0);
-    doc.setLineWidth(0.2);
-    doc.rect(x, y, colWidths[0], 16);
-    try {
-        if (typeof logoUTIC !== 'undefined' && logoUTIC) {
-            // Margen interno para no pegar el logo a los bordes
-            const padding = 2;
-            const logoWidth = colWidths[0] - 2 * padding;
-            const logoHeight = 16 - 2 * padding;
-            doc.addImage(logoUTIC, 'PNG', x + padding, y + padding, logoWidth, logoHeight);
-        } else {
-            // Fallback: texto si no hay logo cargado
-            doc.setFontSize(16);
-            doc.setFont('helvetica', 'bold');
-            doc.text('UT.iC', x + 4, y + 10);
-            doc.setFontSize(6);
-            doc.setFont('helvetica', 'normal');
-            const icWidth = doc.getTextWidth('iC');
-            const integralWidth = doc.getTextWidth('INTEGRAL');
-            const utWidth = doc.getTextWidth('UT.');
-            const icStart = x + 4 + utWidth;
-            const integralX = icStart + (icWidth/2) - (integralWidth/2);
-            doc.text('INTEGRAL', integralX, y + 15);
-        }
-    } catch (e) {
-        // Si hay error, mostrar texto
-        doc.setFontSize(16);
-        doc.setFont('helvetica', 'bold');
-        doc.text('UT.iC', x + 4, y + 10);
-        doc.setFontSize(6);
-        doc.setFont('helvetica', 'normal');
-        const icWidth = doc.getTextWidth('iC');
-        const integralWidth = doc.getTextWidth('INTEGRAL');
-        const utWidth = doc.getTextWidth('UT.');
-        const icStart = x + 4 + utWidth;
-        const integralX = icStart + (icWidth/2) - (integralWidth/2);
-        doc.text('INTEGRAL', integralX, y + 15);
-    }
-
-
-    // 2. Título
-    x += colWidths[0];
-    doc.rect(x, y, colWidths[1], 16);
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('REGISTRO DE FORMACIÓN', x + colWidths[1]/2, y + 10, { align: 'center', baseline: 'middle' });
-
-    // 3. Código y revisión (alineado a la derecha y con más espacio)
-    x += colWidths[1];
-    doc.rect(x, y, colWidths[2], 16);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text('SCF-H003-9', x + colWidths[2]/2, y + 6, { align: 'center' });
-    doc.text('REV.0', x + colWidths[2]/2, y + 13, { align: 'center' });
-
-    // 4. Paginación (alineado a la derecha, mejor separación)
-    x += colWidths[2];
-    doc.rect(x, y, colWidths[3], 16);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    // Mostrar número de página real y total
-    const pagText = `Pag ${numeroPagina} de ${totalPaginas}`;
-    doc.text(pagText, x + colWidths[3] - 3, y + 10, { align: 'right', baseline: 'middle' });
-
-    // Dibujar línea vertical final para cerrar la fila (altura completa de la celda)
-    const finalX = x + colWidths[3];
-    doc.setDrawColor(0,0,0);
-    doc.setLineWidth(0.2);
-    doc.line(finalX, y, finalX, y + 16);
-
-    // Reset X para el resto del contenido
-    y += 20;
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    // === CABECERA DETALLADA (ORDEN Y FUENTE REDUCIDA) ===
-    doc.setFontSize(8);
-    const lineSpacing = 5; // interlineado aún más reducido
-    // Línea 1: FECHA y TIPO (más compacto, solo subrayado en FECHA)
-    doc.setFont('helvetica', 'bold');
-    doc.text('FECHA (D/M/A):', 14, y);
-    doc.setFont('helvetica', 'normal');
-    let fechaFormateada = '___/___/___';
-    if (registro.fecha) {
-        const dateParts = registro.fecha.split('T')[0].split('-');
-        if (dateParts.length === 3) {
-            fechaFormateada = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
-        }
-    }
-    doc.text(fechaFormateada, 44, y);
-    doc.line(44, y + 1, 44 + doc.getTextWidth(fechaFormateada), y + 1);
-
-    doc.setFont('helvetica', 'bold');
-    doc.text('TIPO (marque con "X"):', 75, y);
-    doc.setFont('helvetica', 'normal');
-    doc.text('ENTRENAMIENTO', 120, y);
-    let entrenamientoDato = datosExtra.tipo === 'ENTRENAMIENTO' ? 'X' : '_____';
-    const entrenamientoLabelWidth = doc.getTextWidth('ENTRENAMIENTO ');
-    doc.text(entrenamientoDato, 120 + entrenamientoLabelWidth, y);
-    // Sin subrayado
-    doc.text('CAPACITACIÓN', 155, y);
-    let capacitacionDato = datosExtra.tipo === 'CAPACITACIÓN' ? 'X' : '_____';
-    const capacitacionLabelWidth = doc.getTextWidth('CAPACITACIÓN ');
-    let capXOffset = datosExtra.tipo === 'CAPACITACIÓN' ? 3 : 0;
-    doc.text(capacitacionDato, 155 + capacitacionLabelWidth + capXOffset, y);
-    // Sin subrayado
-
-    y += lineSpacing;
-    // Línea 2: CÓDIGO e INSTRUCTOR (subrayado solo en valores)
-    doc.setFont('helvetica', 'bold');
-    doc.text('CÓDIGO:', 14, y);
-    doc.setFont('helvetica', 'normal');
-    const codigo = registro.codigo || '________';
-    doc.text(codigo, 36, y);
-    doc.line(36, y + 1, 36 + doc.getTextWidth(codigo), y + 1);
-
-    doc.setFont('helvetica', 'bold');
-    doc.text('INSTRUCTOR:', 75, y);
-    doc.setFont('helvetica', 'normal');
-    const nombreInst = nombreInstructor || '________________________';
-    doc.text(nombreInst, 105, y);
-    doc.line(105, y + 1, 105 + doc.getTextWidth(nombreInst), y + 1);
-
-    y += lineSpacing;
-    // Línea 3: INTERNO, EXTERNO, DURACIÓN (subrayado solo en valores de duración)
-    doc.setFont('helvetica', 'bold');
-    doc.text('INTERNO', 14, y);
-    doc.setFont('helvetica', 'normal');
-    let internoDato = datosExtra.modalidad === 'INTERNO' ? 'X' : '_____';
-    doc.text(internoDato, 38, y);
-    // Sin subrayado
-
-    doc.setFont('helvetica', 'bold');
-    doc.text('EXTERNO', 65, y);
-    doc.setFont('helvetica', 'normal');
-    let externoDato = datosExtra.modalidad === 'EXTERNO' ? 'X' : '_____';
-    doc.text(externoDato, 90, y);
-    // Sin subrayado
-
-    doc.setFont('helvetica', 'bold');
-    doc.text('DURACIÓN (horas):', 120, y);
-    doc.setFont('helvetica', 'normal');
-    const duracion = datosExtra.duracion || '____';
-    doc.text(duracion, 160, y);
-    doc.text('hrs', 160 + doc.getTextWidth(duracion) + 2, y);
-    doc.line(160, y + 1, 160 + doc.getTextWidth(duracion), y + 1);
-
-    y += lineSpacing;
-    // Línea 4: TEMA CAPACITACIÓN y ÁREA (subrayado solo en valores)
-    doc.setFont('helvetica', 'bold');
-    doc.text('TEMA CAPACITACIÓN:', 14, y);
-    doc.setFont('helvetica', 'normal');
-    const tema = registro.tema || datosExtra.tema || '__________________________________________';
-    doc.text(tema, 60, y);
-    doc.line(60, y + 1, 60 + doc.getTextWidth(tema), y + 1);
-
-    doc.setFont('helvetica', 'bold');
-    // Acercar el campo ÁREA a continuación del tema
-    const areaLabelX = 60 + doc.getTextWidth(tema) + 10;
-    doc.text('ÁREA:', areaLabelX, y);
-    doc.setFont('helvetica', 'normal');
-    const area = datosExtra.area || '________________________';
-    doc.text(area, areaLabelX + 18, y);
-
-    // Dejar espacio extra antes de la tabla (menos espacio)
-    y += 4;
-    
-
-        // Preparar datos para la tabla
-        const tableData = [];
-        // Mostrar asistentes (de 4 a 15 filas por hoja)
-        for (let i = 0; i < datosPagina.length; i++) {
-            const asistente = datosPagina[i] || {};
-            const numeroGlobal = offsetRegistro + i + 1;
-            // Si es la última fila de la última página, poner el bloque de evaluación en DESCRIPCIÓN
-            if (pagina === totalPaginas - 1 && i === datosPagina.length - 1) {
-                let evalText = 'EVALUACIÓN\n\nSe realizó:   Si   □    No   □\n\nResultado:';
-                tableData.push([
-                    evalText,
-                    numeroGlobal,
-                    asistente.nombre_completo || '',
-                    asistente.cedula || '',
-                    asistente.cargo || '',
-                    asistente.firma || '',
-                    asistente.codigo_lec || ''
-                ]);
-            } else {
-                tableData.push([
-                    '',
-                    numeroGlobal,
-                    asistente.nombre_completo || '',
-                    asistente.cedula || '',
-                    asistente.cargo || '',
-                    asistente.firma || '',
-                    asistente.codigo_lec || ''
-                ]);
-            }
-        }
-    
-    doc.autoTable({
-        startY: y,
-        head: [['DESCRIPCIÓN', '#', 'NOMBRE COMPLETO', 'CÉDULA', 'CARGO', 'FIRMA', 'CÓDIGO']],
-        body: tableData,
-        theme: 'grid',
-        styles: {
-            fontSize: 5.5,
-            cellPadding: 0.2,
-            valign: 'middle',
-            lineWidth: 0.1,
-            lineColor: [0, 0, 0],
-            minCellHeight: 10,
-            cellHeight: 10,
-            overflow: 'linebreak'
-        },
-        headStyles: {
-            fillColor: [96, 125, 139],
-            textColor: [255, 255, 255],
-            fontStyle: 'bold',
-            halign: 'center',
-            valign: 'middle',
-            minCellHeight: 10,
-            cellHeight: 10,
-            fontSize: 6.5
-        },
-        columnStyles: {
-            0: { cellWidth: 28, fontStyle: 'bold', valign: 'top', fontSize: 5.5 },
-            1: { halign: 'center', cellWidth: 7, valign: 'middle' },
-            2: { cellWidth: 52, valign: 'middle', fontSize: 5.5 },
-            3: { halign: 'center', cellWidth: 20, valign: 'middle', fontSize: 5.5 },
-            4: { halign: 'center', cellWidth: 26, valign: 'middle', fontSize: 5.5 },
-            5: { halign: 'center', cellWidth: 20, valign: 'middle' },
-            6: { halign: 'center', cellWidth: 18, valign: 'middle', fontSize: 5.5 }
-        },
-        willDrawCell: function(data) {
-            // Para la columna FIRMA, limpiar el texto de la URL
-            if (data.column.index === 5 && data.section === 'body') {
-                data.cell.text = [];
-            }
-        },
-        didDrawCell: function(data) {
-            // Insertar imágenes de firma en la columna FIRMA (índice 5)
-            if (data.column.index === 5 && data.section === 'body') {
-                const asistente = datosPagina[data.row.index];
-                const firmaUrl = asistente?.firma;
-                if (firmaUrl && firmaUrl.startsWith('http')) {
-                    const cell = data.cell;
-                    const padding = 0.3;
-                    const maxImgWidth = cell.width - (padding * 2);
-                    const maxImgHeight = cell.height - (padding * 2);
-                    const yOffset = padding;
-                    try {
-                        doc.addImage(
-                            firmaUrl,
-                            'PNG',
-                            cell.x + padding,
-                            cell.y + yOffset,
-                            maxImgWidth,
-                            maxImgHeight,
-                            undefined,
-                            'NONE'
-                        );
-                    } catch (e) {
-                        console.error('Error al cargar firma:', e);
-                    }
-                }
-            }
-        },
-        margin: { left: 14, right: 14 }
-    });
-    
-    // Firma del instructor en todas las páginas - en pie de página
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const footerY = pageHeight - 8; // Mucho más cerca del borde inferior
-    doc.line(14, footerY, 80, footerY);
-    doc.setFontSize(7);
-    doc.text('FIRMA DEL INSTRUCTOR', 30, footerY + 4);
-
-    // Mostrar imagen de la firma del instructor si existe la URL en registro.firma_sup
-    if (registro.firma_sup && typeof registro.firma_sup === 'string' && registro.firma_sup.startsWith('http')) {
-        try {
-            // Ajustar tamaño y posición de la imagen de la firma
-            doc.addImage(
-                registro.firma_sup,
-                'PNG',
-                14, // x
-                footerY - 14, // y (justo encima de la línea)
-                60, // ancho
-                12 // alto
-            );
-        } catch (e) {
-            console.error('Error al cargar la firma del instructor:', e);
-        }
-    }
+    currentPage = 1;
+    renderTable();
+    renderPagination();
 }

@@ -41,9 +41,15 @@
             </div>
         </div>
         
-        <!-- Filtros -->
+                <!-- Filtros -->
         <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
             <div style="display: flex; gap: 15px; align-items: end; flex-wrap: wrap;">
+                <div class="form-group" style="margin: 0; flex: 1; min-width: 220px; position: relative;">
+                    <label for="filterTema" style="color: #334155; font-weight: 700;">Buscar por Tema</label>
+                    <input type="text" id="filterTema" list="temasDatalist" placeholder="Escribe o selecciona un tema..." autocomplete="off"
+                        style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <datalist id="temasDatalist"></datalist>
+                </div>
                 <div class="form-group" style="margin: 0; flex: 1; min-width: 200px;">
                     <label for="filterSearch" style="color: #334155; font-weight: 700;">Buscar</label>
                     <input type="text" id="filterSearch" placeholder="Buscar en todos los campos..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
