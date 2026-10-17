@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pruebas de Ingreso - Sistema</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="config.js"></script>
+    <script>const TABLE_NAME = 'resultados_prueba'; const TABLE_TITLE = '🎓 Pruebas de Ingreso';</script>
+    <script src="table-logic-pruebas_ingreso.js"></script>
+    <style>
+        .pi-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .pi-kpi-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-left: 4px solid #475569;
+            border-radius: 12px;
+            padding: 14px;
+        }
+
+        .pi-kpi-label {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-bottom: 6px;
+        }
+
+        .pi-kpi-value {
+            font-size: 22px;
+            font-weight: 700;
+            color: #f1f5f9;
+            line-height: 1.1;
+        }
+
+        .pi-kpi-sub {
+            color: #cbd5e1;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        .pi-charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .pi-chart-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 14px;
+        }
+
+        .pi-chart-card h3 {
+            margin: 0 0 12px;
+            color: #e2e8f0;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .pi-chart-box {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 10px;
+            min-height: 260px;
+        }
+
+        .pi-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 16px;
+            padding: 14px 16px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+        }
+
+        .pi-toolbar label {
+            color: #cbd5e1;
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .pi-toolbar input,
+        .pi-toolbar select {
+            background: #0f172a;
+            color: #e2e8f0;
+            border: 1px solid #475569;
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 14px;
+        }
+
+        .pi-toolbar input[type="text"] {
+            min-width: 220px;
+        }
+
+        .pi-bar {
+            background: #334155;
+            border-radius: 999px;
+            height: 8px;
+            width: 90px;
+            overflow: hidden;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 6px;
+        }
+
+        .pi-bar > span {
+            display: block;
+            height: 100%;
+            border-radius: 999px;
+        }
+
+        .pi-empty {
+            text-align: center;
+            padding: 40px;
+            color: #94a3b8;
+        }
+
+        @media (max-width: 1200px) {
+            .pi-charts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="table-container">
+        <div class="table-header">
+            <h2>🎓 Pruebas de Ingreso</h2>
+            <div class="table-actions">
+                <button class="btn btn-success" onclick="exportToExcel()">📥 Exportar</button>
+                <button class="btn btn-secondary" onclick="loadData()">🔄 Actualizar</button>
+            </div>
+        </div>
+
+        <div class="pi-toolbar">
+            <label for="piSearch">🔍 Buscar:</label>
+            <input type="text" id="piSearch" placeholder="Nombre o cédula..." oninput="scheduleApplyFilter()">
+
+            <label for="piDesde">📅 Desde:</label>
+            <input type="date" id="piDesde" onchange="scheduleApplyFilter()">
+
+            <label for="piHasta">📅 Hasta:</label>
+            <input type="date" id="piHasta" onchange="scheduleApplyFilter()">
+
+            <label for="piOrden">↕️ Ordenar por:</label>
+            <select id="piOrden" onchange="applyFilter()">
+                <option value="fecha_desc">Fecha (más recientes)</option>
+                <option value="fecha_asc">Fecha (más antiguos)</option>
+                <option value="nombre_asc">Nombre (A-Z)</option>
+                <option value="p3_desc">Puntuación Medellín (mayor)</option>
+                <option value="p1_desc">Precisión Textos (mayor)</option>
+                <option value="p2_asc">Errores TPL (menor)</option>
+            </select>
+
+            <button class="btn btn-primary" onclick="clearFilters()">🧹 Limpiar</button>
+        </div>
+
+        <div id="piSummary" style="display: none;">
+            <div id="piKpis" class="pi-kpi-grid"></div>
+            <div class="pi-charts-grid">
+                <div class="pi-chart-card">
+                    <h3>Promedio por prueba (escala 0-100)</h3>
+                    <div class="pi-chart-box">
+                        <canvas id="chart-pi-promedios"></canvas>
+                    </div>
+                </div>
+                <div class="pi-chart-card">
+                    <h3>Distribución de puntuación · Medellín</h3>
+                    <div class="pi-chart-box">
+                        <canvas id="chart-pi-puntuacion"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="data-table-wrapper">
+            <div id="loadingIndicator" class="loading" style="display: none;"><div class="spinner"></div><p>Cargando...</p></div>
+            <div id="tableContainer"></div>
+        </div>
+    </div>
+</body>
+</html>
