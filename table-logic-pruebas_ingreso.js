@@ -552,6 +552,190 @@ function exportToExcel() {
     }
 }
 
+// ===================== Carga de aspirantes inscritos =====================
+// Inserta en la tabla inscritos_prueba (columnas: cedula, nombre).
+const ASPIRANTES_TABLE = 'inscritos_prueba';
+const ASPIRANTES_BATCH_SIZE = 200;
+let aspirantesPrepared = [];
+
+function openAspirantesModal() {
+    const modal = document.getElementById('aspirantesModal');
+    if (!modal) return;
+    document.getElementById('aspirantesCsvFile').value = '';
+    document.getElementById('aspirantesPastedData').value = '';
+    aspirantesPrepared = [];
+    resetAspirantesProgress();
+    document.getElementById('btnImportAspirantes').disabled = true;
+    modal.classList.add('show');
+}
+
+function closeAspirantesModal() {
+    document.getElementById('aspirantesModal')?.classList.remove('show');
+}
+
+function resetAspirantesProgress() {
+    const section = document.getElementById('aspirantesProgressSection');
+    const bar = document.getElementById('aspirantesProgressBar');
+    const text = document.getElementById('aspirantesProgressText');
+    if (section) section.style.display = 'none';
+    if (bar) bar.style.width = '0%';
+    if (text) text.textContent = 'Listo para cargar';
+}
+
+function setAspirantesProgress(processed, total) {
+    const section = document.getElementById('aspirantesProgressSection');
+    const bar = document.getElementById('aspirantesProgressBar');
+    const text = document.getElementById('aspirantesProgressText');
+    if (section) section.style.display = 'block';
+    const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
+    if (bar) bar.style.width = pct + '%';
+    if (text) text.textContent = `${processed} / ${total} registros procesados (${pct}%)`;
+}
+
+// Normaliza encabezados y detecta las columnas de cédula y nombre.
+function normalizarHeader(h) {
+    return String(h || '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase().trim();
+}
+
+function soloDigitos(v) {
+    return String(v == null ? '' : v).replace(/[^0-9]/g, '');
+}
+
+// Convierte las filas parseadas (objetos) en [{ cedula, nombre }] validados.
+function prepararAspirantes(rows) {
+    if (!Array.isArray(rows) || rows.length === 0) return [];
+    const sampleKeys = Object.keys(rows[0] || {});
+    const headerMap = {};
+    sampleKeys.forEach((k) => { headerMap[normalizarHeader(k)] = k; });
+
+    const cedulaKey = ['cedula', 'cédula', 'documento', 'identificacion', 'identificación', 'cc', 'id']
+        .map(normalizarHeader).find((k) => k in headerMap);
+    const nombreKey = ['nombre', 'nombres', 'nombre completo', 'apellidos y nombres', 'aspirante']
+        .map(normalizarHeader).find((k) => k in headerMap);
+
+    if (!cedulaKey) {
+        throw new Error('No se encontró la columna de cédula. Use un encabezado "cedula".');
+    }
+
+    const map = new Map();
+    let omitidos = 0;
+    rows.forEach((row) => {
+        const rawCedula = row[headerMap[cedulaKey]];
+        const rawNombre = nombreKey ? row[headerMap[nombreKey]] : '';
+        const cedula = soloDigitos(rawCedula);
+        if (cedula.length < 5) { omitidos++; return; }
+        const nombre = String(rawNombre == null ? '' : rawNombre).trim();
+        // Deduplicar por cédula (gana el último nombre no vacío)
+        map.set(cedula, { cedula, nombre });
+    });
+
+    const result = Array.from(map.values());
+    if (omitidos > 0) {
+        console.warn(`Aspirantes: ${omitidos} fila(s) omitidas por cédula inválida.`);
+    }
+    return result;
+}
+
+function parseAspirantesFile(input) {
+    const file = input?.files?.[0];
+    if (!file) return;
+    if (typeof Papa === 'undefined') {
+        showMessage('PapaParse no está disponible para leer el CSV.', 'error');
+        return;
+    }
+    Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+            try {
+                aspirantesPrepared = prepararAspirantes(results.data);
+                if (!aspirantesPrepared.length) {
+                    showMessage('No se encontraron aspirantes válidos en el archivo.', 'error');
+                    return;
+                }
+                setAspirantesProgress(0, aspirantesPrepared.length);
+                document.getElementById('btnImportAspirantes').disabled = false;
+                showMessage(`${aspirantesPrepared.length} aspirante(s) listos para cargar.`, 'info');
+            } catch (e) {
+                handleError(e, 'al leer el archivo de aspirantes');
+            }
+        },
+        error: (err) => handleError(err, 'al leer el CSV de aspirantes')
+    });
+}
+
+function parsePastedAspirantes() {
+    const pastedData = document.getElementById('aspirantesPastedData')?.value || '';
+    if (!pastedData.trim()) {
+        showMessage('No hay texto para procesar.', 'error');
+        return;
+    }
+    if (typeof Papa === 'undefined') {
+        showMessage('PapaParse no está disponible para leer el texto.', 'error');
+        return;
+    }
+    const separators = ['auto', ';', '\t', ','];
+    let best = null;
+    separators.forEach((delim) => {
+        const res = Papa.parse(pastedData, { header: true, skipEmptyLines: true, delimiter: delim === 'auto' ? undefined : delim });
+        const keys = Object.keys(res.data?.[0] || {});
+        if (keys.length >= 2 && (!best || keys.length > best.keys.length)) {
+            best = { res, keys };
+        }
+        if (!best && res.data && res.data.length) best = { res, keys };
+    });
+
+    try {
+        aspirantesPrepared = prepararAspirantes(best?.res?.data || []);
+        if (!aspirantesPrepared.length) {
+            showMessage('No se encontraron aspirantes válidos. Verifique encabezados "cedula;nombre".', 'error');
+            return;
+        }
+        setAspirantesProgress(0, aspirantesPrepared.length);
+        document.getElementById('btnImportAspirantes').disabled = false;
+        showMessage(`${aspirantesPrepared.length} aspirante(s) listos para cargar.`, 'info');
+    } catch (e) {
+        handleError(e, 'al procesar el texto pegado');
+    }
+}
+
+async function importAspirantes() {
+    if (!aspirantesPrepared.length) {
+        showMessage('No hay aspirantes para cargar.', 'error');
+        return;
+    }
+    if (!confirm(`¿Deseas cargar/actualizar ${aspirantesPrepared.length} aspirante(s) en inscritos_prueba?`)) {
+        return;
+    }
+
+    const btn = document.getElementById('btnImportAspirantes');
+    btn.disabled = true;
+    btn.textContent = 'Cargando...';
+    setAspirantesProgress(0, aspirantesPrepared.length);
+
+    try {
+        let processed = 0;
+        for (let i = 0; i < aspirantesPrepared.length; i += ASPIRANTES_BATCH_SIZE) {
+            const batch = aspirantesPrepared.slice(i, i + ASPIRANTES_BATCH_SIZE);
+            const { error } = await supabase
+                .from(ASPIRANTES_TABLE)
+                .upsert(batch, { onConflict: 'cedula' });
+            if (error) throw error;
+            processed += batch.length;
+            btn.textContent = `Cargando... ${processed}/${aspirantesPrepared.length}`;
+            setAspirantesProgress(processed, aspirantesPrepared.length);
+        }
+        showMessage(`✓ ${aspirantesPrepared.length} aspirante(s) cargados correctamente.`, 'success');
+        closeAspirantesModal();
+    } catch (error) {
+        handleError(error, 'al cargar aspirantes');
+        btn.disabled = false;
+        btn.textContent = 'Importar Aspirantes';
+    }
+}
+
 // --- Inicialización ---
 document.addEventListener('DOMContentLoaded', function () {
     if (!window.supabase) {
