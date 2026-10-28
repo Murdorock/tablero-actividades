@@ -148,12 +148,41 @@
                 .replace(/\s+/g, '_');
         }
 
-        function normalizeCicloOperativoValue(rawValue) {
-            const value = String(rawValue ?? '').trim();
+                function normalizeCicloOperativoValue(rawValue) {
+            // Normaliza a string "limpio" para comparar: maneja null, undefined, BigInt,
+            // números con decimales ("11.0"), espacios y separadores.
+            if (rawValue === null || rawValue === undefined) return '';
+            let value;
+            if (typeof rawValue === 'bigint') {
+                value = rawValue.toString();
+            } else if (typeof rawValue === 'number') {
+                value = Number.isFinite(rawValue) ? String(Math.trunc(rawValue)) : '';
+            } else if (typeof rawValue === 'object') {
+                // Algunos lectores devuelven { value: 11 }
+                value = rawValue.value != null ? String(rawValue.value) : '';
+            } else {
+                value = String(rawValue);
+            }
+            value = value.trim();
             if (!value) return '';
-            const numeric = Number(value);
-            if (Number.isNaN(numeric)) return value;
-            return String(Math.trunc(numeric));
+            // Si es numérico (con posibles decimales/formato), truncar a entero.
+            const numeric = Number(value.replace(',', '.'));
+            if (Number.isFinite(numeric)) return String(Math.trunc(numeric));
+            return value;
+        }
+
+        // Compara el valor crudo de ciclo_operativo (puede venir numérico, string, null, etc.)
+        // contra el filtro normalizado. Tolerante a "11", "11.0", 11, " 11 ", "011".
+        function cicloCoincide(rawValue, filtroNormalizado) {
+            if (!filtroNormalizado) return true; // sin filtro = todo pasa
+            const normalizado = normalizeCicloOperativoValue(rawValue);
+            if (normalizado === filtroNormalizado) return true;
+            // Tolerancia extra: si el valor tiene texto (p.ej. "CICLO 11"), extraer primer número.
+            const match = String(rawValue ?? '').match(/\d+/);
+            if (match) {
+                return String(Number(match[0])) === filtroNormalizado;
+            }
+            return false;
         }
 
         function detectDelimiter(line) {
@@ -303,9 +332,9 @@
                     return;
                 }
 
-                processedRows = rows.length;
+                                                                                                processedRows = rows.length;
 
-                let batch = [];
+                                                                                                let batch = [];
                 for (let i = 0; i <= rows.length; i++) {
                     if (i < rows.length) {
                         const rawRow = rows[i];
@@ -318,15 +347,15 @@
                             }
                         }
 
-                        if (cicloOperativoFilter) {
-                            const value = normalizeCicloOperativoValue(lookupColumnValue(rawRow, 'ciclo_operativo'));
-                            if (value !== cicloOperativoFilter) {
-                                skippedRows += 1;
-                                continue;
-                            }
-                        }
+                                                if (cicloOperativoFilter) {
+                                                    const rawCiclo = lookupColumnValue(rawRow, 'ciclo_facturacion');
+                                                    if (!cicloCoincide(rawCiclo, cicloOperativoFilter)) {
+                                                        skippedRows += 1;
+                                                        continue;
+                                                    }
+                                                }
 
-                        batch.push(normalizeRow(rawRow, lookupColumnValue));
+                                                batch.push(normalizeRow(rawRow, lookupColumnValue));
                     }
 
                     if (batch.length >= IMPORT_BATCH_SIZE || i === rows.length) {
@@ -385,13 +414,28 @@
             return row;
         }
 
-        function lookupColumnValue(rawRow, expectedColumn) {
+                function lookupColumnValue(rawRow, expectedColumn) {
             if (!rawRow || typeof rawRow !== 'object') return null;
+
+            // 1) Coincidencia exacta
             if (Object.prototype.hasOwnProperty.call(rawRow, expectedColumn)) {
                 return rawRow[expectedColumn];
             }
-            // Fallback: buscar clave normalizada (minúsculas con guiones bajos)
-            const matchingKey = Object.keys(rawRow).find((key) => normalizeHeaderName(key) === expectedColumn);
+
+            const target = normalizeHeaderName(expectedColumn);
+
+            // 2) Coincidencia por nombre normalizado (minúsculas, espacios -> _)
+            const keys = Object.keys(rawRow);
+            let matchingKey = keys.find((key) => normalizeHeaderName(key) === target);
+            if (matchingKey !== undefined) return rawRow[matchingKey];
+
+            // 3) Coincidencia ignorando guiones bajos (camelCase, "CicloOperativo")
+            const stripUnderscores = (s) => normalizeHeaderName(s).replace(/_/g, '');
+            matchingKey = keys.find((key) => stripUnderscores(key) === stripUnderscores(target));
+            if (matchingKey !== undefined) return rawRow[matchingKey];
+
+            // 4) Búsqueda difusa: alguna clave normalizada que contenga el target
+            matchingKey = keys.find((key) => normalizeHeaderName(key).includes(target));
             return matchingKey !== undefined ? rawRow[matchingKey] : null;
         }
 
@@ -539,8 +583,8 @@
                         if (!headerProcessed) {
                             delimiter = detectDelimiter(line);
                             headers = line.split(delimiter).map(normalizeHeaderName);
-                            procesoAgiIndex = headers.indexOf('proceso_agi');
-                            cicloOperativoIndex = headers.indexOf('ciclo_operativo');
+                                                        procesoAgiIndex = headers.indexOf('proceso_agi');
+                            cicloOperativoIndex = headers.indexOf('ciclo_facturacion');
 
                             const missingColumns = EXPECTED_COLUMNS.filter((col) => !headers.includes(col));
                             if (missingColumns.length > 0) {
@@ -553,8 +597,8 @@
                                 throw new Error('No se encontro la columna proceso_agi para aplicar el filtro.');
                             }
 
-                            if (cicloOperativoFilter && cicloOperativoIndex === -1) {
-                                throw new Error('No se encontro la columna ciclo_operativo para aplicar el filtro.');
+                                                        if (cicloOperativoFilter && cicloOperativoIndex === -1) {
+                                throw new Error('No se encontro la columna ciclo_facturacion para aplicar el filtro.');
                             }
 
                             headerProcessed = true;
@@ -577,16 +621,15 @@
                             }
                         }
 
-                        if (cicloOperativoFilter) {
-                            const cicloOperativoValue = normalizeCicloOperativoValue(values[cicloOperativoIndex]);
-                            if (cicloOperativoValue !== cicloOperativoFilter) {
-                                skippedRows += 1;
-                                if (processedRows % UI_YIELD_EVERY_ROWS === 0) {
-                                    await new Promise((resolve) => setTimeout(resolve, 0));
-                                }
-                                continue;
-                            }
-                        }
+                                                if (cicloOperativoFilter) {
+                                                    if (!cicloCoincide(values[cicloOperativoIndex], cicloOperativoFilter)) {
+                                                        skippedRows += 1;
+                                                        if (processedRows % UI_YIELD_EVERY_ROWS === 0) {
+                                                            await new Promise((resolve) => setTimeout(resolve, 0));
+                                                        }
+                                                        continue;
+                                                    }
+                                                }
 
                         const row = {};
 
@@ -621,9 +664,8 @@
                         shouldImport = procesoAgiValue === procesoAgiFilter;
                     }
 
-                    if (shouldImport && cicloOperativoFilter) {
-                        const cicloOperativoValue = normalizeCicloOperativoValue(values[cicloOperativoIndex]);
-                        shouldImport = cicloOperativoValue === cicloOperativoFilter;
+                                        if (shouldImport && cicloOperativoFilter) {
+                        shouldImport = cicloCoincide(values[cicloOperativoIndex], cicloOperativoFilter);
                     }
 
                     if (shouldImport) {
