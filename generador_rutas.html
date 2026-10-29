@@ -226,7 +226,7 @@
                     <label for="inicio-lng">Longitud inicio (opcional)</label>
                     <input type="text" id="inicio-lng" placeholder="-75.56359">
                 </div>
-                <div class="form-control">
+                                <div class="form-control">
                     <label for="delimitador-select">Formato pegado</label>
                     <select id="delimitador-select">
                         <option value="auto">Detectar autom.</option>
@@ -234,6 +234,10 @@
                         <option value="semicolon">Punto y coma</option>
                         <option value="comma">Coma</option>
                     </select>
+                </div>
+                <div class="form-control" style="flex-direction: row; align-items: center; gap: 0.5rem;">
+                    <input type="checkbox" id="split-outliers-checkbox" style="width: auto; min-width: auto;">
+                    <label for="split-outliers-checkbox" style="cursor: pointer;">Sugerir rutas extra para puntos dispersos</label>
                 </div>
             </div>
         </div>

@@ -136,10 +136,28 @@
             'ans_asignacion', 'zona_operativa_ped', 'nombre_cliente', 'telefono_avisar', 'celular_avisar',
             'interiores_agrupados', 'serie_equipo', 'series_agrupados', 'transformador', 'criterio_pedidos', 'cod_contrato'
         ];
-        const IMPORT_BATCH_SIZE = 1000;
+                const IMPORT_BATCH_SIZE = 1000;
         const UI_YIELD_EVERY_ROWS = 2000;
         const DEFAULT_IMPORT_PROCESO_AGI_FILTER = 'LECTURA';
         const DEFAULT_IMPORT_CICLO_OPERATIVO_FILTER = '';
+
+                // Valor que debe tener la columna "segmento" para importar filas desde .parquet.
+        const PARQUET_REQUIRED_SEGMENTO = 'LECTURA';
+
+        // Columnas que se importan al cargar un archivo .parquet, según su posición
+        // (1-based) en EXPECTED_COLUMNS:
+        //   1  -> proceso_agi
+        //   18 -> cod_instalacion
+        //   19 -> nomenclatura_mp
+        //   20 -> municipio
+        //   23 -> correria_lectura
+        //   35 -> ciclo_operativo
+        //   37 -> servicio_pedidos_ab
+        //   42 -> medidor
+        const PARQUET_IMPORT_COLUMN_POSITIONS = [1, 18, 19, 20, 23, 35, 37, 42];
+        const PARQUET_IMPORT_COLUMNS = PARQUET_IMPORT_COLUMN_POSITIONS
+            .map((pos) => EXPECTED_COLUMNS[pos - 1])
+            .filter(Boolean);
 
         function normalizeHeaderName(rawHeader) {
             return String(rawHeader || '')
@@ -148,12 +166,21 @@
                 .replace(/\s+/g, '_');
         }
 
-        function normalizeCicloOperativoValue(rawValue) {
+                function normalizeCicloOperativoValue(rawValue) {
+            // Normaliza el ciclo_operativo a su forma numérica canónica para comparar:
+            //   "001" -> "1", "1.0" -> "1", " 011 " -> "11", "000" -> "0"
+            // Si no es numérico, retorna el texto en minúsculas y sin espacios.
             const value = String(rawValue ?? '').trim();
             if (!value) return '';
-            const numeric = Number(value);
-            if (Number.isNaN(numeric)) return value;
-            return String(Math.trunc(numeric));
+            // Acepta solo valores numéricos (con ceros a la izquierda o decimales tipo .0)
+            if (/^-?\d+(\.\d+)?$/.test(value)) {
+                const numeric = Number(value);
+                if (!Number.isNaN(numeric)) {
+                    return String(Math.trunc(numeric));
+                }
+            }
+            // Valores no numéricos: comparación textual normalizada
+            return value.toLowerCase();
         }
 
         function detectDelimiter(line) {
@@ -212,15 +239,11 @@
         }
 
         // Función para abrir modal de importación
-        function openImportModal() {
+                function openImportModal() {
             const modal = document.getElementById('dataModal');
             const modalTitle = document.getElementById('modalTitle');
             const modalBody = document.getElementById('modalBody');
             const modalConfirm = document.getElementById('modalConfirm');
-            const cicloOptionsHtml = Array.from({ length: 20 }, (_, i) => {
-                const value = String(i + 1);
-                return `<option value="${value}">${value}</option>`;
-            }).join('');
             
             modalTitle.textContent = '📤 Importar Datos';
             modalBody.innerHTML = `
@@ -235,12 +258,9 @@
                         <option value="">Todos los valores</option>
                     </select>
                 </div>
-                <div class="form-group" style="margin-top: 12px;">
-                    <label for="importCicloOperativoFilter">Filtro de carga por ciclo_operativo:</label>
-                    <select id="importCicloOperativoFilter" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; margin-top: 10px;">
-                        <option value="" selected>Todos los ciclos</option>
-                        ${cicloOptionsHtml}
-                    </select>
+                                <div class="form-group" style="margin-top: 12px;">
+                    <label for="importCicloOperativoFilter">Filtro de carga por ciclo_operativo (déjalo vacío para todos):</label>
+                    <input type="text" id="importCicloOperativoFilter" inputmode="numeric" placeholder="Ej: 1, 11, 001 (vacío = todos)" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; margin-top: 10px;">
                 </div>
                                 <div style="margin-top: 15px; color: #7f8c8d; font-size: 0.9em;">
                     <p><strong>Formato:</strong> El delimitador del CSV/TXT se detecta automáticamente (barra vertical |, punto y coma ;, tab y coma ,). Para archivos <strong>.parquet</strong> se leen directamente las columnas.</p>
@@ -262,14 +282,16 @@
             return String(fileName || '').toLowerCase().endsWith('.parquet');
         }
 
-        async function importParquetFile(file, modalConfirm, procesoAgiFilter, cicloOperativoFilter, helpers) {
+                async function importParquetFile(file, modalConfirm, procesoAgiFilter, cicloOperativoFilter, helpers) {
             const { updateProgress } = helpers;
+
+                        // Para .parquet SIEMPRE se importa solo segmento = LECTURA.
+            const requiredSegmento = PARQUET_REQUIRED_SEGMENTO;
 
             modalConfirm.disabled = true;
             modalConfirm.textContent = 'Importando...';
 
-            const activeFilters = [];
-            if (procesoAgiFilter) activeFilters.push(`proceso_agi = ${procesoAgiFilter}`);
+            const activeFilters = [`segmento = ${requiredSegmento}`];
             if (cicloOperativoFilter) activeFilters.push(`ciclo_operativo = ${cicloOperativoFilter}`);
 
             let insertedRows = 0;
@@ -297,7 +319,7 @@
                     rows = materializeParquetRows({ data: rows, columns: null });
                 }
 
-                if (rows.length === 0) {
+                                if (rows.length === 0) {
                     updateProgress('El archivo .parquet no contiene filas.', 100);
                     alert('El archivo .parquet no contiene filas para importar.');
                     return;
@@ -305,17 +327,47 @@
 
                 processedRows = rows.length;
 
+                // ===== DIAGNÓSTICO TEMPORAL =====
+                // Muestra las claves reales del parquet y los valores únicos de
+                // proceso_agi y ciclo_operativo para entender por qué se filtra todo.
+                                try {
+                    const sampleKeys = Object.keys(rows[0] || {});
+                    const unicosSegmento = new Map();
+                    const unicosCiclo = new Map();
+                    const muestra = Math.min(rows.length, 20000);
+                    for (let k = 0; k < muestra; k++) {
+                        const sg = lookupColumnValue(rows[k], 'segmento');
+                        const pc = lookupColumnValue(rows[k], 'ciclo_operativo');
+                        const vs = (sg === null || sg === undefined) ? '<null>' : String(sg);
+                        const vc = (pc === null || pc === undefined) ? '<null>' : String(pc);
+                        unicosSegmento.set(vs, (unicosSegmento.get(vs) || 0) + 1);
+                        unicosCiclo.set(vc, (unicosCiclo.get(vc) || 0) + 1);
+                    }
+                    const topSegmento = [...unicosSegmento.entries()].sort((a,b)=>b[1]-a[1]).slice(0,15);
+                    const topCiclo = [...unicosCiclo.entries()].sort((a,b)=>b[1]-a[1]).slice(0,30);
+                    console.log('🔎 [PARQUET] Columnas detectadas:', sampleKeys);
+                    console.log('🔎 [PARQUET] Valores únicos segmento (muestra ' + muestra + '):', topSegmento);
+                    console.log('🔎 [PARQUET] Valores únicos ciclo_operativo (muestra ' + muestra + '):', topCiclo);
+                    console.log('🔎 [PARQUET] Filtro aplicado -> segmento=' + requiredSegmento + ', ciclo_operativo=' + (cicloOperativoFilter || '(todos)'));
+                    console.log('🔎 [PARQUET] Primeras filas (3):', rows.slice(0, 3));
+                    window.__PARQUET_DIAG__ = { sampleKeys, topSegmento, topCiclo, requiredSegmento, cicloOperativoFilter };
+                } catch (diagErr) {
+                    console.warn('No se pudo generar diagnóstico del parquet:', diagErr);
+                }
+                // ===== FIN DIAGNÓSTICO TEMPORAL =====
+
+
+
                 let batch = [];
                 for (let i = 0; i <= rows.length; i++) {
                     if (i < rows.length) {
                         const rawRow = rows[i];
 
-                        if (procesoAgiFilter) {
-                            const value = String(lookupColumnValue(rawRow, 'proceso_agi') != null ? lookupColumnValue(rawRow, 'proceso_agi') : '').trim().toUpperCase();
-                            if (value !== procesoAgiFilter) {
-                                skippedRows += 1;
-                                continue;
-                            }
+                                                // Filtro obligatorio: segmento debe ser LECTURA
+                        const segmentoValue = String(lookupColumnValue(rawRow, 'segmento') ?? '').trim().toUpperCase();
+                        if (segmentoValue !== requiredSegmento) {
+                            skippedRows += 1;
+                            continue;
                         }
 
                         if (cicloOperativoFilter) {
@@ -326,7 +378,8 @@
                             }
                         }
 
-                        batch.push(normalizeRow(rawRow, lookupColumnValue));
+                        // Solo se importan las columnas de PARQUET_IMPORT_COLUMNS
+                        batch.push(normalizeParquetRow(rawRow, lookupColumnValue));
                     }
 
                     if (batch.length >= IMPORT_BATCH_SIZE || i === rows.length) {
@@ -344,13 +397,33 @@
                     }
                 }
 
-                if (insertedRows === 0) {
+                                if (insertedRows === 0) {
+                                        const diag = window.__PARQUET_DIAG__ || {};
+                    const unicosSeg = (diag.topSegmento || []).map(([v,c]) => `${v} (${c})`).join(', ');
+                    const unicosCic = (diag.topCiclo || []).map(([v,c]) => `${v} (${c})`).join(', ');
+                    const claves = (diag.sampleKeys || []).join(', ');
+                    const columnasPrimera = (rows[0] && Object.keys(rows[0])) ? 'SÍ' : 'NO';
+                    const detalle = [
+                        '',
+                        '——— DIAGNÓSTICO DEL ARCHIVO ———',
+                        'Filas leídas: ' + processedRows.toLocaleString('es-ES'),
+                        'Filas omitidas: ' + skippedRows.toLocaleString('es-ES'),
+                        '',
+                        'Filtro aplicado: segmento=' + requiredSegmento + (cicloOperativoFilter ? (', ciclo_operativo=' + cicloOperativoFilter) : ' (todos los ciclos)'),
+                        '',
+                        'Valores de segmento encontrados: ' + (unicosSeg || '(ninguno / columna no encontrada)'),
+                        'Valores de ciclo_operativo encontrados: ' + (unicosCic || '(ninguno / columna no encontrada)'),
+                        '',
+                        'Columnas detectadas en el parquet: ' + (claves || '(no se detectaron)'),
+                        '',
+                        'Revisa también la consola (F12) para más detalle.'
+                    ].join('\n');
                     const noDataMsg = activeFilters.length > 0
-                        ? `No se encontraron registros para importar con ${activeFilters.join(' y ')}.`
-                        : 'No se encontraron registros para importar';
+                        ? `No se encontraron registros para importar con ${activeFilters.join(' y ')}.\n${detalle}`
+                        : `No se encontraron registros para importar.\n${detalle}`;
                     alert(noDataMsg);
                     updateProgress(
-                        `${noDataMsg} Leidas: ${processedRows.toLocaleString('es-ES')} | Omitidas: ${skippedRows.toLocaleString('es-ES')}`,
+                        `Sin registros con el filtro. Leidas: ${processedRows.toLocaleString('es-ES')} | Omitidas: ${skippedRows.toLocaleString('es-ES')}`,
                         100
                     );
                     return;
@@ -376,9 +449,20 @@
             }
         }
 
-                function normalizeRow(rawRow, lookup) {
+                                function normalizeRow(rawRow, lookup) {
             const row = {};
             EXPECTED_COLUMNS.forEach((col) => {
+                const value = lookup(rawRow, col);
+                row[col] = value !== null && value !== undefined ? String(value).trim() : '';
+            });
+            return row;
+        }
+
+        // Construye la fila a insertar desde un .parquet incluyendo ÚNICAMENTE
+        // las columnas definidas en PARQUET_IMPORT_COLUMNS.
+        function normalizeParquetRow(rawRow, lookup) {
+            const row = {};
+            PARQUET_IMPORT_COLUMNS.forEach((col) => {
                 const value = lookup(rawRow, col);
                 row[col] = value !== null && value !== undefined ? String(value).trim() : '';
             });

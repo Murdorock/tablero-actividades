@@ -14,6 +14,38 @@ const MAX_GOOGLE_MAPS_WAYPOINTS = 23;
 const TARGET_REBALANCE_ITERATIONS = 80;
 const TARGET_ROUTE_TOLERANCE_MIN = 30;
 
+// Peso de compacidad geografica frente al criterio de tiempo.
+// Mas alto = se prioriza agrupar puntos cercanos aunque se sacrifiquen
+// algunos minutos de diferencia contra el objetivo. Mas bajo = se prioriza
+// clavar el tiempo objetivo aunque queden saltos largos.
+// El valor se expresa en "minutos equivalentes por km".
+const COMPACTNESS_WEIGHT = 8;
+// Margen de tiempo que se tolera por encima del objetivo al reasignar por
+// compacidad: nunca se acepta superar el objetivo en mas de esto si hay
+// alternativa razonable.
+const HARD_TIME_OVERFLOW_MIN = 20;
+// Factor de "aislamiento": un punto se considera atipico dentro de su ruta si
+// su distancia al vecino mas cercano de la MISMA ruta es mayor que este factor
+// multiplicado por la distancia a su vecino mas cercano en OTRA ruta. Es decir,
+// esta mucho mas cerca de otra ruta que de la suya. 1.4 = al menos 40% mas
+// cerca de otra ruta. Mas bajo = mas agresivo moviendo puntos.
+const OUTLIER_DISTANCE_RATIO = 1.5;
+// Numero maximo de pasadas del post-proceso de reasignacion de atipicos.
+const OUTLIER_MAX_PASSES = 30;
+
+// --- Sugerencia de rutas adicionales para puntos dispersos ---
+// Un salto entre paradas consecutivas se considera "puente lejano" si supera
+// este factor por la mediana de saltos de la ruta y ademas supera el minimo
+// absoluto en km. Lo que queda tras ese salto se propone como ruta nueva.
+const SPLIT_GAP_MEDIAN_FACTOR = 2.5;
+const SPLIT_GAP_MIN_KM = 1.5;
+// Un sub-grupo aislado se separa solo si tiene al menos esta cantidad de
+// paradas y su distancia al nucleo de la ruta es significativa.
+const SPLIT_MIN_GROUP_STOPS = 1;
+const SPLIT_MIN_ISOLATION_KM = 1.5;
+// Maximo de rutas adicionales que se sugeriran en una sola generacion.
+const SPLIT_MAX_NEW_ROUTES = 6;
+
 document.addEventListener('DOMContentLoaded', () => {
     bindEvents();
     initializeRoutesMap();
@@ -230,14 +262,32 @@ function deduplicatePoints(points) {
 
     points.forEach((point) => {
         const key = `${point.lat}|${point.lng}`;
-        if (map.has(key)) {
-            map.get(key).count += 1;
+        const direccion = point.direccion || '(Sin direccion)';
+
+                if (map.has(key)) {
+            const existing = map.get(key);
+            existing.count += 1;
+            // Conservar TODAS las direcciones originales tal cual se pegaron,
+            // incluidas las coincidentes exactas (p.ej. apendices 201, 301,
+            // 401 que comparten la misma coordenada). Asi el exporte puede
+            // emitir una fila por cada registro pegado.
+            existing.direcciones.push(direccion);
         } else {
-            map.set(key, { ...point, count: 1 });
+            map.set(key, {
+                ...point,
+                count: 1,
+                // Lista de direcciones originales asociadas a este punto.
+                direcciones: [direccion]
+            });
         }
     });
 
-    return Array.from(map.values());
+    // Garantizar que count coincida con el numero de actas reales, y que
+    // direcciones tenga al menos la direccion base.
+    return Array.from(map.values()).map((p) => ({
+        ...p,
+        direcciones: p.direcciones && p.direcciones.length ? p.direcciones : [p.direccion || '(Sin direccion)']
+    }));
 }
 
 function generateRoutes() {
@@ -268,7 +318,32 @@ function generateRoutes() {
         createRouteFromStops(stops, index, startPoint, routeParams)
     );
 
-    rutasGeneradas = optimizeRoutesForTargetDuration(initialRoutes, startPoint, routeParams);
+        rutasGeneradas = optimizeRoutesForTargetDuration(initialRoutes, startPoint, routeParams);
+
+    // Post-proceso: compactar las rutas geograficamente. Mueve puntos "limite"
+    // (lejanos del nucleo de su ruta) hacia la ruta vecina mas cercana cuando
+    // eso reduce la distancia total y NO excede el tiempo objetivo de la ruta
+    // receptora. Elimina los saltos largos manteniendo el control de tiempo.
+    rutasGeneradas = compactRoutesGeographically(rutasGeneradas, startPoint, routeParams);
+
+    // Post-proceso 2: reasignar puntos "atipicos" (aislados de su propia ruta
+    // pero cercanos a otra ruta) a la ruta geograficamente correcta. Ataca
+    // casos como "pocos puntos en un municipio suelto dentro de rutas de otro
+    // municipio", siempre sin exceder el tiempo objetivo de la ruta receptora.
+    rutasGeneradas = reassignOutlierPoints(rutasGeneradas, startPoint, routeParams);
+
+    // Post-proceso 3 (opcional): si el usuario lo habilita, sugerir rutas
+    // ADICIONALES para grupos de puntos que siguen muy alejados del resto de
+    // su ruta. Separa esos sub-grupos en nuevas rutas ("Persona N+1") para que
+    // ninguna persona tenga que recorrer saltos largos. Respeta el tiempo
+    // objetivo: si un sub-grupo aislado admite su propia ruta, se sugiere.
+    const splitOutliers = document.getElementById('split-outliers-checkbox');
+    if (splitOutliers && splitOutliers.checked) {
+        rutasGeneradas = suggestSplitRoutes(rutasGeneradas, startPoint, routeParams);
+    }
+
+    // Re-compactar tras la reasignacion para reacomodar ordenes y distancias.
+    rutasGeneradas = compactRoutesGeographically(rutasGeneradas, startPoint, routeParams);
 
     renderSummary();
     renderRoutesMap();
@@ -379,6 +454,7 @@ function optimizeRoutesForTargetDuration(initialRoutes, startPoint, routeParams)
             }
         });
 
+        // Si ya estamos dentro de tolerancia o no hay a quien mover, terminar.
         if (maxDelta <= TARGET_ROUTE_TOLERANCE_MIN || mostOverIdx === mostUnderIdx) {
             return currentRoutes;
         }
@@ -387,21 +463,38 @@ function optimizeRoutesForTargetDuration(initialRoutes, startPoint, routeParams)
             return currentRoutes;
         }
 
-        const currentPenalty = totalTargetPenalty(currentRoutes, target);
-        let bestPenalty = currentPenalty;
+        const currentCost = totalCompactTimeCost(currentRoutes, target, startPoint, routeParams);
+        let bestCost = currentCost;
         let bestGroups = null;
+        let bestOverflow = Number.POSITIVE_INFINITY;
 
+        // Evaluar mover CADA punto de la ruta mas cargada hacia la mas vacia.
+        // Se penaliza tanto el desbalance de tiempo como la distancia geografica
+        // del punto respecto a la ruta destino, para evitar saltos largos.
         stopGroups[mostOverIdx].forEach((candidateStop, stopIdx) => {
             const nextGroups = stopGroups.map((group) => group.slice());
             nextGroups[mostOverIdx].splice(stopIdx, 1);
             nextGroups[mostUnderIdx].push(candidateStop);
 
             const candidateRoutes = nextGroups.map((group, idx) => createRouteFromStops(group, idx, startPoint, routeParams));
-            const candidatePenalty = totalTargetPenalty(candidateRoutes, target);
+            const candidateCost = totalCompactTimeCost(candidateRoutes, target, startPoint, routeParams);
 
-            if (candidatePenalty < bestPenalty) {
-                bestPenalty = candidatePenalty;
+            // Overflow maximo por encima del objetivo entre las dos rutas tocadas.
+            const overflow = Math.max(
+                candidateRoutes[mostOverIdx].totalMinutes - target,
+                candidateRoutes[mostUnderIdx].totalMinutes - target
+            );
+
+            // Descartar movimientos que revienten el objetivo de tiempo.
+            if (overflow > HARD_TIME_OVERFLOW_MIN) {
+                return;
+            }
+
+            // Preferir costo combinado menor; ante empate, menor overflow de tiempo.
+            if (candidateCost < bestCost - 1e-6 || (Math.abs(candidateCost - bestCost) <= 1e-6 && overflow < bestOverflow)) {
+                bestCost = candidateCost;
                 bestGroups = nextGroups;
+                bestOverflow = overflow;
             }
         });
 
@@ -413,6 +506,348 @@ function optimizeRoutesForTargetDuration(initialRoutes, startPoint, routeParams)
     }
 
     return stopGroups.map((group, idx) => createRouteFromStops(group, idx, startPoint, routeParams));
+}
+
+/**
+ * Costo combinado por ruta: desbalance de tiempo vs objetivo + penalizacion
+ * de distancia geografica total (ponderada). Un costo menor indica rutas
+ * mas "pegadas" al objetivo temporal y mas compactas geograficamente.
+ */
+function totalCompactTimeCost(routes, targetMinutes, startPoint, routeParams) {
+    return routes.reduce((acc, route) => {
+        const timeDelta = Math.abs(route.totalMinutes - targetMinutes);
+        const distancePenalty = route.totalKm * COMPACTNESS_WEIGHT;
+        return acc + timeDelta + distancePenalty;
+    }, 0);
+}
+
+/**
+ * Post-proceso de compactitud geografica entre rutas.
+ *
+ * Objetivo: agrupar puntos cercanos y eliminar los "saltos largos" (puntos
+ * pocos y lejanos dentro de una ruta). Para cada punto de cada ruta evalúa
+ * moverlo a otra ruta si:
+ *   1. Reduce la distancia total del sistema (costo combinado menor).
+ *   2. La ruta receptora NO excede el objetivo de tiempo (con margen duro).
+ *   3. La ruta donante sigue teniendo al menos 1 parada.
+ *
+ * Se repite hasta agotar mejoras o alcanzar un máximo de pasadas.
+ */
+function compactRoutesGeographically(routes, startPoint, routeParams) {
+    if (!Array.isArray(routes) || routes.length < 2) {
+        return routes;
+    }
+
+    const target = routeParams.targetRouteMinutes;
+
+    // Trabajamos con grupos de paradas "base" (sin metricas calculadas).
+    let stopGroups = routes.map((route) => route.paradas.map((stop) => toBaseStop(stop)));
+
+    const maxPasses = 25;
+    for (let pass = 0; pass < maxPasses; pass += 1) {
+        const currentRoutes = stopGroups.map((group, idx) => createRouteFromStops(group, idx, startPoint, routeParams));
+        const currentCost = totalCompactTimeCost(currentRoutes, target, startPoint, routeParams);
+
+        let bestCost = currentCost;
+        let bestMove = null; // { fromRoute, toRoute, stopIndex }
+
+        // Evaluar mover cada punto de cada ruta hacia cualquier otra ruta.
+        for (let fromIdx = 0; fromIdx < stopGroups.length; fromIdx += 1) {
+            // Nunca vaciar una ruta por completo.
+            if (stopGroups[fromIdx].length <= 1) continue;
+
+            for (let stopIdx = 0; stopIdx < stopGroups[fromIdx].length; stopIdx += 1) {
+                const candidateStop = stopGroups[fromIdx][stopIdx];
+
+                for (let toIdx = 0; toIdx < stopGroups.length; toIdx += 1) {
+                    if (toIdx === fromIdx) continue;
+
+                    const nextGroups = stopGroups.map((group) => group.slice());
+                    nextGroups[fromIdx].splice(stopIdx, 1);
+                    nextGroups[toIdx].push(candidateStop);
+
+                    const candidateRoutes = nextGroups.map((group, idx) =>
+                        createRouteFromStops(group, idx, startPoint, routeParams)
+                    );
+
+                    // La ruta receptora no debe reventar el objetivo de tiempo.
+                    if (candidateRoutes[toIdx].totalMinutes > target + HARD_TIME_OVERFLOW_MIN) {
+                        continue;
+                    }
+
+                    const candidateCost = totalCompactTimeCost(candidateRoutes, target, startPoint, routeParams);
+
+                    // Solo aceptar si mejora el costo global de forma significativa
+                    // (evita oscilaciones y movimientos triviales).
+                    if (candidateCost < bestCost - 1e-3) {
+                        bestCost = candidateCost;
+                        bestMove = { fromIdx, toIdx, stopIdx };
+                    }
+                }
+            }
+        }
+
+        if (!bestMove) {
+            break;
+        }
+
+        // Aplicar la mejor mejora encontrada y continuar.
+        const movedStop = stopGroups[bestMove.fromIdx].splice(bestMove.stopIdx, 1)[0];
+        stopGroups[bestMove.toIdx].push(movedStop);
+    }
+
+        return stopGroups.map((group, idx) => createRouteFromStops(group, idx, startPoint, routeParams));
+}
+
+/**
+ * Reasigna puntos "atipicos" a la ruta geograficamente correcta.
+ *
+ * Un punto es atipico dentro de su ruta si esta claramente mas cerca de otra
+ * ruta que de la suya. Esto resuelve casos como "unas pocas paradas de un
+ * municipio quedaron dentro del grupo de otro municipio".
+ *
+ * Reglas:
+ *   1. Solo se evalua mover un punto si su vecino mas cercano en OTRA ruta
+ *      esta a menor distancia que su vecino mas cercano en SU propia ruta,
+ *      superando el ratio OUTLIER_DISTANCE_RATIO.
+ *   2. La ruta receptora NO debe superar el objetivo de tiempo (margen duro).
+ *   3. La ruta donante conserva al menos 1 parada.
+ *   4. Se mueve solo al destino geograficamente mas cercano.
+ *
+ * Cada pasada mueve el "mejor" atipico (mayor reduccion de distancia) y se
+ * repite para reacomodar. Converge cuando no hay mas atipicos movibles.
+ */
+function reassignOutlierPoints(routes, startPoint, routeParams) {
+    if (!Array.isArray(routes) || routes.length < 2) {
+        return routes;
+    }
+
+    const target = routeParams.targetRouteMinutes;
+    const feasibleOverflow = target + HARD_TIME_OVERFLOW_MIN;
+
+    for (let pass = 0; pass < OUTLIER_MAX_PASSES; pass += 1) {
+        const stopGroups = routes.map((route) => route.paradas.map((stop) => toBaseStop(stop)));
+        let bestMove = null;
+        let bestGain = 0; // ganancia de distancia (km) al mover
+
+        for (let fromIdx = 0; fromIdx < stopGroups.length; fromIdx += 1) {
+            const fromGroup = stopGroups[fromIdx];
+            if (fromGroup.length <= 1) continue;
+
+            for (let stopIdx = 0; stopIdx < fromGroup.length; stopIdx += 1) {
+                const point = fromGroup[stopIdx];
+
+                // Distancia al vecino mas cercano DENTRO de su propia ruta.
+                let nearestOwn = Number.POSITIVE_INFINITY;
+                for (let k = 0; k < fromGroup.length; k += 1) {
+                    if (k === stopIdx) continue;
+                    const d = haversineKm(point, fromGroup[k]);
+                    if (d < nearestOwn) nearestOwn = d;
+                }
+
+                // Buscar la ruta con el vecino mas cercano fuera de su ruta.
+                let bestToIdx = -1;
+                let nearestOther = Number.POSITIVE_INFINITY;
+                for (let toIdx = 0; toIdx < stopGroups.length; toIdx += 1) {
+                    if (toIdx === fromIdx) continue;
+                    const group = stopGroups[toIdx];
+                    for (let k = 0; k < group.length; k += 1) {
+                        const d = haversineKm(point, group[k]);
+                        if (d < nearestOther) {
+                            nearestOther = d;
+                            bestToIdx = toIdx;
+                        }
+                    }
+                }
+
+                if (bestToIdx === -1) continue;
+
+                // ¿Es realmente atipico? Solo si esta mas cerca de otra ruta.
+                if (!(nearestOther * OUTLIER_DISTANCE_RATIO < nearestOwn)) {
+                    continue;
+                }
+
+                // Construir candidato y validar el tiempo de la ruta receptora.
+                const nextGroups = stopGroups.map((group) => group.slice());
+                nextGroups[fromIdx].splice(stopIdx, 1);
+                nextGroups[bestToIdx].push(point);
+
+                const receiver = createRouteFromStops(nextGroups[bestToIdx], bestToIdx, startPoint, routeParams);
+                if (receiver.totalMinutes > feasibleOverflow) {
+                    continue;
+                }
+
+                // Ganancia aproximada: cuanto "salto" se elimina.
+                const gain = nearestOwn - nearestOther;
+                if (gain > bestGain) {
+                    bestGain = gain;
+                    bestMove = { fromIdx, toIdx: bestToIdx, stopIdx };
+                }
+            }
+        }
+
+        if (!bestMove) {
+            break;
+        }
+
+        // Aplicar el movimiento sobre las rutas reales y continuar.
+        const movedStop = routes[bestMove.fromIdx].paradas.splice(bestMove.stopIdx, 1)[0];
+        routes[bestMove.toIdx].paradas.push(movedStop);
+
+        // Recalcular metricas y orden de las rutas afectadas.
+        routes[bestMove.fromIdx] = createRouteFromStops(
+            routes[bestMove.fromIdx].paradas.map((s) => toBaseStop(s)),
+            bestMove.fromIdx,
+            startPoint,
+            routeParams
+        );
+        routes[bestMove.toIdx] = createRouteFromStops(
+            routes[bestMove.toIdx].paradas.map((s) => toBaseStop(s)),
+            bestMove.toIdx,
+            startPoint,
+            routeParams
+        );
+    }
+
+        return routes;
+}
+
+/**
+ * Sugiere rutas ADICIONALES para grupos de puntos que quedan muy alejados
+ * del resto de su ruta.
+ *
+ * Idea: dentro de una ruta ya ordenada por cercania, se buscan "puentes
+ * lejanos": saltos entre paradas consecutivas mucho mayores que lo normal.
+ * Lo que queda del otro lado de ese puente se trata como un sub-grupo
+ * aislado y, si esta suficientemente lejos y admite su propia ruta sin
+ * desbordar el objetivo de tiempo, se separa como una nueva "Persona".
+ *
+ * Asi evitamos que una persona acumule pocas paradas a distancias muy
+ * prolongadas: en su lugar se PROPONE una ruta extra para ese grupo.
+ *
+ * Devuelve un arreglo de rutas posiblemente mayor que el de entrada.
+ */
+function suggestSplitRoutes(routes, startPoint, routeParams) {
+    if (!Array.isArray(routes) || !routes.length) {
+        return routes;
+    }
+
+    const target = routeParams.targetRouteMinutes;
+    const feasibleOverflow = target + HARD_TIME_OVERFLOW_MIN;
+
+    const result = [];
+    let newRoutesCount = 0;
+
+    routes.forEach((route) => {
+        const stops = route.paradas.map((stop) => toBaseStop(stop));
+
+        if (stops.length < SPLIT_MIN_GROUP_STOPS + 1 || newRoutesCount >= SPLIT_MAX_NEW_ROUTES) {
+            result.push(route);
+            return;
+        }
+
+        // Distancias entre paradas consecutivas del orden actual.
+        const gaps = [];
+        for (let i = 1; i < stops.length; i += 1) {
+            gaps.push(haversineKm(stops[i - 1], stops[i]));
+        }
+
+        const sortedGaps = gaps.slice().sort((a, b) => a - b);
+        const median = sortedGaps.length
+            ? sortedGaps[Math.floor(sortedGaps.length / 2)]
+            : 0;
+        const gapThreshold = Math.max(median * SPLIT_GAP_MEDIAN_FACTOR, SPLIT_GAP_MIN_KM);
+
+        // Buscar el puente mas largo que supere el umbral.
+        let splitIndex = -1;
+        let maxGap = 0;
+        for (let i = 0; i < gaps.length; i += 1) {
+            if (gaps[i] >= gapThreshold && gaps[i] > maxGap) {
+                maxGap = gaps[i];
+                splitIndex = i + 1; // el sub-grupo aislado empieza aqui
+            }
+        }
+
+        if (splitIndex <= 0) {
+            result.push(route);
+            return;
+        }
+
+        const coreStops = stops.slice(0, splitIndex);
+        const isolatedStops = stops.slice(splitIndex);
+
+        // Reglas de seguridad: ambos lados deben quedar con paradas.
+        if (!coreStops.length || isolatedStops.length < SPLIT_MIN_GROUP_STOPS) {
+            result.push(route);
+            return;
+        }
+
+        // El grupo aislado debe estar realmente lejos del nucleo.
+        const isolationDistance = minDistanceBetweenGroups(coreStops, isolatedStops);
+        if (isolationDistance < SPLIT_MIN_ISOLATION_KM) {
+            result.push(route);
+            return;
+        }
+
+        // El grupo aislado debe poder ser su propia ruta sin desbordar tiempo.
+        const isolatedRoute = createRouteFromStops(
+            isolatedStops,
+            routes.length + newRoutesCount,
+            startPoint,
+            routeParams
+        );
+        if (isolatedRoute.totalMinutes > feasibleOverflow) {
+            // Si el aislado es demasiado grande para una ruta propia, no separar.
+            result.push(route);
+            return;
+        }
+
+        // La ruta original (nucleo) tambien debe seguir siendo valida.
+        const coreRoute = createRouteFromStops(coreStops, result.length, startPoint, routeParams);
+        if (coreRoute.totalMinutes > feasibleOverflow) {
+            result.push(route);
+            return;
+        }
+
+                // Aplicar la separacion: nucleo + nueva ruta sugerida.
+        result.push(coreRoute);
+        isolatedRoute.suggested = true;
+        result.push(isolatedRoute);
+        newRoutesCount += 1;
+    });
+
+    // Renumerar personas respetando la marca de "sugerida".
+    result.forEach((route, idx) => {
+        route.persona = route.suggested
+            ? `Persona ${idx + 1} (sugerida)`
+            : `Persona ${idx + 1}`;
+    });
+
+    return result;
+}
+
+/**
+ * Distancia minima entre cualquier punto de dos grupos (km).
+ */
+function minDistanceBetweenGroups(groupA, groupB) {
+    let min = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < groupA.length; i += 1) {
+        for (let j = 0; j < groupB.length; j += 1) {
+            const d = haversineKm(groupA[i], groupB[j]);
+            if (d < min) min = d;
+        }
+    }
+    return min;
+}
+
+/**
+ * Marca una ruta como sugerida (proveniente de separar puntos dispersos).
+ */
+function isolateRouteSuggested(route) {
+    if (route) {
+        route.suggested = true;
+    }
+    return route;
 }
 
 function totalTargetPenalty(routes, targetMinutes) {
@@ -428,7 +863,11 @@ function toBaseStop(stop) {
         lat: stop.lat,
         lng: stop.lng,
         coordenada: stop.coordenada || `${stop.lat} ${stop.lng}`,
-        count: stop.count || 1
+        count: stop.count || 1,
+        // Preservar las direcciones originales (apendices con misma coord).
+        direcciones: Array.isArray(stop.direcciones) && stop.direcciones.length
+            ? stop.direcciones.slice()
+            : [stop.direccion || '(Sin direccion)']
     };
 }
 
@@ -611,11 +1050,29 @@ function findBestTransferPoint(assignments, points, centroids, sourceCluster, ta
     let bestIndex = -1;
     let bestPenalty = Number.POSITIVE_INFINITY;
 
+    // Puntos ya asignados al cluster destino, para medir cercania real
+    // (al vecino mas proximo) en lugar de solo al centroide.
+    const targetMembers = points.filter((_, idx) => assignments[idx] === targetCluster);
+
     assignments.forEach((assignedCluster, idx) => {
         if (assignedCluster !== sourceCluster) return;
 
-        const distToSource = haversineKm(points[idx], centroids[sourceCluster]);
-        const distToTarget = haversineKm(points[idx], centroids[targetCluster]);
+        const point = points[idx];
+        const distToSource = haversineKm(point, centroids[sourceCluster]);
+
+        // Distancia al vecino mas cercano dentro del cluster destino.
+        // Si el cluster destino esta vacio, se usa el centroide.
+        let distToTarget;
+        if (targetMembers.length) {
+            distToTarget = targetMembers.reduce((minDist, member) => {
+                return Math.min(minDist, haversineKm(point, member));
+            }, Number.POSITIVE_INFINITY);
+        } else {
+            distToTarget = haversineKm(point, centroids[targetCluster]);
+        }
+
+        // Penalizacion: cuanto mas cerca quede del destino y cuanto menos se
+        // aleje del origen, mejor. Se prioriza compacidad geografica.
         const penalty = distToTarget - distToSource;
 
         if (penalty < bestPenalty) {
@@ -670,7 +1127,69 @@ function orderRouteNearestNeighbor(points, startPoint = null) {
         current = nextStop;
     }
 
-    return ordered;
+    // Refinamiento 2-opt: elimina cruces y saltos largos internos de la ruta,
+    // reduciendo la distancia total sin cambiar el conjunto de puntos.
+    return improveOrderTwoOpt(ordered, startPoint);
+}
+
+/**
+ * Mejora el orden de la ruta con 2-opt: intenta invertir segmentos para
+ * reducir la distancia total. Respeta el punto de inicio fijo (si existe).
+ * Se limita el numero de pasadas para mantener el rendimiento en rutas grandes.
+ */
+function improveOrderTwoOpt(ordered, startPoint = null) {
+    if (ordered.length < 3) return ordered;
+
+    const route = ordered.slice();
+    const maxPasses = 8;
+    let improved = true;
+    let passes = 0;
+
+    // Distancia entre puntos con soporte para el punto de inicio virtual.
+    const dist = (a, b) => haversineKm(a, b);
+
+    // Punto previo a la posicion i del arreglo (o el inicio si i=0).
+    const pointBefore = (i) => (i === 0 ? startPoint : route[i - 1]);
+
+    while (improved && passes < maxPasses) {
+        improved = false;
+        passes += 1;
+
+        // i empieza en 0; el segmento comienza en route[i]. El "antes" del
+        // segmento depende del startPoint.
+        for (let i = 0; i < route.length - 1; i += 1) {
+            const before = pointBefore(i);
+            for (let j = i + 2; j < route.length; j += 1) {
+                const a = route[i];
+                const b = route[i + 1];
+                const c = route[j];
+                const d = j + 1 < route.length ? route[j + 1] : null;
+
+                // Distancia actual: (before->a) + (b->c) + (c->d si existe)
+                // Distancia tras invertir segmento [i+1 .. j]: (before->a) + (a->c) + (b->d si existe)
+                const currentLeg = (before ? dist(before, a) : 0) + dist(b, c) + (d ? dist(c, d) : 0);
+                const swappedLeg = (before ? dist(before, a) : 0) + dist(a, c) + (d ? dist(b, d) : 0);
+
+                if (swappedLeg + 1e-9 < currentLeg) {
+                    // Invertir el sub-arreglo (i+1 .. j) inclusive.
+                    let left = i + 1;
+                    let right = j;
+                    while (left < right) {
+                        const tmp = route[left];
+                        route[left] = route[right];
+                        route[right] = tmp;
+                        left += 1;
+                        right -= 1;
+                    }
+                    improved = true;
+                    break;
+                }
+            }
+            if (improved) break;
+        }
+    }
+
+    return route;
 }
 
 function calcRouteDistanceKm(stops, startPoint = null) {
@@ -829,10 +1348,35 @@ function initializeRoutesMap() {
         attributionControl: true
     });
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(routesMap);
+        // Se usan tiles libres SIN API key. El tile server estandar de OSM
+        // (tile.openstreetmap.org) y CARTO basemaps responden 403 / "api key
+        // required" en algunos contextos (sobre todo al abrir desde file://).
+        // Se usa el servidor raster de Esri World Street Map, que es publico,
+        // no requiere key y permite uso directo en navegador.
+        const primaryTiles = L.tileLayer(
+            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+            {
+                maxZoom: 19,
+                crossOrigin: true,
+                attribution:
+                    'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, ' +
+                    'iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom'
+            }
+        );
+        primaryTiles.addTo(routesMap);
+
+        // Fallback: si el proveedor principal falla, se intenta un espejo libre de
+        // OSM para que el mapa no quede en blanco.
+        primaryTiles.on('tileerror', () => {
+            if (routesMap.__fallbackApplied) return;
+            routesMap.__fallbackApplied = true;
+            routesMap.removeLayer(primaryTiles);
+            L.tileLayer('https://tile.openstreetmap.bzh/br/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                crossOrigin: true,
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(routesMap);
+        });
 
     routesMapLayerGroup = L.layerGroup().addTo(routesMap);
     routesMap.setView([6.25184, -75.56359], 12);
@@ -959,6 +1503,8 @@ function exportRoutesCsv() {
     const header = [
         'persona',
         'orden',
+        'acta',
+        'actas_en_punto',
         'direccion',
         'latitud',
         'longitud',
@@ -973,18 +1519,31 @@ function exportRoutesCsv() {
     rutasGeneradas.forEach((ruta) => {
         ruta.paradas.forEach((parada, idx) => {
             const maps = `https://www.google.com/maps?q=${encodeURIComponent(`${parada.lat},${parada.lng}`)}`;
-            rows.push([
-                csvSafe(ruta.persona),
-                idx + 1,
-                csvSafe(parada.direccion),
-                parada.lat,
-                parada.lng,
-                parada.segmentDistanceKm,
-                parada.travelMinutes,
-                parada.serviceMinutes,
-                parada.accumulatedMinutes,
-                maps
-            ].join(';'));
+
+            // Emitir UNA fila por cada direccion original. Cuando varias
+            // direcciones comparten la misma coordenada (p.ej. apendices
+            // 201, 301, 401), se exportan todas, no solo una.
+                        const direcciones = Array.isArray(parada.direcciones) && parada.direcciones.length
+                ? parada.direcciones
+                : [parada.direccion || '(Sin direccion)'];
+            const actasEnPunto = direcciones.length;
+
+            direcciones.forEach((direccion, direccionIdx) => {
+                rows.push([
+                    csvSafe(ruta.persona),
+                    idx + 1,
+                    direccionIdx + 1,
+                    actasEnPunto,
+                    csvSafe(direccion),
+                    parada.lat,
+                    parada.lng,
+                    parada.segmentDistanceKm,
+                    parada.travelMinutes,
+                    parada.serviceMinutes,
+                    parada.accumulatedMinutes,
+                    maps
+                ].join(';'));
+            });
         });
     });
 
