@@ -178,14 +178,20 @@ function getInitialMonth(months) {
 function changeMonth(direction) {
     if (!currentMonthKey) return;
 
-    const allowedMonths = getAllowedMonthKeys();
-    const currentIndex = allowedMonths.indexOf(currentMonthKey);
-    if (currentIndex === -1) return;
+    const [yearStr, monthStr] = currentMonthKey.split('-');
+    let year = Number(yearStr);
+    let month = Number(monthStr);
 
-    const targetIndex = currentIndex + direction;
-    if (targetIndex < 0 || targetIndex >= allowedMonths.length) return;
+    month += direction;
+    if (month < 1) {
+        month = 12;
+        year -= 1;
+    } else if (month > 12) {
+        month = 1;
+        year += 1;
+    }
 
-    currentMonthKey = allowedMonths[targetIndex];
+    currentMonthKey = `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}`;
     renderCalendar();
 }
 
@@ -261,24 +267,20 @@ function renderCalendar() {
         html += '<div class="calendar-day empty"></div>';
     }
 
-    grid.innerHTML = html;
+        grid.innerHTML = html;
 
     const prevBtn = document.getElementById('btnPrevMonth');
     const nextBtn = document.getElementById('btnNextMonth');
-    const allowedMonths = getAllowedMonthKeys();
-    const currentIndex = allowedMonths.indexOf(currentMonthKey);
 
     if (prevBtn) {
-        const canGoPrev = currentIndex > 0;
-        prevBtn.disabled = !canGoPrev;
-        prevBtn.style.opacity = canGoPrev ? '1' : '0.45';
-        prevBtn.style.cursor = canGoPrev ? 'pointer' : 'not-allowed';
+        prevBtn.disabled = false;
+        prevBtn.style.opacity = '1';
+        prevBtn.style.cursor = 'pointer';
     }
     if (nextBtn) {
-        const canGoNext = currentIndex >= 0 && currentIndex < allowedMonths.length - 1;
-        nextBtn.disabled = !canGoNext;
-        nextBtn.style.opacity = canGoNext ? '1' : '0.45';
-        nextBtn.style.cursor = canGoNext ? 'pointer' : 'not-allowed';
+        nextBtn.disabled = false;
+        nextBtn.style.opacity = '1';
+        nextBtn.style.cursor = 'pointer';
     }
 
     if (meta) {
@@ -310,8 +312,8 @@ function getColombianHolidays(year) {
     holidays.add(toDateKey(new Date(year, 4, 1)));   // Día del Trabajo
     holidays.add(toDateKey(new Date(year, 6, 20)));  // Independencia
     holidays.add(toDateKey(new Date(year, 7, 7)));   // Batalla de Boyacá
-    holidays.add(toDateKey(new Date(year, 11, 8)));  // Inmaculada Concepción
-    holidays.add(toDateKey(new Date(year, 11, 25))); // Navidad
+
+
 
     // Festivos trasladables (Ley Emiliani)
     holidays.add(toDateKey(moveToNextMonday(new Date(year, 0, 6))));   // Reyes Magos
@@ -373,14 +375,4 @@ function calculateEasterSunday(year) {
 function getCurrentMonthKey() {
     const today = new Date();
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function getAllowedMonthKeys() {
-    const today = new Date();
-    const current = new Date(today.getFullYear(), today.getMonth(), 1);
-    const previous = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    const next = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-
-    const toMonthKey = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    return [toMonthKey(previous), toMonthKey(current), toMonthKey(next)];
 }
