@@ -1156,11 +1156,19 @@ function sortCycleValuesForPivot(cycles) {
         const aIsNumber = !Number.isNaN(aNumber);
         const bIsNumber = !Number.isNaN(bNumber);
 
+        // El período de ciclo va de 14 -> 13. Orden: 14,15,16,17,18,19,20,1,...,13.
+        // Los que no están en 1..20 se envían al final.
+        const cycleRank = (value) => {
+            if (!Number.isFinite(value)) return Number.POSITIVE_INFINITY;
+            if (value >= 14 && value <= 20) return value;          // 14..20 primero
+            if (value >= 1 && value <= 13) return 1000 + value;    // 1..13 después
+            return 2000 + value;                                   // fuera de rango al final
+        };
+
         if (aIsNumber && bIsNumber) {
-            const aRank = aNumber >= 14 ? aNumber : aNumber + 1000;
-            const bRank = bNumber >= 14 ? bNumber : bNumber + 1000;
-            return aRank - bRank;
+            return cycleRank(aNumber) - cycleRank(bNumber);
         }
+
         return String(aNormalized).localeCompare(String(bNormalized), 'es', { numeric: true });
     });
 }

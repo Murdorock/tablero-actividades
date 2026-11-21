@@ -98,11 +98,18 @@ function convertMesToNumber(value: unknown) {
   return null;
 }
 
-function buildJoinKey(ciclo: unknown, mes: unknown) {
+function toAnioNumber(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  const num = Number(String(value).trim());
+  return Number.isInteger(num) && num >= 1900 && num <= 3000 ? num : null;
+}
+
+function buildJoinKey(ciclo: unknown, anio: unknown, mes: unknown) {
   const cicloValue = normalizeCiclo(ciclo);
   const mesNumber = convertMesToNumber(mes);
-  if (!cicloValue || !mesNumber) return null;
-  return `${cicloValue}|${mesNumber}`;
+  const anioNumber = toAnioNumber(anio);
+  if (!cicloValue || !mesNumber || anioNumber === null) return null;
+  return `${cicloValue}|${anioNumber}|${mesNumber}`;
 }
 
 function detectPrimaryKeyFromRows(rows: Record<string, unknown>[]) {
@@ -255,6 +262,8 @@ async function updateByCycleAndMes({
   targetTable,
   cicloColumn,
   cicloValue,
+  anioColumn,
+  anioValue,
   mesColumn,
   mesValue,
   fechaEjecucion,
@@ -263,6 +272,8 @@ async function updateByCycleAndMes({
   targetTable: string;
   cicloColumn: string;
   cicloValue: unknown;
+  anioColumn: string;
+  anioValue: unknown;
   mesColumn: string;
   mesValue: unknown;
   fechaEjecucion: unknown;
@@ -276,6 +287,9 @@ async function updateByCycleAndMes({
     .update({ fecha_ejecucion: fechaEjecucion })
     .eq(cicloColumn, cicloValue);
 
+  if (anioColumn && anioValue !== null && anioValue !== undefined) {
+    query = query.eq(anioColumn, anioValue);
+  }
   if (mesColumn && mesValue !== null && mesValue !== undefined) {
     query = query.eq(mesColumn, mesValue);
   }
@@ -358,29 +372,28 @@ Deno.serve(async (req: Request) => {
     const primaryKey = detectPrimaryKeyFromRows(ordenesSample);
     const hasUsablePrimaryKey = Object.prototype.hasOwnProperty.call(ordenesSample[0], primaryKey);
 
+        // Columnas del calendario: ciclo, fecha, mes (texto), anio (num).
     const calendarioCicloCol = detectColumnName(calendarioRows, [/^ciclo$/, /cod.*ciclo/, /ciclo/]);
     const calendarioMesCol = detectColumnName(calendarioRows, [/^mes$/, /mes/]);
+    const calendarioAnioCol = detectColumnName(calendarioRows, [/^anio$/, /^ano$/, /anno/, /year/, /anio/]);
     const calendarioFechaCol = detectColumnName(calendarioRows, [/^fecha$/, /fecha/, /date/]);
 
+    // Columnas de órdenes: ciclo, anio (num), mes (num).
     const ordenesCicloCol = detectColumnName(ordenesSample, [/^ciclo$/, /cod.*ciclo/, /ciclo/]);
     const ordenesMesCol = detectColumnName(ordenesSample, [/^mes$/, /mes/]);
-    const ordenesFechaProgramadaCol = detectColumnName(ordenesSample, [/fecha.*programada/, /fecha_programada/, /fecha/, /date/]);
+    const ordenesAnioCol = detectColumnName(ordenesSample, [/^anio$/, /^ano$/, /anno/, /year/, /anio/]);
 
-    if (!calendarioCicloCol || !calendarioMesCol || !calendarioFechaCol) {
-      return jsonResponse({ error: "No se detectaron columnas ciclo/mes/fecha en calendario" }, 400);
+    if (!calendarioCicloCol || !calendarioMesCol || !calendarioAnioCol) {
+      return jsonResponse({ error: "No se detectaron columnas ciclo/mes/anio en calendario" }, 400);
     }
 
-    if (!ordenesCicloCol) {
-      return jsonResponse({ error: "No se detecto la columna ciclo en ordenes" }, 400);
+    if (!ordenesCicloCol || !ordenesAnioCol || !ordenesMesCol) {
+      return jsonResponse({ error: "No se detectaron columnas ciclo/anio/mes en ordenes" }, 400);
     }
 
-    if (!ordenesMesCol && !ordenesFechaProgramadaCol) {
-      return jsonResponse({ error: "No se detecto mes ni fecha programada en ordenes" }, 400);
-    }
-
-    const calendarioMap = new Map<string, unknown>();
+        const calendarioMap = new Map<string, unknown>();
     calendarioRows.forEach((row) => {
-      const key = buildJoinKey(row[calendarioCicloCol], row[calendarioMesCol]);
+      const key = buildJoinKey(row[calendarioCicloCol], row[calendarioAnioCol], row[calendarioMesCol]);
       const fechaValue = row[calendarioFechaCol];
       if (!key || !fechaValue) return;
       if (!calendarioMap.has(key)) {
@@ -392,15 +405,15 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({
         updatedRows: 0,
         pendingRows: 0,
-        message: "No se pudo construir mapa ciclo/mes desde calendario",
+        message: "No se pudo construir mapa ciclo/anio/mes desde calendario",
       });
     }
 
     const selectedColumns = Array.from(new Set([
       primaryKey,
       ordenesCicloCol,
+      ordenesAnioCol,
       ordenesMesCol,
-      ordenesFechaProgramadaCol,
       "fecha_ejecucion",
     ].filter((col): col is string => Boolean(col))));
 
@@ -423,17 +436,17 @@ Deno.serve(async (req: Request) => {
       const rows = (data || []) as Record<string, unknown>[];
       if (!rows.length) break;
 
-      const updates: Array<{
+            const updates: Array<{
         id: unknown;
         cicloRaw: unknown;
+        anioRaw: unknown;
         mesRaw: unknown;
         fecha_ejecucion: unknown;
       }> = [];
 
       rows.forEach((row) => {
         const rowId = row[primaryKey];
-        const mesOrden = getMesFromRow(row, ordenesMesCol, ordenesFechaProgramadaCol);
-        const key = buildJoinKey(row[ordenesCicloCol], mesOrden);
+        const key = buildJoinKey(row[ordenesCicloCol], row[ordenesAnioCol], row[ordenesMesCol]);
         const fechaCalendario = key ? (calendarioMap.get(key) || null) : null;
         const fechaActual = row.fecha_ejecucion;
 
@@ -442,7 +455,8 @@ Deno.serve(async (req: Request) => {
         updates.push({
           id: rowId,
           cicloRaw: row[ordenesCicloCol],
-          mesRaw: ordenesMesCol ? row[ordenesMesCol] : null,
+          anioRaw: row[ordenesAnioCol],
+          mesRaw: row[ordenesMesCol],
           fecha_ejecucion: fechaCalendario,
         });
       });
@@ -475,7 +489,7 @@ Deno.serve(async (req: Request) => {
           continue;
         }
 
-        const fallbackKey = `${normalizeCiclo(item.cicloRaw)}|${convertMesToNumber(item.mesRaw)}|${item.fecha_ejecucion}`;
+                const fallbackKey = `${normalizeCiclo(item.cicloRaw)}|${item.anioRaw}|${convertMesToNumber(item.mesRaw)}|${item.fecha_ejecucion}`;
         if (fallbackDone.has(fallbackKey)) continue;
 
         await updateByCycleAndMes({
@@ -483,6 +497,8 @@ Deno.serve(async (req: Request) => {
           targetTable,
           cicloColumn: ordenesCicloCol,
           cicloValue: item.cicloRaw,
+          anioColumn: ordenesAnioCol,
+          anioValue: item.anioRaw,
           mesColumn: ordenesMesCol,
           mesValue: item.mesRaw,
           fechaEjecucion: item.fecha_ejecucion,
